@@ -24,29 +24,36 @@ class Qcar2DataAdapter:
     def process_camera_image(self, image: np.ndarray) -> np.ndarray:
         """
         Process Qcar2 camera image to SimLingo format.
-        
+
         Args:
             image: Raw camera image from Qcar2 (BGR format from OpenCV)
-            
+
         Returns:
             Processed image in SimLingo format (RGB, resized), dtype=uint8
         """
         try:
+            logger.debug(f"DATA ADAPTER: Processing camera image, input shape={image.shape}, dtype={image.dtype}")
+
             # Convert BGR to RGB (OpenCV uses BGR by default)
             if len(image.shape) == 3 and image.shape[2] == 3:
                 image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                logger.debug(f"  Converted BGR to RGB")
             else:
                 image_rgb = image
-                
+                logger.debug(f"  Image already in correct format (not BGR)")
+
             # Resize to target dimensions
             w,h = image_rgb.shape[1], image_rgb.shape[0]
             if (w, h) != self.target_size:
                 resized_image = cv2.resize(image_rgb, self.target_size, cv2.INTER_LINEAR)
+                logger.debug(f"  Resized from ({w}, {h}) to {self.target_size}")
             else:
                 resized_image = image_rgb
-            
+                logger.debug(f"  No resize needed, already {self.target_size}")
+
+            logger.debug(f"  Output shape={resized_image.shape}, dtype={resized_image.dtype}")
             return resized_image
-            
+
         except Exception as e:
             logger.error(f"Error processing camera image: {e}")
             raise

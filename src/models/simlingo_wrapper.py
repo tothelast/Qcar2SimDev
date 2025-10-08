@@ -110,6 +110,10 @@ class SimLingoModel:
 
         H, W = img.shape[:2]
 
+        logger.debug("="*80)
+        logger.debug("MODEL WRAPPER: Starting Inference")
+        logger.debug(f"  Input image shape: {img.shape}, dtype: {img.dtype}")
+
         # Build processor/tokenizer once from model config if accessible
         processor = getattr(self, "processor", None)
         tokenizer = processor.tokenizer if hasattr(processor, "tokenizer") else processor
@@ -121,6 +125,8 @@ class SimLingoModel:
         pv = torch.stack([transform(t) for t in tiles])  # [NP,3,448,448]
         model_dtype = next(self.model.parameters()).dtype
         pixel_values = pv.unsqueeze(0).unsqueeze(0).to(self.device, dtype=model_dtype)  # [B=1,T=1,NP,C,H,W]
+
+        logger.debug(f"  Image preprocessing: {len(tiles)} patches, pixel_values shape: {pixel_values.shape}")
 
         # Build commentary (Chain-of-Thought) prompt via InternVL chat template
         # Paper: first generate commentary (language) then actions conditioned on it
@@ -168,9 +174,16 @@ class SimLingoModel:
         E_np = np.array(camera_info['extrinsics'], dtype=np.float32)
         E = torch.tensor(E_np, dtype=torch.float32, device=self.device)
 
-        spd = float(vehicle_info.get('speed_mps', 0.0)) 
+        spd = float(vehicle_info.get('speed_mps', 0.0))
         speed = torch.tensor([[spd]], dtype=torch.float32, device=self.device)
         target_point = torch.tensor([[0.0, 0.0]], dtype=torch.float32, device=self.device)
+
+        logger.debug(f"  Model inputs:")
+        logger.debug(f"    Instruction: '{user_instr}'")
+        logger.debug(f"    Vehicle speed: {spd:.3f} m/s")
+        logger.debug(f"    Target point: {target_point.cpu().numpy().tolist()}")
+        logger.debug(f"    Camera intrinsics shape: {K.shape}")
+        logger.debug(f"    Camera extrinsics shape: {E.shape}")
 
         din = DrivingInput(
             camera_images=pixel_values,
@@ -184,6 +197,7 @@ class SimLingoModel:
         )
 
         # Run the upstream model (CoT commentary + actions)
+        logger.debug(f"  Running model forward pass...")
         outputs = self.model(din)
 
         # Unpack: upstream returns (speed_wps, route, language)
@@ -205,14 +219,27 @@ class SimLingoModel:
             arr = pred_speed_wps.detach().float().cpu().numpy()
             if arr.ndim >= 3:
                 out["pred_speed_wps"] = arr[0]
+                logger.debug(f"  Model outputs:")
+                logger.debug(f"    pred_speed_wps shape: {arr[0].shape}")
+                logger.debug(f"    First 5 speed waypoints:")
+                for i in range(min(5, len(arr[0]))):
+                    logger.debug(f"      [{i}]: [{arr[0][i,0]:7.3f}, {arr[0][i,1]:7.3f}]")
         if isinstance(pred_route, torch.Tensor):
             arr = pred_route.detach().float().cpu().numpy()
             if arr.ndim >= 3:
                 out["pred_route"] = arr[0]
+                logger.debug(f"    pred_route shape: {arr[0].shape}")
+                logger.debug(f"    First 5 route waypoints:")
+                for i in range(min(5, len(arr[0]))):
+                    logger.debug(f"      [{i}]: [{arr[0][i,0]:7.3f}, {arr[0][i,1]:7.3f}]")
 
         # Language is already decoded to strings by upstream DrivingModel
         if isinstance(language, (list, tuple)) and len(language) > 0 and isinstance(language[0], str):
             out["language_text"] = language[0].strip()
+            logger.debug(f"    Language commentary: '{out['language_text']}'")
+
+        logger.debug("MODEL WRAPPER: Inference Complete")
+        logger.debug("="*80)
 
         return out
 

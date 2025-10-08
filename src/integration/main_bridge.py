@@ -13,6 +13,7 @@ import time
 import logging
 import math
 import io
+import numpy as np
 from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass
 from pathlib import Path
@@ -131,20 +132,32 @@ class SimLingoQcar2Driver:
         period = 1.0 / max(1e-3, self.cfg.hz)
         end_time = time.time() + self.cfg.duration_sec
 
+        step_count = 0
+        logger.info(f"Starting control loop: hz={self.cfg.hz}, period={period:.3f}s, duration={self.cfg.duration_sec}s")
 
         while time.time() < end_time:
             t0 = time.time()
+            step_count += 1
+
             try:
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"CONTROL LOOP STEP {step_count}")
+                logger.debug(f"{'='*80}")
+
                 # 1) Acquire camera
                 img = self.data_adapter.get_qcar2_camera_data(self.car, self.camera_id)
                 if img is None:
+                    logger.warning(f"Step {step_count}: No camera image received, stopping car")
                     # If no image, stop car briefly
                     self.control_adapter.send_control_command(self.car, 0.0, 0.0)
                     time.sleep(period)
                     continue
 
+                logger.debug(f"Step {step_count}: Camera image acquired, shape={img.shape}")
+
                 # 2) Prepare model input
                 model_input = self.data_adapter.process_camera_image(img)
+                logger.debug(f"Step {step_count}: Model input prepared, shape={model_input.shape}")
 
                 # 3) Model inference
                 H, W = model_input.shape[:2]
@@ -155,6 +168,8 @@ class SimLingoQcar2Driver:
                     "extrinsics": self._E,
                 }
                 vehicle_ctx = {"speed_mps": float(self._last_speed_mps)}
+
+                logger.debug(f"Step {step_count}: Running model inference...")
                 out = self.model.inference(model_input, camera_info=camera_ctx, vehicle_info=vehicle_ctx)
 
                 if self.cfg.show_current_instruction:
@@ -163,7 +178,10 @@ class SimLingoQcar2Driver:
                     logger.info(f"\033[92mAgent's comment: {out['language_text']}\033[0m")
 
                 # 4) Convert and send to QCar2
+                logger.debug(f"Step {step_count}: Processing control output...")
                 fwd, turn = self.control_adapter.process_simlingo_output(out, current_speed=self._last_speed_mps)
+
+                logger.debug(f"Step {step_count}: Sending control command to QCar2...")
                 _, info = self.control_adapter.send_control_command(self.car, fwd, turn)
 
                 # 5) Update speed estimate
@@ -175,24 +193,42 @@ class SimLingoQcar2Driver:
                         dt = max(1e-3, now - self._last_time)
                         dx = float(loc[0]) - float(self._last_location[0])
                         dy = float(loc[1]) - float(self._last_location[1])
+                        dz = float(loc[2]) - float(self._last_location[2])
                         yaw = float(rot[2])
                         fx = math.cos(yaw); fy = math.sin(yaw)
-                        self._last_speed_mps = (dx * fx + dy * fy) / dt
+                        speed_estimate = (dx * fx + dy * fy) / dt
+                        self._last_speed_mps = speed_estimate
+
+                        logger.debug(f"Step {step_count}: Vehicle state update:")
+                        logger.debug(f"  Location: [{loc[0]:.3f}, {loc[1]:.3f}, {loc[2]:.3f}]")
+                        logger.debug(f"  Rotation (yaw): {np.degrees(yaw):.2f}°")
+                        logger.debug(f"  Delta position: dx={dx:.4f}, dy={dy:.4f}, dz={dz:.4f}")
+                        logger.debug(f"  Delta time: {dt:.4f}s")
+                        logger.debug(f"  Speed estimate: {speed_estimate:.4f} m/s")
+                    else:
+                        logger.debug(f"Step {step_count}: First location update")
+                        logger.debug(f"  Location: [{loc[0]:.3f}, {loc[1]:.3f}, {loc[2]:.3f}]")
+                        logger.debug(f"  Rotation (yaw): {np.degrees(rot[2]):.2f}°")
+
                     self._last_location = (float(loc[0]), float(loc[1]), float(loc[2]))
                     self._last_time = now
 
             except KeyboardInterrupt:
+                logger.info("Keyboard interrupt received, stopping...")
                 break
             except Exception as e:
-                logger.error(f"Loop error: {e}")
+                logger.error(f"Step {step_count}: Loop error: {e}", exc_info=True)
                 self.control_adapter.send_control_command(self.car, 0.0, 0.0)
 
             # Maintain loop rate
             dt = time.time() - t0
             if dt < period:
                 time.sleep(period - dt)
+            else:
+                logger.warning(f"Step {step_count}: Loop took {dt:.3f}s, exceeding period {period:.3f}s")
 
         # Stop the vehicle
+        logger.info(f"Control loop finished after {step_count} steps. Stopping vehicle.")
         self.control_adapter.send_control_command(self.car, 0.0, 0.0)
 
     def close(self) -> None:
@@ -221,14 +257,7 @@ def run_cli(
     show_agents_comments: bool = False,
     show_current_instruction: bool = False,
 ) -> int:
-    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("transformers").setLevel(logging.WARNING)
-    logging.getLogger("transformers_modules").setLevel(logging.WARNING)
-    logging.getLogger("matplotlib").setLevel(logging.WARNING)
-    logging.getLogger("PIL").setLevel(logging.WARNING)
-    logging.getLogger("timm").setLevel(logging.WARNING)
-
+    # Logging is now configured in main.py, so we don't need to set it up here
     cfg = DriverConfig(hz=hz, duration_sec=duration, show_agents_comments=show_agents_comments, show_current_instruction=show_current_instruction)
     driver = SimLingoQcar2Driver(cfg)
     ok = driver.run()
