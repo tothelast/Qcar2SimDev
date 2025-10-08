@@ -14,6 +14,11 @@ REPO_ROOT = HERE.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+# Add simlingo directory to path for simlingo_training imports
+SIMLINGO_DIR = REPO_ROOT / "simlingo"
+if str(SIMLINGO_DIR) not in sys.path:
+    sys.path.insert(0, str(SIMLINGO_DIR))
+
 from src.integration.main_bridge import run_cli
 
 
