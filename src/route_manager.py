@@ -39,30 +39,47 @@ class RouteManager:
             Tuple of (target_point, next_target_point) in world coordinates
             Both are [x, y, z] arrays
         """
-        # Find nearest waypoint
-        distances = np.linalg.norm(self.route_waypoints[:, :2] - current_position[:2], axis=1)
-        nearest_idx = np.argmin(distances)
-        
-        # Update current waypoint index (only move forward)
-        if nearest_idx > self.current_waypoint_index:
-            self.current_waypoint_index = nearest_idx
+        # Find nearest waypoint AHEAD of current position to update progress
+        # Only search from current index forward to avoid jumping to waypoints behind
+        # This is critical for routes that loop back or have parallel sections
+        search_start = self.current_waypoint_index
+        search_end = min(self.current_waypoint_index + 10, len(self.route_waypoints))  # Look ahead max 10 waypoints
+
+        if search_end > search_start:
+            distances_ahead = np.linalg.norm(
+                self.route_waypoints[search_start:search_end, :2] - current_position[:2],
+                axis=1
+            )
+            nearest_idx_relative = np.argmin(distances_ahead)
+            nearest_idx = search_start + nearest_idx_relative
+
+            # Update current waypoint index (only move forward)
+            if nearest_idx > self.current_waypoint_index:
+                self.current_waypoint_index = nearest_idx
         
         # Find target waypoint based on lookahead distance
         target_idx = self.current_waypoint_index
         accumulated_distance = 0.0
-        
+
+        # Start accumulating from current position to first waypoint
+        if self.current_waypoint_index < len(self.route_waypoints):
+            accumulated_distance = np.linalg.norm(
+                self.route_waypoints[self.current_waypoint_index, :2] - current_position[:2]
+            )
+
         for i in range(self.current_waypoint_index, len(self.route_waypoints) - 1):
+            if accumulated_distance >= self.lookahead_distance:
+                target_idx = i
+                break
+
             segment_distance = np.linalg.norm(
                 self.route_waypoints[i + 1, :2] - self.route_waypoints[i, :2]
             )
             accumulated_distance += segment_distance
-            
-            if accumulated_distance >= self.lookahead_distance:
-                target_idx = i + 1
-                break
-        else:
-            # If we reach the end, use the last waypoint
-            target_idx = len(self.route_waypoints) - 1
+            target_idx = i + 1
+
+        # Ensure we don't go past the end
+        target_idx = min(target_idx, len(self.route_waypoints) - 1)
         
         # Get target point
         target_point = self.route_waypoints[target_idx]

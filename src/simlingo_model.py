@@ -74,10 +74,13 @@ class SimlingoModelWrapper:
 
         # Load processor (needed for model instantiation)
         if self.processor is None:
-            print(f"Loading processor from {self.cfg.model.vision_model.variant}...")
+            # Use local pretrained model to avoid HF authentication issues
+            local_model_path = f"pretrained/{self.cfg.model.vision_model.variant.split('/')[1]}"
+            print(f"Loading processor from local path: {local_model_path}...")
             self.processor = AutoProcessor.from_pretrained(
-                self.cfg.model.vision_model.variant,
-                trust_remote_code=True
+                local_model_path,
+                trust_remote_code=True,
+                local_files_only=True
             )
 
         # Instantiate model architecture using Hydra
@@ -150,20 +153,24 @@ class SimlingoModelWrapper:
         
     def load_tokenizer(self):
         """Load tokenizer and add special tokens."""
-        print(f"Loading tokenizer from {self.config.encoder_variant}...")
-        
+        # Use local pretrained model to avoid HF authentication issues
+        local_model_path = f"pretrained/{self.config.encoder_variant.split('/')[1]}"
+        print(f"Loading tokenizer from local path: {local_model_path}...")
+
         try:
             # Try loading as processor first (for InternVL2)
             self.processor = AutoProcessor.from_pretrained(
-                self.config.encoder_variant,
-                trust_remote_code=True
+                local_model_path,
+                trust_remote_code=True,
+                local_files_only=True
             )
             self.tokenizer = self.processor.tokenizer
         except:
             # Fall back to tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.config.encoder_variant,
-                trust_remote_code=True
+                local_model_path,
+                trust_remote_code=True,
+                local_files_only=True
             )
         
         # Add special tokens

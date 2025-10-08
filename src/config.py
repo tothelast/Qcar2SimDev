@@ -140,11 +140,12 @@ class SimlingoQCar2Config:
         self.qcar2_actor_number = 0
 
         # QCar2 spawn location (QLabs Cityscape Lite coordinates)
-        # Spawn location adjusted to be near the route start
-        # The route starts at [0, 1.3] but we spawn slightly behind at [0, -1.3]
-        # Keep original heading of 90° (facing +Y direction)
-        self.qcar2_spawn_location = [0.0, -1.300, 0.005]  # [x, y, z]
-        self.qcar2_spawn_rotation = [0.0, 0.0, np.pi/2]  # [roll, pitch, yaw] in radians (90° = facing +Y)
+        # Spawn at Node 13 (roundabout route start)
+        # Coordinates from SDCSRoadMap with proper scaling:
+        #   SDCSRoadMap: [0.26862, 1.84981] → QLabs: [2.686, 18.498] = × 10
+        # Heading: 90° (facing north/east)
+        self.qcar2_spawn_location = [2.686, 18.498, 0.005]  # [x, y, z] - Node 13
+        self.qcar2_spawn_rotation = [0.0, 0.0, 1.5708]  # [roll, pitch, yaw] in radians (90° = 1.5708 rad)
 
         # QCar2 camera selection
         self.qcar2_camera = 3  # CAMERA_CSI_FRONT
@@ -152,51 +153,67 @@ class SimlingoQCar2Config:
         # -------------------------------------------------------------------------
         # Route Waypoints (QLabs Cityscape Lite Global Coordinates)
         # -------------------------------------------------------------------------
-        # Route: Simple straight-line test route for visual verification
-        #
-        # This is a SIMPLE TEST ROUTE to verify that waypoints are correctly
-        # placed on the roads in QLabs Cityscape Lite.
+        # Route: Node 13 → 19 → 17 → 20 → 22 (Roundabout Navigation)
         #
         # Route description:
-        # - Starts at spawn location [0, -1.3] heading 90° (facing +Y/North)
-        # - Goes straight north along X=0 for ~41 meters
-        # - Waypoints spaced every 2 meters for smooth control
-        # - Total length: 41.3 meters
-        # - 22 waypoints total
+        # - Generated using SDCSRoadMap.generate_path([13, 19, 17, 20, 22])
+        # - Follows actual road network in QLabs Cityscape
+        # - Coordinates scaled: QLabs_X = SDCSRoadMap_X × 10, QLabs_Y = SDCSRoadMap_Y × 10
+        # - Total length: ~89 meters
+        # - 36 waypoints (downsampled from 893 to ~2.5m spacing)
+        # - Starts at Node 13 [2.686, 18.498] heading 90°
+        # - Ends at Node 22 [-19.841, 29.760] heading -90°
         #
-        # This route should be easy to verify visually in the simulation:
-        # - The car should drive straight forward from spawn
-        # - No turns, just a straight line
-        # - If the car veers left/right, it indicates model bias or control issues
+        # This route tests:
+        # - Roundabout navigation (Node 19 → 17)
+        # - Multiple direction changes
+        # - Long-distance route following
+        # - Curved road sections
         self.route_waypoints = [
-            [  0.000,  -1.300, 0.0],  # Spawn location
-            [  0.000,   0.700, 0.0],
-            [  0.000,   2.700, 0.0],
-            [  0.000,   4.700, 0.0],
-            [  0.000,   6.700, 0.0],
-            [  0.000,   8.700, 0.0],
-            [  0.000,  10.700, 0.0],
-            [  0.000,  12.700, 0.0],
-            [  0.000,  14.700, 0.0],
-            [  0.000,  16.700, 0.0],
-            [  0.000,  18.700, 0.0],
-            [  0.000,  20.700, 0.0],
-            [  0.000,  22.700, 0.0],
-            [  0.000,  24.700, 0.0],
-            [  0.000,  26.700, 0.0],
-            [  0.000,  28.700, 0.0],
-            [  0.000,  30.700, 0.0],
-            [  0.000,  32.700, 0.0],
-            [  0.000,  34.700, 0.0],
-            [  0.000,  36.700, 0.0],
-            [  0.000,  38.700, 0.0],
-            [  0.000,  40.000, 0.0],  # End of route
+            [  2.686,  18.498, 0.0],  # Start (spawn location - Node 13)
+            [  2.686,  20.998, 0.0],
+            [  3.144,  23.456, 0.0],
+            [  4.591,  25.593, 0.0],
+            [  6.452,  27.274, 0.0],
+            [  8.362,  28.993, 0.0],  # Waypoint 5
+            [ 10.273,  30.606, 0.0],
+            [ 12.686,  31.523, 0.0],
+            [ 15.259,  31.440, 0.0],
+            [ 17.826,  31.740, 0.0],
+            [ 20.094,  32.978, 0.0],  # Waypoint 10
+            [ 21.733,  34.976, 0.0],
+            [ 22.505,  37.442, 0.0],
+            [ 22.298,  40.018, 0.0],
+            [ 21.142,  42.329, 0.0],
+            [ 19.204,  44.039, 0.0],  # Waypoint 15
+            [ 16.768,  44.900, 0.0],
+            [ 14.270,  44.974, 0.0],
+            [ 11.770,  44.974, 0.0],
+            [  9.170,  44.974, 0.0],
+            [  6.570,  44.974, 0.0],  # Waypoint 20
+            [  3.970,  44.974, 0.0],
+            [  1.370,  44.974, 0.0],
+            [ -1.200,  44.974, 0.0],
+            [ -3.700,  44.974, 0.0],
+            [ -6.200,  44.974, 0.0],  # Waypoint 25
+            [ -8.800,  44.974, 0.0],
+            [-11.328,  44.965, 0.0],
+            [-13.872,  44.473, 0.0],
+            [-16.167,  43.271, 0.0],
+            [-18.019,  41.460, 0.0],  # Waypoint 30
+            [-19.273,  39.193, 0.0],
+            [-19.821,  36.661, 0.0],
+            [-19.841,  34.160, 0.0],
+            [-19.841,  31.660, 0.0],
+            [-19.841,  29.760, 0.0],  # End (Node 22)
         ]
 
         # Lookahead distance for target point selection
         # This determines how far ahead the vehicle looks for the target point
-        # 10 meters works well with the waypoint spacing of 5-8 meters
-        self.target_point_lookahead = 10.0  # meters
+        # Set to 5.0m for this 89m route (appropriate for curved roads and roundabout)
+        # Original SimLingo uses 10m for highway driving
+        # Route length: 89m, so lookahead should be < 44m
+        self.target_point_lookahead = 5.0  # meters
         
         # -------------------------------------------------------------------------
         # Visualization and Debugging
@@ -204,6 +221,17 @@ class SimlingoQCar2Config:
         self.enable_visualization = True
         self.save_images = False
         self.save_path = "output"
+
+        # QLabs trajectory tracer configuration
+        self.enable_trajectory_tracer = True  # Enable real-time trajectory visualization in QLabs
+        self.trajectory_tracer_color = [1.0, 0.0, 0.0]  # RGB color (red for actual trajectory)
+        self.trajectory_tracer_width = 0.05  # Line width in meters
+        self.trajectory_tracer_update_interval = 5  # Update every N steps (reduce overhead)
+
+        # Planned route visualization
+        self.enable_planned_route_tracer = True  # Show planned route as green line
+        self.planned_route_tracer_color = [0.0, 1.0, 0.0]  # RGB color (green for planned route)
+        self.planned_route_tracer_width = 0.05  # Line width in meters
         
         # -------------------------------------------------------------------------
         # Special Tokens for Language Model
