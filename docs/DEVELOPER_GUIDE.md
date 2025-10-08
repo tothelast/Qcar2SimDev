@@ -51,7 +51,7 @@ Qcar2SimDev/
   - **Route waypoints:** Full route from spawn to destination
   - **Spawn location:** QCar2 initial position and heading
   - **Control parameters:**
-    - Lateral PID: `turn_kp=3.25`, `turn_ki=0.75`, `turn_kd=1.20` (QCar2-tuned)
+    - Lateral PID: `turn_kp=3.25`, `turn_ki=1.0`, `turn_kd=1.0` (Official SimLingo)
     - Longitudinal: Linear Regression (7 coefficients)
     - Throttle limits: `clip_throttle=1.0`, `max_throttle=1.0`
   - **Kinematic bicycle model:** Wheelbase, steering gain, acceleration parameters
@@ -88,8 +88,9 @@ Qcar2SimDev/
 - **`control_converter.py`** - Control conversion (Official SimLingo implementation)
   - **Two controller classes:**
     1. **`LateralPIDController`** - Steering control
-       - QCar2-tuned PID gains: Kp=3.25, Ki=0.75, Kd=1.20
-       - Continuous lookahead: `0.976 * speed_kmh + 1.915`
+       - **Official SimLingo PID gains:** Kp=3.25, Ki=1.0, Kd=1.0
+       - **Discrete lookahead:** 2.25m (slow), 3.0m (medium), 7.0m (fast)
+       - Speed thresholds: 5.5 m/s and 15.0 m/s
        - Outputs steering angle [-1, 1]
     2. **`LongitudinalLinearRegressionController`** - Speed control
        - Linear regression with 7 coefficients (official SimLingo)
@@ -288,34 +289,32 @@ python src/visualize_trajectory.py --log debug_output/trajectory_log_YYYYMMDD_HH
 
 ### Common Issues & Solutions
 
-**High lateral deviation / oscillations:**
-- **Cause:** PID gains not tuned for QCar2 dynamics
-- **Solution:** Adjust lateral PID gains in `control_converter.py`:
-  - Reduce `k_i` to reduce oscillations (currently 0.75)
-  - Increase `k_d` to add damping (currently 1.20)
-  - See `QCAR2_PID_TUNING.md` for details
-
-**Low success rate (<20%):**
-- **Cause:** Lateral deviation consistently above 1.0m threshold
+**Moderate lateral deviation (mean ~1.5m):**
+- **Current State:** Success rate ~30% (within 1.0m threshold)
+- **Cause:** Domain gap between CARLA training and QLabs QCar2
+- **Status:** This is expected with official SimLingo parameters
 - **Solution:**
-  - Check PID tuning (see above)
-  - Verify route waypoints are reasonable (use `visualize_route.py`)
-  - Check for domain gap issues (model trained on CARLA, running on QLabs)
+  - Fine-tune model on QLabs data for better performance
+  - Consider hybrid control (model + MPC/LQR)
+  - Note: Custom PID tuning performed worse than official parameters
 
-**Vehicle too slow:**
-- **Cause:** QCar2 has lower acceleration than CARLA vehicles
-- **Current:** Average speed ~0.4 m/s, max ~1.2 m/s
+**Vehicle speed (~0.7 m/s average):**
+- **Current State:** Mean 0.7 m/s, max 1.27 m/s
+- **Cause:** QCar2 has lower acceleration than CARLA vehicles (1/10 scale)
+- **Status:** This is a hardware limitation
 - **Solution:**
-  - This is a hardware limitation (1/10 scale vehicle)
-  - Linear regression controller is already at max throttle
-  - Consider fine-tuning model on QLabs data
+  - Linear regression controller is already at max throttle (0.994 mean)
+  - Fine-tuning model on QLabs data may help
+  - Consider speed scaling in waypoint predictions
 
-**Collisions:**
-- **Cause:** Aggressive steering at higher speeds
+**Collisions (~4% of steps):**
+- **Current State:** 19 collisions in 462 steps
+- **Cause:** Model predictions occasionally lead to wall contact
+- **Status:** Acceptable for current implementation
 - **Solution:**
-  - Increase Kd for more damping
-  - Add speed limiting during high lateral deviation
-  - See `POST_FIX_ANALYSIS.md` for detailed analysis
+  - Add collision avoidance logic (brake when collision detected)
+  - Fine-tune model with QLabs collision data
+  - Add safety margins to route waypoints
 
 **Model inference slow (~0.5s per frame):**
 - **Expected:** This is normal for InternVL2-1B on GPU
@@ -324,6 +323,11 @@ python src/visualize_trajectory.py --log debug_output/trajectory_log_YYYYMMDD_HH
   - Use GPU if available (much faster than CPU)
   - Consider model quantization for faster inference
   - Async processing (run model in separate thread)
+
+**Important Note on PID Tuning:**
+- Custom QCar2-tuned parameters (Ki=0.75, Kd=1.20, continuous lookahead) performed **worse** than official SimLingo parameters
+- **Current best:** Official SimLingo parameters (Ki=1.0, Kd=1.0, discrete lookahead)
+- Success rate: 30% (official) vs. 15% (custom tuning)
 
 ---
 
@@ -346,17 +350,22 @@ All parameters are defined in the `SimlingoQCar2Config` class.
 - `imagenet_mean`: `[0.485, 0.456, 0.406]` (normalization)
 - `imagenet_std`: `[0.229, 0.224, 0.225]` (normalization)
 
-### Control Parameters (QCar2-Tuned)
+### Control Parameters (Official SimLingo)
 **Lateral PID (in `control_converter.py`):**
 - `k_p`: `3.25` (proportional gain - from config.turn_kp)
-- `k_i`: `0.75` (integral gain - tuned for QCar2, reduced from 1.0)
-- `k_d`: `1.20` (derivative gain - tuned for QCar2, increased from 1.0)
-- `lookahead`: `0.976 * speed_kmh + 1.915` (continuous function)
+- `k_i`: `1.0` (integral gain - from config.turn_ki)
+- `k_d`: `1.0` (derivative gain - from config.turn_kd)
+- `turn_n`: `20` (buffer size for integral/derivative)
+- **Lookahead (discrete):**
+  - `2.25m` when speed < 5.5 m/s
+  - `3.0m` when 5.5 m/s ≤ speed < 15.0 m/s
+  - `7.0m` when speed ≥ 15.0 m/s
 
 **Longitudinal Linear Regression (in `control_converter.py`):**
 - 7 regression coefficients (hardcoded from official SimLingo)
 - `max_acceleration`: `1.89` m/tick
 - `max_deceleration`: `-4.82` m/tick
+- `minimum_target_speed`: `0.278` m/s
 
 **Throttle Limits:**
 - `clip_throttle`: `1.0` (maximum throttle)
@@ -385,13 +394,22 @@ All parameters are defined in the `SimlingoQCar2Config` class.
 5. **Iterate** based on analysis
 6. **Document** findings in analysis reports
 
-### Tuning PID Parameters
+### Tuning PID Parameters (Not Recommended)
+**Note:** Custom PID tuning has been tested and performed worse than official SimLingo parameters.
+
+If you still want to experiment:
 1. **Identify issue** from trajectory visualization (oscillations, high deviation, etc.)
 2. **Adjust parameters** in `src/control_converter.py`:
    - Lateral PID: `k_p`, `k_i`, `k_d` in `LateralPIDController.__init__`
 3. **Test** with same route
-4. **Compare** before/after metrics
-5. **Document** changes in tuning reports
+4. **Compare** before/after metrics (success rate, lateral deviation, collisions)
+5. **Revert if worse** - official parameters are currently best
+6. **Document** changes and results
+
+**Previous Tuning Attempt:**
+- Custom: Ki=0.75, Kd=1.20, continuous lookahead → Success rate: 15%
+- Official: Ki=1.0, Kd=1.0, discrete lookahead → Success rate: 30%
+- **Conclusion:** Official parameters are better for QCar2
 
 ### Creating New Routes
 1. **Choose nodes** from SDCSRoadMap (see `python/hal/products/mats.py`)
@@ -413,9 +431,10 @@ All parameters are defined in the `SimlingoQCar2Config` class.
 
 **Control Architecture:**
 - Uses official SimLingo control architecture (verified against paper)
-- Lateral: Simple PID controller (QCar2-tuned parameters)
+- Lateral: Simple PID controller (official SimLingo parameters: Kp=3.25, Ki=1.0, Kd=1.0)
 - Longitudinal: Linear Regression controller (official SimLingo default)
 - See `SIMLINGO_PAPER_VERIFICATION.md` for detailed verification
+- **Note:** Custom PID tuning performed worse than official parameters
 
 **Coordinate Systems:**
 - Model outputs waypoints in **ego frame** (vehicle-centric)
@@ -434,12 +453,16 @@ All parameters are defined in the `SimlingoQCar2Config` class.
 **Domain Gap:**
 - Model trained on CARLA (full-size vehicles, different dynamics)
 - Running on QLabs QCar2 (1/10 scale, different acceleration)
-- PID parameters tuned for QCar2 (see `QCAR2_PID_TUNING.md`)
+- Using official SimLingo parameters (best performance observed)
 
-**Performance:**
+**Current Performance (Official SimLingo Parameters):**
 - Model inference: ~0.5s per frame on GPU
 - Control loop: ~2 Hz (limited by model inference)
-- Expected speeds: 0.4-1.2 m/s (QCar2 hardware limitation)
+- Average speed: 0.7 m/s, max speed: 1.27 m/s
+- Success rate: ~30% (within 1.0m of route)
+- Mean lateral deviation: 1.5m
+- Collision rate: ~4% of steps
+- Route completion: Yes (reaches destination)
 
 ---
 
@@ -451,8 +474,8 @@ All parameters are defined in the `SimlingoQCar2Config` class.
 |------|------|----------|
 | **Change route** | `config.py` | `SimlingoQCar2Config.route_waypoints` |
 | **Change spawn location** | `config.py` | `SimlingoQCar2Config.qcar2_spawn_location` |
-| **Tune lateral PID** | `control_converter.py` | `LateralPIDController.__init__` (k_p, k_i, k_d) |
-| **Adjust lookahead** | `control_converter.py` | `LateralPIDController.__init__` (lookahead formula) |
+| **Tune lateral PID** | `control_converter.py` | `LateralPIDController.__init__` (k_p, k_i, k_d) - Not recommended |
+| **Adjust lookahead** | `control_converter.py` | `LateralPIDController.__init__` (discrete thresholds) |
 | **Modify throttle limits** | `config.py` | `SimlingoQCar2Config.clip_throttle` |
 | **Generate new route** | `generate_route_coordinates.py` | Use SDCSRoadMap |
 | **Preview route** | `visualize_route.py` | Run before testing |
