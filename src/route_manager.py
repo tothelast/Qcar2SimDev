@@ -1,0 +1,197 @@
+"""
+Route Management Module.
+Manages waypoints and converts global target points to ego frame.
+"""
+
+import numpy as np
+from typing import List, Tuple, Optional
+
+
+class RouteManager:
+    """Manages route waypoints and target point selection."""
+    
+    def __init__(self, config):
+        """
+        Initialize route manager.
+        
+        Args:
+            config: SimlingoQCar2Config instance
+        """
+        self.config = config
+        
+        # Route waypoints in world coordinates
+        self.route_waypoints = np.array(config.route_waypoints, dtype=np.float32)
+        
+        # Current waypoint index
+        self.current_waypoint_index = 0
+        
+        # Target point lookahead distance
+        self.lookahead_distance = config.target_point_lookahead
+        
+    def get_target_point(self, current_position: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get target point based on current position.
+        
+        Args:
+            current_position: Current vehicle position [x, y, z]
+            
+        Returns:
+            Tuple of (target_point, next_target_point) in world coordinates
+            Both are [x, y, z] arrays
+        """
+        # Find nearest waypoint
+        distances = np.linalg.norm(self.route_waypoints[:, :2] - current_position[:2], axis=1)
+        nearest_idx = np.argmin(distances)
+        
+        # Update current waypoint index (only move forward)
+        if nearest_idx > self.current_waypoint_index:
+            self.current_waypoint_index = nearest_idx
+        
+        # Find target waypoint based on lookahead distance
+        target_idx = self.current_waypoint_index
+        accumulated_distance = 0.0
+        
+        for i in range(self.current_waypoint_index, len(self.route_waypoints) - 1):
+            segment_distance = np.linalg.norm(
+                self.route_waypoints[i + 1, :2] - self.route_waypoints[i, :2]
+            )
+            accumulated_distance += segment_distance
+            
+            if accumulated_distance >= self.lookahead_distance:
+                target_idx = i + 1
+                break
+        else:
+            # If we reach the end, use the last waypoint
+            target_idx = len(self.route_waypoints) - 1
+        
+        # Get target point
+        target_point = self.route_waypoints[target_idx]
+        
+        # Get next target point (one waypoint ahead)
+        next_target_idx = min(target_idx + 1, len(self.route_waypoints) - 1)
+        next_target_point = self.route_waypoints[next_target_idx]
+        
+        return target_point, next_target_point
+    
+    def get_target_point_ego(self, current_position: np.ndarray, current_heading: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get target point in ego vehicle frame.
+        
+        Args:
+            current_position: Current vehicle position [x, y, z]
+            current_heading: Current vehicle heading in radians
+            
+        Returns:
+            Tuple of (target_point_ego, next_target_point_ego)
+            Both are [x, y] arrays in ego frame
+        """
+        # Get target points in world frame
+        target_world, next_target_world = self.get_target_point(current_position)
+
+        # Debug: Print world frame info (first call only)
+        if not hasattr(self, '_target_debug_printed'):
+            print(f"DEBUG route: current_position (world) = {current_position}")
+            print(f"DEBUG route: current_heading (world) = {current_heading:.4f} rad = {np.degrees(current_heading):.1f}°")
+            print(f"DEBUG route: target_world = {target_world}")
+            print(f"DEBUG route: next_target_world = {next_target_world}")
+            print(f"DEBUG route: route_waypoints[0:5] (world) = {self.route_waypoints[:5]}")
+            self._target_debug_printed = True
+
+        # Convert to ego frame
+        target_ego = self._world_to_ego(target_world[:2], current_position[:2], current_heading)
+        next_target_ego = self._world_to_ego(next_target_world[:2], current_position[:2], current_heading)
+
+        # Debug: Print ego frame info (first call only)
+        if not hasattr(self, '_target_ego_debug_printed'):
+            print(f"DEBUG route: target_ego = {target_ego}")
+            print(f"DEBUG route: next_target_ego = {next_target_ego}")
+            self._target_ego_debug_printed = True
+
+        return target_ego, next_target_ego
+    
+    def _world_to_ego(self, world_point: np.ndarray, vehicle_pos: np.ndarray, vehicle_heading: float) -> np.ndarray:
+        """
+        Convert world coordinates to ego vehicle frame.
+        Matches the original Simlingo implementation (inverse_conversion_2d).
+
+        Args:
+            world_point: Point in world coordinates [x, y]
+            vehicle_pos: Vehicle position [x, y]
+            vehicle_heading: Vehicle heading in radians (yaw)
+
+        Returns:
+            Point in ego frame [x, y]
+        """
+        # Create rotation matrix (same as original Simlingo)
+        rotation_matrix = np.array([
+            [np.cos(vehicle_heading), -np.sin(vehicle_heading)],
+            [np.sin(vehicle_heading), np.cos(vehicle_heading)]
+        ])
+
+        # Apply transformation: R^T @ (point - translation)
+        # This matches the original Simlingo inverse_conversion_2d function
+        ego_point = rotation_matrix.T @ (world_point - vehicle_pos)
+
+        return ego_point.astype(np.float32)
+    
+    def is_route_complete(self, current_position: np.ndarray, threshold: float = 2.0) -> bool:
+        """
+        Check if route is complete.
+        
+        Args:
+            current_position: Current vehicle position [x, y, z]
+            threshold: Distance threshold to final waypoint (meters)
+            
+        Returns:
+            True if route is complete, False otherwise
+        """
+        final_waypoint = self.route_waypoints[-1]
+        distance_to_final = np.linalg.norm(final_waypoint[:2] - current_position[:2])
+        
+        return distance_to_final < threshold
+    
+    def get_progress(self, current_position: np.ndarray) -> float:
+        """
+        Get route progress as percentage.
+        
+        Args:
+            current_position: Current vehicle position [x, y, z]
+            
+        Returns:
+            Progress percentage (0.0 to 1.0)
+        """
+        if len(self.route_waypoints) <= 1:
+            return 1.0
+        
+        # Find nearest waypoint
+        distances = np.linalg.norm(self.route_waypoints[:, :2] - current_position[:2], axis=1)
+        nearest_idx = np.argmin(distances)
+        
+        # Calculate progress
+        progress = nearest_idx / (len(self.route_waypoints) - 1)
+        
+        return np.clip(progress, 0.0, 1.0)
+    
+    def add_waypoint(self, waypoint: np.ndarray):
+        """
+        Add waypoint to route.
+        
+        Args:
+            waypoint: Waypoint [x, y, z]
+        """
+        self.route_waypoints = np.vstack([self.route_waypoints, waypoint])
+    
+    def set_route(self, waypoints: List[List[float]]):
+        """
+        Set new route waypoints.
+        
+        Args:
+            waypoints: List of waypoints [[x, y, z], ...]
+        """
+        self.route_waypoints = np.array(waypoints, dtype=np.float32)
+        self.current_waypoint_index = 0
+    
+    def reset(self):
+        """Reset route manager to start of route."""
+        self.current_waypoint_index = 0
+

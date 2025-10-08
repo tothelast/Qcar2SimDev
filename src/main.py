@@ -1,125 +1,406 @@
-#!/usr/bin/env python3
 """
-Entry point for SimLingo-Qcar2 minimal integration demo.
+Main entry point for Simlingo-QCar2 integration.
+Run with: python src/main.py
 """
-from __future__ import annotations
 
-import argparse
-import logging
 import sys
+import os
+import time
+import numpy as np
+import argparse
+import json
 from datetime import datetime
-from pathlib import Path
 
-# Ensure the repository root is on sys.path so `src` is importable
-HERE = Path(__file__).resolve()
-REPO_ROOT = HERE.parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+# Add src directory to path
+sys.path.insert(0, os.path.dirname(__file__))
 
-# Add simlingo directory to path for simlingo_training imports
-SIMLINGO_DIR = REPO_ROOT / "simlingo"
-if str(SIMLINGO_DIR) not in sys.path:
-    sys.path.insert(0, str(SIMLINGO_DIR))
-
-from src.integration.main_bridge import run_cli
+from config import SimlingoQCar2Config
+from qcar2_interface import QCar2Interface
+from camera_processor import CameraProcessor
+from state_estimator import StateEstimator
+from route_manager import RouteManager
+from simlingo_model import SimlingoModelWrapper
+from control_converter import ControlConverter
 
 
-def setup_logging(debug: bool = False) -> Path:
-    """
-    Configure logging with file output and console output.
+class SimlingoQCar2Controller:
+    """Main controller for Simlingo-QCar2 integration."""
+    
+    def __init__(self, config_path=None):
+        """
+        Initialize controller.
+        
+        Args:
+            config_path: Path to custom config file (optional)
+        """
+        # Load configuration
+        self.config = SimlingoQCar2Config()
+        
+        # Initialize components
+        self.qcar_interface = QCar2Interface(self.config)
+        self.camera_processor = CameraProcessor(self.config)
+        self.state_estimator = StateEstimator(self.config)
+        self.route_manager = RouteManager(self.config)
+        self.model_wrapper = SimlingoModelWrapper(self.config)
+        self.control_converter = ControlConverter(self.config)
+        
+        # Control loop state
+        self.running = False
+        self.step_count = 0
+        self.stuck_detector = 0
+        self.force_move = 0
 
-    Args:
-        debug: If True, set file logging to DEBUG level. Otherwise INFO level.
+        # Trajectory logging
+        self.trajectory_log = []
+        self.collision_count = 0
+        self.start_time = None
+        
+    def initialize(self) -> bool:
+        """
+        Initialize all components.
+        
+        Returns:
+            True if initialization successful, False otherwise
+        """
+        print("=" * 80)
+        print("Simlingo-QCar2 Integration")
+        print("=" * 80)
+        
+        # Connect to QLabs
+        if not self.qcar_interface.connect():
+            return False
+        
+        # Spawn QCar2
+        if not self.qcar_interface.spawn_qcar():
+            return False
+        
+        # Possess camera for visualization
+        self.qcar_interface.possess_camera()
+        
+        # Load Simlingo model
+        try:
+            print("\nLoading Simlingo model...")
+            self.model_wrapper.load_tokenizer()
+            self.model_wrapper.load_model()
+            print("Model loaded successfully")
+        except Exception as e:
+            print(f"ERROR: Failed to load model: {e}")
+            import traceback
+            traceback.print_exc()
+            print("\nModel loading failed. Please check:")
+            print(f"1. Checkpoint path: {self.config.model_checkpoint_path}")
+            print(f"2. Hydra config path: {self.config.hydra_config_path}")
+            return False
+        
+        print("\nInitialization complete!")
+        print("=" * 80)
+        
+        return True
+    
+    def run_step(self) -> bool:
+        """
+        Execute one control loop iteration.
+        
+        Returns:
+            True if step successful, False otherwise
+        """
+        # Get camera image
+        image = self.qcar_interface.get_camera_image()
+        if image is None:
+            print("ERROR: Failed to get camera image")
+            return False
 
-    Returns:
-        Path to the log file
-    """
-    # Create logs directory if it doesn't exist
-    logs_dir = REPO_ROOT / "logs"
-    logs_dir.mkdir(exist_ok=True)
+        # Save raw camera image (before preprocessing) for debugging
+        if self.step_count == 0:
+            import cv2
+            import os
+            os.makedirs("debug_output", exist_ok=True)
+            img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            cv2.imwrite("debug_output/camera_raw_step0.jpg", img_bgr)
+            print(f"DEBUG: Saved raw camera image to debug_output/camera_raw_step0.jpg")
 
-    # Create timestamped log file
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = logs_dir / f"simlingo_qcar2_{timestamp}.log"
+        # Process camera image
+        camera_images, image_sizes = self.camera_processor.process_image(image)
+        camera_intrinsics = self.camera_processor.get_camera_intrinsics_tensor()
+        camera_extrinsics = self.camera_processor.get_camera_extrinsics_tensor()
+        
+        # Get current state
+        location, rotation = self.qcar_interface.get_state()
+        self.state_estimator.update(location, rotation)
+        
+        # Get velocity
+        velocity = self.state_estimator.get_velocity()
+        
+        # Get target points
+        current_position = self.state_estimator.get_position()
+        current_heading = self.state_estimator.get_heading()
+        target_point, next_target_point = self.route_manager.get_target_point_ego(
+            current_position, current_heading
+        )
+        
+        # Run model inference
+        speed_wps, route_wps, language = self.model_wrapper.inference(
+            camera_images=camera_images,
+            image_sizes=image_sizes,
+            camera_intrinsics=camera_intrinsics,
+            camera_extrinsics=camera_extrinsics,
+            vehicle_speed=velocity,
+            target_point=target_point,
+            next_target_point=next_target_point
+        )
 
-    # Determine log levels
-    file_level = logging.DEBUG if debug else logging.INFO
-    console_level = logging.INFO
+        if speed_wps is None or route_wps is None:
+            print("ERROR: Model inference failed")
+            return False
+        
+        # Convert to numpy
+        route_waypoints = route_wps[0].cpu().numpy()
+        speed_waypoints = speed_wps[0].cpu().numpy()
 
-    # Create formatters
-    file_formatter = logging.Formatter(
-        fmt='[%(asctime)s] [%(levelname)8s] [%(name)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    console_formatter = logging.Formatter(
-        fmt='[%(asctime)s] %(levelname)s: %(message)s',
-        datefmt='%H:%M:%S'
-    )
+        # NOTE: Bias correction disabled for trajectory logging test
+        # The model has a systematic leftward bias (avg Y = 0.34 for straight scenarios)
+        # BIAS_SCALE_FACTOR = 0.5  # Reduce Y predictions by 50%
+        # route_waypoints[:, 1] *= BIAS_SCALE_FACTOR
 
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)  # Capture all levels, handlers will filter
+        # Debug: Print waypoint information and save camera image
+        if self.step_count == 0:
+            print(f"DEBUG: route_waypoints shape: {route_waypoints.shape}")
+            print(f"DEBUG: speed_waypoints shape: {speed_waypoints.shape}")
+            print(f"DEBUG: First 3 route waypoints:\n{route_waypoints[:3]}")
+            print(f"DEBUG: First 3 speed waypoints:\n{speed_waypoints[:3]}")
+            print(f"DEBUG: Target point (ego): {target_point}")
+            print(f"DEBUG: Next target point (ego): {next_target_point}")
 
-    # Remove any existing handlers
-    root_logger.handlers.clear()
+            # Save camera image to inspect what the model sees
+            import cv2
+            import os
+            os.makedirs("debug_output", exist_ok=True)
+            # camera_images shape: [1, 1, num_patches, 3, 448, 448]
+            # Save the first patch
+            img_tensor = camera_images[0, 0, 0].cpu().numpy()  # [3, 448, 448]
+            img_tensor = np.transpose(img_tensor, (1, 2, 0))  # [448, 448, 3]
+            # Denormalize from ImageNet normalization
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            img = img_tensor * std + mean
+            img = np.clip(img * 255, 0, 255).astype(np.uint8)
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            cv2.imwrite("debug_output/camera_patch0_step0.jpg", img_bgr)
+            print(f"DEBUG: Saved camera image to debug_output/camera_patch0_step0.jpg")
 
-    # File handler (detailed logging)
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-    file_handler.setLevel(file_level)
-    file_handler.setFormatter(file_formatter)
-    root_logger.addHandler(file_handler)
+        # Compute control using PID
+        steer, throttle, brake = self.control_converter.control_pid(
+            route_waypoints, velocity, speed_waypoints
+        )
+        
+        # Stuck detection
+        if velocity < 0.1:
+            self.stuck_detector += 1
+        else:
+            self.stuck_detector = 0
 
-    # Console handler (minimal logging)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(console_level)
-    console_handler.setFormatter(console_formatter)
-    root_logger.addHandler(console_handler)
+        # Initial startup boost (first 50 steps or until moving)
+        # The Simlingo model is trained on moving vehicles, so we need to get it moving first
+        if self.step_count < 50 and velocity < 0.5:
+            throttle = max(0.3, throttle)  # Minimum 30% throttle
+            brake = False
+            if self.step_count == 0:
+                print("DEBUG: Applying initial startup boost to get vehicle moving")
 
-    # Suppress verbose third-party loggers
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("transformers").setLevel(logging.WARNING)
-    logging.getLogger("transformers_modules").setLevel(logging.WARNING)
-    logging.getLogger("matplotlib").setLevel(logging.WARNING)
-    logging.getLogger("PIL").setLevel(logging.WARNING)
-    logging.getLogger("timm").setLevel(logging.WARNING)
+        # Stuck recovery (after initial startup period)
+        elif self.stuck_detector > self.config.stuck_threshold:
+            self.force_move = self.config.creep_duration
 
-    # Log the configuration
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized: file={log_file.name}, file_level={logging.getLevelName(file_level)}, console_level={logging.getLevelName(console_level)}")
+        if self.force_move > 0:
+            throttle = max(self.config.creep_throttle, throttle)
+            brake = False
+            self.force_move -= 1
+        
+        # Convert to QCar2 control
+        forward_velocity, turn_angle = self.control_converter.convert_to_qcar2_control(
+            steer, throttle, brake, velocity, self.config.dt
+        )
+        
+        # Send control to QCar2
+        success, location, rotation = self.qcar_interface.set_control(
+            forward_velocity, turn_angle
+        )
 
-    return log_file
+        if not success:
+            print("ERROR: Failed to send control")
+            return False
+
+        # Log trajectory data
+        target_world, _ = self.route_manager.get_target_point(current_position)
+        distance_to_target = np.linalg.norm(target_world[:2] - current_position[:2])
+
+        # Check for collision
+        collision_detected = self.qcar_interface.check_collision()
+        if collision_detected:
+            self.collision_count += 1
+
+        trajectory_entry = {
+            'step': int(self.step_count),
+            'timestamp': float(time.time() - self.start_time if self.start_time else 0),
+            'position': current_position.tolist(),
+            'heading_deg': float(rotation[2] * 180 / np.pi),
+            'speed': float(velocity),
+            'steering': float(steer),
+            'throttle': float(throttle),
+            'brake': bool(brake),
+            'current_waypoint_index': int(self.route_manager.current_waypoint_index),
+            'target_waypoint': target_world.tolist(),
+            'distance_to_target': float(distance_to_target),
+            'collision': bool(collision_detected)
+        }
+        self.trajectory_log.append(trajectory_entry)
+        
+        # Print status
+        if self.step_count % 10 == 0:
+            progress = self.route_manager.get_progress(current_position)
+            current_wp_idx = self.route_manager.current_waypoint_index
+            total_wps = len(self.route_manager.route_waypoints)
+
+            print(f"Step {self.step_count:4d} | "
+                  f"Speed: {velocity:5.2f} m/s | "
+                  f"Steer: {steer:6.3f} | "
+                  f"Throttle: {throttle:5.3f} | "
+                  f"Brake: {brake} | "
+                  f"Progress: {progress*100:5.1f}%")
+            print(f"  Pos: [{current_position[0]:6.2f}, {current_position[1]:6.2f}] | "
+                  f"Heading: {trajectory_entry['heading_deg']:6.1f}° | "
+                  f"Target WP[{current_wp_idx}/{total_wps}]: [{target_world[0]:6.2f}, {target_world[1]:6.2f}] | "
+                  f"Dist: {distance_to_target:5.2f}m")
+
+            if language is not None:
+                print(f"  Language: {language}")
+        
+        self.step_count += 1
+        
+        # Check if route complete
+        if self.route_manager.is_route_complete(current_position):
+            print("\nRoute complete!")
+            return False
+        
+        return True
+    
+    def save_trajectory_log(self):
+        """Save trajectory log to file."""
+        os.makedirs("debug_output", exist_ok=True)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"debug_output/trajectory_log_{timestamp}.json"
+
+        # Prepare metadata
+        metadata = {
+            'timestamp': timestamp,
+            'total_steps': self.step_count,
+            'total_time': self.trajectory_log[-1]['timestamp'] if self.trajectory_log else 0,
+            'collision_count': self.collision_count,
+            'route_waypoints': self.route_manager.route_waypoints.tolist(),
+            'spawn_location': self.config.qcar2_spawn_location,
+            'spawn_rotation': self.config.qcar2_spawn_rotation
+        }
+
+        # Save to JSON
+        data = {
+            'metadata': metadata,
+            'trajectory': self.trajectory_log
+        }
+
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        print(f"\nTrajectory log saved to {filename}")
+
+        # Also save as "latest" for easy access
+        latest_filename = "debug_output/trajectory_log_latest.json"
+        with open(latest_filename, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        print(f"Trajectory log also saved to {latest_filename}")
+
+    def run(self):
+        """Run main control loop."""
+        self.running = True
+        self.start_time = time.time()
+
+        print("\nStarting control loop at {} Hz...".format(self.config.control_frequency))
+        print("Press Ctrl+C to stop")
+        print("-" * 80)
+
+        try:
+            while self.running:
+                loop_start_time = time.time()
+
+                # Execute one step
+                if not self.run_step():
+                    break
+
+                # Maintain control frequency
+                elapsed = time.time() - loop_start_time
+                sleep_time = self.config.dt - elapsed
+
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                else:
+                    print(f"WARNING: Control loop running slow ({elapsed:.3f}s > {self.config.dt:.3f}s)")
+
+        except KeyboardInterrupt:
+            print("\n\nControl loop interrupted by user")
+        
+        except Exception as e:
+            print(f"\n\nERROR: Control loop failed: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        finally:
+            self.shutdown()
+    
+    def shutdown(self):
+        """Shutdown and cleanup."""
+        print("\n" + "=" * 80)
+        print("Shutting down...")
+
+        # Save trajectory log
+        if self.trajectory_log:
+            self.save_trajectory_log()
+
+        # Stop vehicle
+        if self.qcar_interface.connected:
+            print("Stopping vehicle...")
+            self.qcar_interface.set_control(0.0, 0.0)
+
+        # Close QLabs connection
+        self.qcar_interface.close()
+        
+        print("Shutdown complete")
+        print("=" * 80)
 
 
 def main():
-    p = argparse.ArgumentParser(description="Run SimLingo-Qcar2 integration demo")
-    p.add_argument("--hz", type=float, default=5.0, help="Control loop frequency (default: 5 Hz)")
-    p.add_argument("--duration", type=float, default=30.0, help="Run duration in seconds")
-    p.add_argument("--show_agents_comments", action="store_true", help="Show model's reasoning/commentary")
-    p.add_argument("--show_current_instruction", action="store_true", help="Show current instruction")
-    p.add_argument("--debug", action="store_true", help="Enable DEBUG level logging to file")
-    args = p.parse_args()
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description='Simlingo-QCar2 Integration')
+    parser.add_argument('--config', type=str, default=None,
+                        help='Path to custom config file')
 
-    # Setup logging
-    log_file = setup_logging(debug=args.debug)
-    logger = logging.getLogger(__name__)
-    logger.info("="*80)
-    logger.info("SimLingo-QCar2 Integration Starting")
-    logger.info(f"Configuration: hz={args.hz}, duration={args.duration}s, debug={args.debug}")
-    logger.info(f"Log file: {log_file}")
-    logger.info("="*80)
+    args = parser.parse_args()
 
-    try:
-        return run_cli(
-            hz=args.hz,
-            duration=args.duration,
-            show_agents_comments=args.show_agents_comments,
-            show_current_instruction=args.show_current_instruction
-        )
-    except Exception:
-        logger.exception("Fatal error in main execution")
+    # Create controller
+    controller = SimlingoQCar2Controller(config_path=args.config)
+
+    # Initialize
+    if not controller.initialize():
+        print("\nERROR: Initialization failed")
         return 1
 
+    # Run control loop
+    controller.run()
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
 
