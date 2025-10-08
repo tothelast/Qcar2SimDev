@@ -10,132 +10,174 @@ from scipy.interpolate import PchipInterpolator
 from typing import Tuple
 
 
-class PIDController:
-    """Basic PID controller (exact Simlingo implementation)."""
-    
-    def __init__(self, k_p=1.0, k_i=0.0, k_d=0.0, n=20):
+class LateralPIDController:
+    """Lateral PID controller for steering (exact Simlingo implementation)."""
+
+    def __init__(self, config):
         """
-        Initialize PID controller.
-        
+        Initialize lateral PID controller.
+
         Args:
-            k_p: Proportional gain
-            k_i: Integral gain
-            k_d: Derivative gain
-            n: Window size for integral and derivative
+            config: SimlingoQCar2Config instance
         """
-        self.k_p = k_p
-        self.k_i = k_i
-        self.k_d = k_d
-        self._window = deque([0 for _ in range(n)], maxlen=n)
+        self.k_p = config.turn_kp
+        self.k_i = config.turn_ki
+        self.k_d = config.turn_kd
+        self.n = config.turn_n
+        self._window = deque([0 for _ in range(self.n)], maxlen=self.n)
+
+        # Speed-dependent aim distances (meters)
+        self.aim_distance_slow = 2.25
+        self.aim_distance_fast = 3.0
+        self.aim_distance_very_fast = 7.0
+        self.aim_distance_threshold = 5.5  # m/s
+        self.aim_distance_threshold2 = 15.0  # m/s
     
-    def step(self, error):
+    def step(self, route_np: np.ndarray, current_speed: float) -> float:
         """
-        Compute PID control output.
-        
+        Compute steering control.
+
         Args:
-            error: Control error
-            
+            route_np: Route waypoints array (N, 2)
+            current_speed: Current speed in m/s
+
         Returns:
-            Control output
+            Steering value [-1, 1]
         """
-        self._window.append(error)
-        
+        # Convert speed to km/h
+        current_speed_kmh = current_speed * 3.6
+
+        # Calculate aim distance based on speed
+        if current_speed_kmh < self.aim_distance_threshold:
+            aim_distance = self.aim_distance_slow
+        elif current_speed_kmh < self.aim_distance_threshold2:
+            aim_distance = self.aim_distance_fast
+        else:
+            aim_distance = self.aim_distance_very_fast
+
+        # Convert to waypoint index (assuming 0.1m spacing between waypoints)
+        n_lookahead = int(min(aim_distance * 10, len(route_np) - 1))
+
+        # Get desired heading vector
+        desired_heading_vec = route_np[n_lookahead]
+
+        # Calculate heading error
+        yaw_path = np.arctan2(desired_heading_vec[1], desired_heading_vec[0])
+        heading_error = yaw_path % (2 * np.pi)
+        heading_error = heading_error if heading_error < np.pi else heading_error - 2 * np.pi
+
+        # Update window
+        self._window.append(heading_error)
+
+        # Calculate derivative and integral
         if len(self._window) >= 2:
             integral = sum(self._window) / len(self._window)
             derivative = self._window[-1] - self._window[-2]
         else:
             integral = 0.0
             derivative = 0.0
-        
-        return self.k_p * error + self.k_i * integral + self.k_d * derivative
-    
+
+        # PID control law
+        steering = self.k_p * heading_error + self.k_i * integral + self.k_d * derivative
+        steering = np.clip(steering, -1.0, 1.0)
+
+        return steering
+
     def reset(self):
         """Reset controller state."""
-        self._window = deque([0 for _ in range(self._window.maxlen)], maxlen=self._window.maxlen)
+        self._window = deque([0 for _ in range(self.n)], maxlen=self.n)
 
 
-class LateralPIDController:
-    """Lateral PID controller for steering (exact Simlingo implementation)."""
-    
+class LongitudinalLinearRegressionController:
+    """
+    Longitudinal controller using linear regression (exact SimLingo implementation).
+    This is the DEFAULT controller used by SimLingo, not the PID controller.
+    """
+
     def __init__(self, config):
         """
-        Initialize lateral PID controller.
-        
+        Initialize longitudinal linear regression controller.
+
         Args:
             config: SimlingoQCar2Config instance
         """
-        self.k_p = config.lateral_pid_kp
-        self.k_d = config.lateral_pid_kd
-        self.k_i = config.lateral_pid_ki
-        self.speed_scale = config.lateral_pid_speed_scale
-        self.speed_offset = config.lateral_pid_speed_offset
-        self.default_lookahead = config.lateral_pid_default_lookahead
-        self.speed_threshold = config.lateral_pid_speed_threshold
-        self.n = config.lateral_pid_window_size
-        self.inference_mode = True  # Always True for trained model
-        
-        self._window = []
-    
-    def step(self, route_np: np.ndarray, current_speed: float) -> float:
+        # Minimum threshold for target speed (< 1 km/h)
+        self.minimum_target_speed = 0.278  # m/s
+
+        # Coefficients of the linear regression model
+        # Source: team_code/config.py - longitudinal_linear_regression_params
+        self.params = np.array([
+            1.1990342347353184,   # current_speed coefficient
+            -0.8057602384167799,  # current_speed^2 coefficient
+            1.710818710950062,    # 100*speed_error_cl coefficient
+            0.921890257450335,    # speed_error_cl^2 coefficient
+            1.556497522998393,    # current_speed*speed_error_cl coefficient
+            -0.7013479734904027,  # current_speed^2*speed_error_cl coefficient
+            1.031266635497984     # braking ratio threshold
+        ])
+
+        # Maximum acceleration rate (approximately 1.9 m/tick)
+        self.max_acceleration = 1.89
+
+        # Maximum deceleration rate (approximately -4.82 m/tick)
+        self.max_deceleration = -4.82
+
+    def get_throttle_and_brake(
+        self,
+        target_speed: float,
+        current_speed: float
+    ) -> Tuple[float, bool]:
         """
-        Compute steering control.
-        
+        Get throttle and brake values using linear regression.
+
         Args:
-            route_np: Route waypoints array (N, 2)
-            current_speed: Current speed in m/s
-            
+            target_speed: Desired target speed in m/s
+            current_speed: Current speed of the vehicle in m/s
+
         Returns:
-            Steering value [-1, 1]
+            Tuple of (throttle, brake) where:
+                throttle: float in [0, 1]
+                brake: bool (True to brake, False otherwise)
         """
-        # Convert speed to km/h
+        # If target speed is very small, apply braking
+        if target_speed < 1e-5:
+            return 0.0, True
+
+        # Avoid very small target speeds
+        target_speed = max(self.minimum_target_speed, target_speed)
+
+        # Convert to km/h for calculation
         current_speed_kmh = current_speed * 3.6
-        
-        # Calculate lookahead distance
-        if self.inference_mode:
-            n_lookahead = np.clip(
-                self.speed_scale * current_speed_kmh + self.speed_offset,
-                24, 105
-            ) / 10
-            n_lookahead = n_lookahead - 2
-            n_lookahead = int(min(n_lookahead, route_np.shape[0] - 1))
-        else:
-            n_lookahead = int(min(
-                np.clip(self.speed_scale * current_speed_kmh + self.speed_offset, 24, 105),
-                route_np.shape[0] - 1
-            ))
-        
-        n_lookahead = min(n_lookahead, len(route_np) - 1)
-        
-        # Get desired heading vector
-        desired_heading_vec = route_np[n_lookahead]
-        
-        # Calculate heading error
-        yaw_path = np.arctan2(desired_heading_vec[1], desired_heading_vec[0])
-        heading_error = yaw_path % (2 * np.pi)
-        heading_error = heading_error if heading_error < np.pi else heading_error - 2 * np.pi
-        
-        # Scale heading error (legacy from previous implementation)
-        heading_error = heading_error * 180.0 / np.pi / 90.0
-        
-        # Update window
-        self._window.append(heading_error)
-        self._window = self._window[-self.n:]
-        
-        # Calculate derivative and integral
-        derivative = 0.0 if len(self._window) == 1 else self._window[-1] - self._window[-2]
-        integral = np.mean(self._window)
-        
-        # PID control law
-        steering = np.clip(
-            self.k_p * heading_error + self.k_d * derivative + self.k_i * integral,
-            -1.0, 1.0
-        ).item()
-        
-        return steering
-    
-    def reset(self):
-        """Reset controller state."""
-        self._window = []
+        target_speed_kmh = target_speed * 3.6
+
+        speed_error = target_speed_kmh - current_speed_kmh
+
+        # Maximum acceleration check (1.9 m/tick)
+        if speed_error > self.max_acceleration:
+            return 1.0, False
+
+        # Braking check using ratio threshold
+        if current_speed_kmh / target_speed_kmh > self.params[-1]:
+            return 0.0, True
+
+        # Normalize values (scaling is leftover from optimization)
+        speed_error_cl = np.clip(speed_error, 0.0, np.inf) / 100.0
+        current_speed_norm = current_speed_kmh / 100.0
+
+        # Construct feature vector
+        features = np.array([
+            current_speed_norm,
+            current_speed_norm**2,
+            100 * speed_error_cl,
+            speed_error_cl**2,
+            current_speed_norm * speed_error_cl,
+            current_speed_norm**2 * speed_error_cl
+        ])
+
+        # Linear regression: throttle = features @ coefficients
+        throttle = np.clip(features @ self.params[:-1], 0.0, 1.0)
+
+        return throttle, False
 
 
 class ControlConverter:
@@ -144,22 +186,16 @@ class ControlConverter:
     def __init__(self, config):
         """
         Initialize control converter.
-        
+
         Args:
             config: SimlingoQCar2Config instance
         """
         self.config = config
-        
-        # Initialize PID controllers
-        self.speed_controller = PIDController(
-            k_p=config.speed_kp,
-            k_i=config.speed_ki,
-            k_d=config.speed_kd,
-            n=config.speed_n
-        )
-        
+
+        # Initialize controllers
+        self.speed_controller = LongitudinalLinearRegressionController(config)
         self.turn_controller = LateralPIDController(config)
-        
+
         # State for kinematic bicycle model
         self.current_speed = 0.0
         
@@ -182,16 +218,14 @@ class ControlConverter:
         """
         # Calculate desired speed from speed waypoints
         # NOTE: The model was trained with data_save_freq=4, so it predicts 10 waypoints
-        # But our config has data_save_freq=1, so we need to adjust the calculation
         # Original: one_second = carla_fps // (wp_dilation * data_save_freq) = 20 // 4 = 5
         # With 10 waypoints, we use indices 3 and 8 (half_second-2=3, one_second-2=8)
-        model_data_save_freq = 4  # The model was trained with this value
+        model_data_save_freq = 4
         one_second = int(self.config.carla_fps // (self.config.wp_dilation * model_data_save_freq))
         half_second = one_second // 2
 
         # Ensure we have enough waypoints
         if len(speed_waypoints) < one_second:
-            # Fallback: use all available waypoints
             if len(speed_waypoints) >= 2:
                 desired_speed = np.linalg.norm(
                     speed_waypoints[-1] - speed_waypoints[0]
@@ -203,42 +237,20 @@ class ControlConverter:
                 speed_waypoints[half_second - 2] - speed_waypoints[one_second - 2]
             ) * 2.0
 
-        # Debug output for first call
-        if not hasattr(self, '_debug_printed'):
-            print(f"DEBUG control_pid: one_second={one_second}, half_second={half_second}")
-            print(f"DEBUG control_pid: speed_waypoints length={len(speed_waypoints)}")
-            print(f"DEBUG control_pid: desired_speed={desired_speed:.3f} m/s")
-            print(f"DEBUG control_pid: velocity={velocity:.3f} m/s")
-            print(f"DEBUG control_pid: brake_speed threshold={self.config.brake_speed:.3f} m/s")
-            self._debug_printed = True
-
-        # Brake logic
-        brake = (
-            (desired_speed < self.config.brake_speed) or
-            ((velocity / (desired_speed + 1e-6)) > self.config.brake_ratio)
+        # Get throttle and brake from linear regression controller
+        throttle, brake = self.speed_controller.get_throttle_and_brake(
+            target_speed=desired_speed,
+            current_speed=velocity
         )
 
-        # Throttle calculation
-        delta = np.clip(desired_speed - velocity, 0.0, self.config.clip_delta)
-        throttle = self.speed_controller.step(delta)
+        # Clip throttle to configured maximum
         throttle = np.clip(throttle, 0.0, self.config.clip_throttle)
-        throttle = throttle if not brake else 0.0
-        
+
         # Steering calculation
         route_interp = self.interpolate_waypoints(route_waypoints)
         steer = self.turn_controller.step(route_interp, velocity)
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
-
-        # Debug output for first call
-        if not hasattr(self, '_steer_debug_printed'):
-            print(f"DEBUG steering: route_waypoints[:3] = {route_waypoints[:3]}")
-            print(f"DEBUG steering: route_interp[:5] = {route_interp[:5]}")
-            print(f"DEBUG steering: velocity = {velocity:.3f} m/s")
-            print(f"DEBUG steering: n_lookahead = {self.turn_controller._window[-1] if hasattr(self.turn_controller, '_window') and self.turn_controller._window else 'N/A'}")
-            print(f"DEBUG steering: heading_error = {self.turn_controller._window[-1] if hasattr(self.turn_controller, '_window') and self.turn_controller._window else 'N/A'}")
-            print(f"DEBUG steering: steer = {steer}")
-            self._steer_debug_printed = True
 
         return steer, throttle, brake
     

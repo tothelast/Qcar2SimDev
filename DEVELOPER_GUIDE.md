@@ -8,14 +8,30 @@ Quick reference guide for navigating and developing this project.
 
 ```
 Qcar2SimDev/
-├── src/                    # Integration code (our code)
-├── python/                 # Quanser HAL library (original, don't modify)
-├── simlingo/              # Simlingo model code (original, don't modify)
-├── models/                # Model checkpoints (LoRA weights)
-├── pretrained/            # Hugging Face model cache (~1.8GB, DO NOT DELETE)
-├── debug_output/          # Test results and logs
-└── README.md              # Project overview
+├── src/                           # Integration code (our implementation)
+│   ├── main.py                    # Main entry point
+│   ├── config.py                  # Configuration (SimLingo parameters)
+│   ├── simlingo_model.py          # SimLingo model wrapper
+│   ├── qcar2_interface.py         # QCar2 vehicle interface
+│   ├── camera_processor.py        # Camera image processing
+│   ├── control_converter.py       # Control conversion (PID + Linear Regression)
+│   ├── route_manager.py           # Route waypoint management
+│   ├── state_estimator.py         # Vehicle state estimation
+│   ├── visualize_trajectory.py    # Trajectory visualization tool
+│   ├── visualize_route.py         # Route preview tool
+│   └── generate_route_coordinates.py  # Route generation helper
+├── python/                        # Quanser HAL library (DO NOT MODIFY)
+├── models/                        # Model checkpoints (LoRA weights)
+├── pretrained/                    # Hugging Face model cache (~1.8GB, DO NOT DELETE)
+├── debug_output/                  # Test results and logs
+├── SIMLINGO_PAPER_VERIFICATION.md # Implementation verification report
+├── IMPLEMENTATION_CHANGES.md      # Recent implementation fixes
+├── POST_FIX_ANALYSIS.md          # Latest test analysis
+├── QCAR2_PID_TUNING.md           # PID tuning documentation
+└── README.md                      # Project overview
 ```
+
+**Note:** The `simlingo/` directory is NOT used. We use the official SimLingo model from Hugging Face directly.
 
 ---
 
@@ -29,63 +45,97 @@ Qcar2SimDev/
   - Handles shutdown
 
 ### Configuration
-- **`config.py`** - All configuration settings
-  - Model paths and parameters
-  - QCar2 spawn location and settings
-  - Route waypoints (based on SDCSRoadMap)
-  - Control parameters (PID gains, lookahead distance)
-  - Camera settings
+- **`config.py`** - All configuration settings (SimlingoQCar2Config class)
+  - **Model parameters:** InternVL2-1B with LoRA (r=32, alpha=64)
+  - **Camera settings:** Resolution (1024×512), FOV (110°), crop (30% bottom)
+  - **Route waypoints:** Full route from spawn to destination
+  - **Spawn location:** QCar2 initial position and heading
+  - **Control parameters:**
+    - Lateral PID: `turn_kp=3.25`, `turn_ki=0.75`, `turn_kd=1.20` (QCar2-tuned)
+    - Longitudinal: Linear Regression (7 coefficients)
+    - Throttle limits: `clip_throttle=1.0`, `max_throttle=1.0`
+  - **Kinematic bicycle model:** Wheelbase, steering gain, acceleration parameters
 
 ### Model & Interface
-- **`simlingo_model.py`** - Simlingo model wrapper
-  - Loads InternVL2-1B model with LoRA
-  - Handles image preprocessing (cropping, patching)
-  - Runs model inference
-  - Returns waypoint predictions
+- **`simlingo_model.py`** - SimLingo model wrapper
+  - **Model:** InternVL2-1B from Hugging Face (`OpenGVLab/InternVL2-1B`)
+  - **LoRA weights:** Loaded from `models/simlingo/checkpoints/epoch=013.ckpt`
+  - **Input processing:**
+    - Splits 1024×512 image into 2 patches (512×512 each)
+    - Applies ImageNet normalization
+    - Adds speed scalar input
+  - **Output:**
+    - 20 route waypoints (ego frame, cumulative sum encoding)
+    - 10 speed waypoints (ego frame, cumulative sum encoding)
+  - **Inference:** ~0.5s per frame on GPU
 
 - **`qcar2_interface.py`** - QCar2 vehicle interface
-  - Connects to QLabs
-  - Spawns vehicle
-  - Sends control commands
-  - Reads vehicle state (position, velocity, rotation)
-  - Detects collisions
+  - Connects to QLabs simulator
+  - Spawns QCar2 at configured location
+  - **Control interface:** Sends velocity and turn_angle commands
+  - **State reading:** Position, rotation, velocity from QLabs
+  - **Collision detection:** Monitors vehicle collisions
+  - **Camera:** CSI camera (1024×512 resolution, 110° FOV)
 
 ### Processing & Control
 - **`camera_processor.py`** - Camera image processing
-  - Captures images from QCar2 CSI camera
-  - Crops bottom 30% (remove hood/dashboard)
-  - Splits into patches for InternVL2
-  - Applies ImageNet normalization
+  - Captures images from QCar2 CSI camera (1024×512)
+  - Crops bottom 30% (removes hood/dashboard)
+  - Splits into 2 patches (512×512 each) for InternVL2
+  - Applies ImageNet normalization (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+  - Returns preprocessed tensor for model input
 
-- **`control_converter.py`** - Control conversion
-  - Converts Simlingo predictions to QCar2 commands
-  - PID speed controller
-  - Pure pursuit steering controller
-  - Handles coordinate frame conversions
+- **`control_converter.py`** - Control conversion (Official SimLingo implementation)
+  - **Two controller classes:**
+    1. **`LateralPIDController`** - Steering control
+       - QCar2-tuned PID gains: Kp=3.25, Ki=0.75, Kd=1.20
+       - Continuous lookahead: `0.976 * speed_kmh + 1.915`
+       - Outputs steering angle [-1, 1]
+    2. **`LongitudinalLinearRegressionController`** - Speed control
+       - Linear regression with 7 coefficients (official SimLingo)
+       - Max acceleration: 1.89 m/tick
+       - Max deceleration: -4.82 m/tick
+       - Outputs throttle [0, 1] and brake (bool)
+  - **`ControlConverter`** class:
+    - Converts model waypoint predictions to QCar2 commands
+    - Calculates desired speed from speed waypoints
+    - Interpolates route waypoints for smooth tracking
+    - Applies kinematic bicycle model for velocity/turn_angle conversion
 
 - **`route_manager.py`** - Route management
-  - Manages route waypoints
-  - Tracks current waypoint index
-  - Finds target waypoint based on lookahead distance
-  - Converts waypoints between world/ego frames
-  - Checks route completion
+  - Manages route waypoints (world frame)
+  - Tracks current waypoint index based on vehicle position
+  - Converts waypoints between world frame and ego frame
+  - Checks route completion (distance to final waypoint)
+  - Provides waypoints for visualization
 
 - **`state_estimator.py`** - State estimation
-  - Estimates vehicle state from QCar2 sensors
-  - Calculates velocity from position changes
-  - Provides filtered state estimates
+  - Estimates vehicle velocity from position changes
+  - Filters noisy sensor readings
+  - Provides smooth state estimates for control
 
-### Analysis Tools
-- **`visualize_trajectory.py`** - Trajectory visualization
-  - Loads trajectory logs (JSON)
-  - Creates 6-panel visualization:
-    * Full route view (planned vs actual)
+### Analysis & Utility Tools
+- **`visualize_trajectory.py`** - Trajectory visualization and analysis
+  - Loads trajectory logs from `debug_output/trajectory_log_*.json`
+  - Creates comprehensive 6-panel visualization:
+    * Full route view (planned vs actual trajectory)
     * Zoomed start area
     * Lateral deviation over time
-    * Speed profile
-    * Steering profile
-    * Statistics summary
-  - Saves PNG visualizations
+    * Speed profile over time
+    * Steering profile over time
+    * Statistics summary (success rate, collisions, metrics)
+  - Saves PNG to `debug_output/trajectory_comparison_*.png`
+  - Calculates success rate (% of points within 1.0m of route)
+
+- **`visualize_route.py`** - Route preview tool
+  - Visualizes planned route before running
+  - Shows waypoints and spawn location
+  - Useful for route validation
+
+- **`generate_route_coordinates.py`** - Route generation helper
+  - Generates route waypoints from SDCSRoadMap node sequences
+  - Handles 10x scaling for QLabs coordinates
+  - Outputs formatted waypoint lists for `config.py`
 
 ---
 
@@ -104,15 +154,6 @@ Key files to reference:
 - **`python/qvl/qlabs.py`** - QLabs connection
 - **`python/qvl/qcar.py`** - QCar2 vehicle class
 
-### Simlingo Model (`simlingo/`)
-**DO NOT MODIFY** - Original Simlingo repository
-
-Key files to reference:
-- **`simlingo/simlingo_training/models/driving.py`** - Main model class
-- **`simlingo/simlingo_training/models/encoder/internvl2_model.py`** - Vision encoder
-- **`simlingo/simlingo_training/utils/custom_types.py`** - Data types
-- **`simlingo/simlingo_training/utils/image_utils.py`** - Image preprocessing
-
 ---
 
 ## Model Files
@@ -121,11 +162,16 @@ Key files to reference:
 **Location:** `models/simlingo/checkpoints/epoch=013.ckpt`
 
 **Model Details:**
-- Base: InternVL2-1B (vision-language model)
-- Fine-tuning: LoRA (alpha=64, r=32, dropout=0.1)
-- Training: CARLA simulator data
-- Input: 2 image patches (448×448 each) + speed
-- Output: 20 route waypoints + 10 speed waypoints
+- **Base Model:** InternVL2-1B from Hugging Face (`OpenGVLab/InternVL2-1B`)
+- **Fine-tuning:** LoRA (r=32, alpha=64, dropout=0.1)
+- **Training Data:** CARLA simulator (official SimLingo dataset)
+- **Input:**
+  - 2 image patches (512×512 each, from 1024×512 camera)
+  - Current speed (scalar)
+- **Output:**
+  - 20 route waypoints (ego frame, cumulative sum encoding)
+  - 10 speed waypoints (ego frame, cumulative sum encoding)
+- **Inference Time:** ~0.5s per frame on GPU
 
 ### Pretrained Model Cache
 **Location:** `pretrained/InternVL2-1B/`
@@ -134,11 +180,12 @@ Key files to reference:
 - Hugging Face cache for InternVL2-1B base model
 - Size: ~1.8 GB
 - **DO NOT DELETE** - Required for model loading
-- Avoids re-downloading model from Hugging Face
+- Avoids re-downloading from Hugging Face (saves time and bandwidth)
 - Essential for offline use
 
 **What's Cached:**
 - InternVL2-1B vision encoder weights
+- InternVL2-1B language model weights
 - Tokenizer files
 - Model configuration files
 
@@ -147,17 +194,18 @@ Key files to reference:
 ## Coordinate Systems
 
 ### World Frame (QLabs)
-- X: East (+) / West (-)
-- Y: North (+) / South (-)
-- Z: Up (+) / Down (-)
-- Heading: 0° = East, 90° = North, 180° = West, -90° = South
+- **X:** East (+) / West (-)
+- **Y:** North (+) / South (-)
+- **Z:** Up (+) / Down (-)
+- **Heading:** 0° = East, 90° = North, 180° = West, -90° = South
 
-### Ego Frame (Vehicle)
-- X: Forward
-- Y: Left (opposite of world Y!)
-- Origin: Vehicle position
+### Ego Frame (Vehicle-Centric)
+- **X:** Forward (direction vehicle is facing)
+- **Y:** Left (perpendicular to forward direction)
+- **Origin:** Vehicle position
+- **Note:** Model predictions are in ego frame (cumulative sum encoding)
 
-### Conversion
+### Conversion (World ↔ Ego)
 ```python
 # World → Ego (from route_manager.py)
 rotation_matrix = np.array([
@@ -165,32 +213,49 @@ rotation_matrix = np.array([
     [-np.sin(heading), np.cos(heading)]
 ])
 ego_point = rotation_matrix.T @ (world_point - vehicle_pos)
+
+# Ego → World
+world_point = rotation_matrix @ ego_point + vehicle_pos
 ```
+
+**Important:** Model outputs waypoints in ego frame with cumulative sum encoding. These must be converted to world frame for visualization and waypoint tracking.
 
 ---
 
 ## Route Configuration
 
-### Current Route (Simple Test Route)
-- **Type:** Straight-line test route for visual verification
-- **Start:** [0, -1.3] heading 90° (facing +Y/North)
-- **End:** [0, 40.0]
-- **Direction:** Straight north along X=0
-- **Total length:** 41.3 meters
-- **Total waypoints:** 22 (spaced every 2 meters)
-- **Purpose:** Easy visual verification and bias diagnosis
+### Current Route
+The current route is defined in `config.py` → `SimlingoQCar2Config.route_waypoints`
 
-### Spawn Location
-- **Position:** [0.0, -1.3, 0.005]
-- **Heading:** 90° (facing North/+Y)
+**Route Details:**
+- **Total waypoints:** 36
+- **Approximate length:** ~90 meters
+- **Includes:** Straight sections, curves, and a roundabout
+- **Spawn location:** [2.686, 18.498, 0.005]
+- **Spawn heading:** 90° (facing North)
+- **Destination:** [-19.841, 29.760, 0.0]
 
 ### Modifying Routes
-1. Choose node sequence from SDCSRoadMap (see `python/hal/products/mats.py`)
-2. Generate path: `roadmap.generate_path([node1, node2, ...])`
-3. Scale coordinates: `waypoints_scaled = waypoints * 10.0`
-4. Downsample to ~5m spacing
-5. Add lead-in from spawn to route start
-6. Update `config.py` → `self.route_waypoints`
+
+**Option 1: Use SDCSRoadMap (Recommended)**
+1. Open `python/hal/products/mats.py` to see available nodes (0-23)
+2. Choose a node sequence (e.g., `[0, 1, 2, 3]`)
+3. Use `generate_route_coordinates.py` to generate waypoints:
+   ```python
+   from python.hal.products.mats import SDCSRoadMap
+   roadmap = SDCSRoadMap()
+   path = roadmap.generate_path([0, 1, 2, 3])
+   waypoints_scaled = path * 10.0  # Scale for QLabs
+   ```
+4. Copy the generated waypoints to `config.py` → `self.route_waypoints`
+
+**Option 2: Manual Waypoints**
+1. Define waypoints as `[x, y, z]` coordinates in QLabs world frame
+2. Ensure waypoints are spaced appropriately (~2-5 meters apart)
+3. Update `config.py` → `self.route_waypoints`
+4. Update spawn location to match route start
+
+**Important:** Always use `visualize_route.py` to preview the route before running!
 
 ---
 
@@ -221,93 +286,207 @@ python src/visualize_trajectory.py --log debug_output/trajectory_log_YYYYMMDD_HH
 - **Camera images:** `debug_output/camera_*.jpg`
   - Raw and processed camera images (when debug enabled)
 
-### Common Issues
+### Common Issues & Solutions
 
-**Vehicle veers left:**
-- Model has systematic leftward bias (~0.34m in Y predictions)
-- Solution: Apply bias correction in `control_converter.py`
+**High lateral deviation / oscillations:**
+- **Cause:** PID gains not tuned for QCar2 dynamics
+- **Solution:** Adjust lateral PID gains in `control_converter.py`:
+  - Reduce `k_i` to reduce oscillations (currently 0.75)
+  - Increase `k_d` to add damping (currently 1.20)
+  - See `QCAR2_PID_TUNING.md` for details
 
-**Route completion detected too early:**
-- Check final waypoint distance from spawn
-- Increase completion threshold in `route_manager.py`
+**Low success rate (<20%):**
+- **Cause:** Lateral deviation consistently above 1.0m threshold
+- **Solution:**
+  - Check PID tuning (see above)
+  - Verify route waypoints are reasonable (use `visualize_route.py`)
+  - Check for domain gap issues (model trained on CARLA, running on QLabs)
 
-**Steering oscillation:**
-- Check waypoint filtering (remove waypoints < 0.05m from origin)
-- Adjust PID gains in `config.py`
+**Vehicle too slow:**
+- **Cause:** QCar2 has lower acceleration than CARLA vehicles
+- **Current:** Average speed ~0.4 m/s, max ~1.2 m/s
+- **Solution:**
+  - This is a hardware limitation (1/10 scale vehicle)
+  - Linear regression controller is already at max throttle
+  - Consider fine-tuning model on QLabs data
 
-**Slow control loop:**
-- Model inference takes ~0.5s
-- Target: 20 Hz (50ms), actual: ~2 Hz
-- Consider model optimization or async processing
+**Collisions:**
+- **Cause:** Aggressive steering at higher speeds
+- **Solution:**
+  - Increase Kd for more damping
+  - Add speed limiting during high lateral deviation
+  - See `POST_FIX_ANALYSIS.md` for detailed analysis
+
+**Model inference slow (~0.5s per frame):**
+- **Expected:** This is normal for InternVL2-1B on GPU
+- **Impact:** Control loop runs at ~2 Hz instead of 20 Hz
+- **Solution:**
+  - Use GPU if available (much faster than CPU)
+  - Consider model quantization for faster inference
+  - Async processing (run model in separate thread)
 
 ---
 
 ## Key Parameters (`config.py`)
 
-### Model
-- `model_checkpoint`: Path to model weights
-- `device`: 'cuda' or 'cpu'
+All parameters are defined in the `SimlingoQCar2Config` class.
 
-### Camera
-- `camera_resolution`: [820, 410] (width, height)
-- `crop_bottom_percent`: 30% (remove hood)
+### Model Parameters
+- `model_name`: `"OpenGVLab/InternVL2-1B"` (Hugging Face model ID)
+- `model_checkpoint`: `"models/simlingo/checkpoints/epoch=013.ckpt"` (LoRA weights)
+- `device`: `"cuda"` or `"cpu"` (GPU recommended)
+- `lora_r`: `32` (LoRA rank)
+- `lora_alpha`: `64` (LoRA alpha)
+- `lora_dropout`: `0.1` (LoRA dropout)
 
-### Control
-- `target_point_lookahead`: 10.0 meters
-- `speed_kp`, `speed_ki`, `speed_kd`: PID gains for speed
-- `steering_k`: Pure pursuit gain
+### Camera Parameters
+- `camera_resolution`: `[1024, 512]` (width × height)
+- `camera_fov`: `110` (degrees, horizontal field of view)
+- `crop_bottom_percent`: `30` (removes hood/dashboard)
+- `imagenet_mean`: `[0.485, 0.456, 0.406]` (normalization)
+- `imagenet_std`: `[0.229, 0.224, 0.225]` (normalization)
 
-### Route
-- `route_waypoints`: List of [x, y, z] waypoints
-- `completion_threshold`: 2.0 meters
+### Control Parameters (QCar2-Tuned)
+**Lateral PID (in `control_converter.py`):**
+- `k_p`: `3.25` (proportional gain - from config.turn_kp)
+- `k_i`: `0.75` (integral gain - tuned for QCar2, reduced from 1.0)
+- `k_d`: `1.20` (derivative gain - tuned for QCar2, increased from 1.0)
+- `lookahead`: `0.976 * speed_kmh + 1.915` (continuous function)
+
+**Longitudinal Linear Regression (in `control_converter.py`):**
+- 7 regression coefficients (hardcoded from official SimLingo)
+- `max_acceleration`: `1.89` m/tick
+- `max_deceleration`: `-4.82` m/tick
+
+**Throttle Limits:**
+- `clip_throttle`: `1.0` (maximum throttle)
+- `max_throttle`: `1.0` (absolute maximum)
+
+### Route Parameters
+- `route_waypoints`: List of `[x, y, z]` waypoints (world frame)
+- `qcar2_spawn_location`: `[x, y, z]` spawn position
+- `qcar2_spawn_rotation`: `[roll, pitch, yaw]` spawn orientation
+
+### Waypoint Parameters
+- `num_route_waypoints`: `20` (model output)
+- `num_speed_waypoints`: `10` (model output)
+- `wp_dilation`: `1` (waypoint spacing multiplier)
+- `carla_fps`: `20` (CARLA training framerate)
 
 ---
 
 ## Development Workflow
 
+### Standard Development Cycle
 1. **Make changes** to integration code in `src/`
 2. **Test** with `python src/main.py`
 3. **Visualize** results with `python src/visualize_trajectory.py`
-4. **Iterate** based on trajectory analysis
-5. **Keep** only essential files, remove debug scripts
+4. **Analyze** metrics (success rate, lateral deviation, speed, collisions)
+5. **Iterate** based on analysis
+6. **Document** findings in analysis reports
+
+### Tuning PID Parameters
+1. **Identify issue** from trajectory visualization (oscillations, high deviation, etc.)
+2. **Adjust parameters** in `src/control_converter.py`:
+   - Lateral PID: `k_p`, `k_i`, `k_d` in `LateralPIDController.__init__`
+3. **Test** with same route
+4. **Compare** before/after metrics
+5. **Document** changes in tuning reports
+
+### Creating New Routes
+1. **Choose nodes** from SDCSRoadMap (see `python/hal/products/mats.py`)
+2. **Generate waypoints** using `src/generate_route_coordinates.py`
+3. **Preview route** with `python src/visualize_route.py`
+4. **Update config** in `src/config.py` → `route_waypoints` and spawn location
+5. **Test** and iterate
 
 ---
 
 ## Important Notes
 
-- **Never modify** `python/` or `simlingo/` directories
-  - The integration is designed to work WITHOUT modifying official Simlingo code
-  - All fixes are in the wrapper (`src/simlingo_model.py`)
+### DO NOT MODIFY
+- **`python/`** - Quanser HAL library (original)
+- **`pretrained/`** - Hugging Face model cache (DO NOT DELETE)
+- **`models/`** - Model checkpoint files
 
-- **Placeholder values for image tokens:**
-  - Image tokens (`<img>`, `</img>`, `<IMG_CONTEXT>`) are pre-existing in InternVL2 tokenizer
-  - Must provide empty arrays for them in `placeholder_values` to avoid KeyError
-  - These empty arrays satisfy the lookup but don't create waypoint embeddings
-  - Vision embeddings replace them in a separate step
+### Implementation Details
 
-- **Always test** after configuration changes
+**Control Architecture:**
+- Uses official SimLingo control architecture (verified against paper)
+- Lateral: Simple PID controller (QCar2-tuned parameters)
+- Longitudinal: Linear Regression controller (official SimLingo default)
+- See `SIMLINGO_PAPER_VERIFICATION.md` for detailed verification
 
-- **Use trajectory visualization** to diagnose issues
+**Coordinate Systems:**
+- Model outputs waypoints in **ego frame** (vehicle-centric)
+- Route waypoints stored in **world frame** (QLabs global)
+- Conversion handled by `route_manager.py`
 
-- **SDCSRoadMap coordinates** need 10x scaling for QLabs
+**Image Preprocessing:**
+- Must match CARLA training: crop bottom 30%, split into 2 patches
+- ImageNet normalization applied
+- Camera resolution: 1024×512 (matches training)
 
-- **Steering convention:** QCar2 positive = right turn (opposite of CARLA)
+**SDCSRoadMap Scaling:**
+- SDCSRoadMap coordinates × 10 = QLabs coordinates
+- Always scale when using `generate_path()`
 
-- **Image preprocessing:** Must match CARLA training (crop bottom 30%, 2 patches)
+**Domain Gap:**
+- Model trained on CARLA (full-size vehicles, different dynamics)
+- Running on QLabs QCar2 (1/10 scale, different acceleration)
+- PID parameters tuned for QCar2 (see `QCAR2_PID_TUNING.md`)
+
+**Performance:**
+- Model inference: ~0.5s per frame on GPU
+- Control loop: ~2 Hz (limited by model inference)
+- Expected speeds: 0.4-1.2 m/s (QCar2 hardware limitation)
 
 ---
 
 ## Quick Reference
 
-| Task | File | Function/Class |
-|------|------|----------------|
-| Change route | `config.py` | `route_waypoints` |
-| Adjust PID gains | `config.py` | `speed_kp/ki/kd` |
-| Modify steering | `control_converter.py` | `calculate_steering()` |
-| Change spawn | `config.py` | `qcar2_spawn_location` |
-| Add bias correction | `control_converter.py` | `convert_to_qcar2_control()` |
-| Visualize trajectory | `visualize_trajectory.py` | `visualize_trajectory()` |
-| Generate new route | `python/hal/products/mats.py` | `SDCSRoadMap.generate_path()` |
+### Common Tasks
+
+| Task | File | Location |
+|------|------|----------|
+| **Change route** | `config.py` | `SimlingoQCar2Config.route_waypoints` |
+| **Change spawn location** | `config.py` | `SimlingoQCar2Config.qcar2_spawn_location` |
+| **Tune lateral PID** | `control_converter.py` | `LateralPIDController.__init__` (k_p, k_i, k_d) |
+| **Adjust lookahead** | `control_converter.py` | `LateralPIDController.__init__` (lookahead formula) |
+| **Modify throttle limits** | `config.py` | `SimlingoQCar2Config.clip_throttle` |
+| **Generate new route** | `generate_route_coordinates.py` | Use SDCSRoadMap |
+| **Preview route** | `visualize_route.py` | Run before testing |
+| **Visualize trajectory** | `visualize_trajectory.py` | Run after testing |
+| **Analyze results** | `debug_output/` | Check trajectory logs and visualizations |
+
+### Key Files for Tuning
+
+| Component | File | What to Tune |
+|-----------|------|--------------|
+| **Lateral Control** | `control_converter.py` | `LateralPIDController` (k_p, k_i, k_d, lookahead) |
+| **Longitudinal Control** | `control_converter.py` | `LongitudinalLinearRegressionController` (coefficients) |
+| **Route** | `config.py` | `route_waypoints`, spawn location |
+| **Camera** | `config.py` | Resolution, FOV, crop percentage |
+| **Model** | `config.py` | Model path, LoRA parameters |
+
+### Analysis Documents
+
+| Document | Purpose |
+|----------|---------|
+| `SIMLINGO_PAPER_VERIFICATION.md` | Verification against official SimLingo |
+| `IMPLEMENTATION_CHANGES.md` | Recent implementation fixes |
+| `POST_FIX_ANALYSIS.md` | Latest test run analysis |
+| `QCAR2_PID_TUNING.md` | PID tuning documentation |
+| `AUTONOMOUS_VEHICLE_ANALYSIS.md` | Comprehensive system analysis |
+
+---
+
+## References
+
+- **Official SimLingo:** https://github.com/RenzKa/simlingo
+- **SimLingo Paper:** https://arxiv.org/abs/2503.09594
+- **InternVL2 Model:** https://huggingface.co/OpenGVLab/InternVL2-1B
+- **Quanser QLabs:** https://www.quanser.com/products/qlabs/
 
 ---
 

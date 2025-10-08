@@ -48,52 +48,17 @@ class SimlingoQCar2Config:
         # -------------------------------------------------------------------------
         # PID Controller Parameters (Exact Simlingo Values)
         # -------------------------------------------------------------------------
-        # Turn PID Controller
+        # Lateral PID Controller (Simple - from config_simlingo.py)
         self.turn_kp = 3.25
         self.turn_ki = 1.0
         self.turn_kd = 1.0
         self.turn_n = 20  # Buffer size
-        
-        # Speed PID Controller
-        self.speed_kp = 1.75
-        self.speed_ki = 1.0
-        self.speed_kd = 2.0
-        self.speed_n = 20  # Buffer size
-        
-        # Lateral PID Controller (Advanced)
-        self.lateral_pid_kp = 3.118357247806046
-        self.lateral_pid_kd = 1.3782508892109167
-        self.lateral_pid_ki = 0.6406067986034124
-        self.lateral_pid_speed_scale = 0.9755321901954155
-        self.lateral_pid_speed_offset = 1.9152884533402488
-        self.lateral_pid_default_lookahead = 24
-        self.lateral_pid_speed_threshold = 23.150102938235136
-        self.lateral_pid_window_size = 6
-        
-        # Longitudinal PID Controller
-        self.longitudinal_pid_proportional_gain = 5.0
-        self.longitudinal_pid_derivative_gain = 1.5761818624794222
-        self.longitudinal_pid_integral_gain = 0.2941563856687906
-        self.longitudinal_pid_max_window_length = 0
-        self.longitudinal_pid_speed_error_scaling = 0.0
-        self.longitudinal_pid_braking_ratio = 1.0324622059220139
-        self.longitudinal_pid_minimum_target_speed = 0.278
-        
+
         # -------------------------------------------------------------------------
         # Control Parameters (Exact Simlingo Values)
         # -------------------------------------------------------------------------
-        self.brake_speed = 0.4  # m/s
-        self.brake_ratio = 1.1
-        self.clip_delta = 1.0
         self.clip_throttle = 1.0
         self.max_throttle = 1.0
-        
-        # Aim distances for different speeds
-        self.aim_distance_fast = 3.0  # meters
-        self.aim_distance_slow = 2.25  # meters
-        self.aim_distance_very_fast = 7.0  # meters
-        self.aim_distance_threshold = 5.5  # m/s
-        self.aim_distance_threshold2 = 15.0  # m/s
         
         # -------------------------------------------------------------------------
         # Kinematic Bicycle Model Parameters (Exact Simlingo Values)

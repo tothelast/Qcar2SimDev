@@ -16,6 +16,14 @@ import argparse
 # Add src directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
+# ============================================================================
+# Configuration
+# ============================================================================
+# Success threshold: Maximum acceptable lateral deviation from planned route (meters)
+# Points within this threshold are considered "successful"
+# Default: 1.0 meter (typical lane width is ~3.5m, so 1.0m allows reasonable deviation)
+SUCCESS_THRESHOLD_METERS = 1.0
+
 
 def load_trajectory_log(filename=None):
     """Load trajectory log from file."""
@@ -77,6 +85,24 @@ def calculate_lateral_deviation(trajectory, route_waypoints):
     return np.array(deviations)
 
 
+def calculate_success_rate(lateral_deviations, threshold=SUCCESS_THRESHOLD_METERS):
+    """
+    Calculate success rate based on lateral deviation threshold.
+
+    Args:
+        lateral_deviations: Array of lateral deviations (meters)
+        threshold: Maximum acceptable deviation (meters)
+
+    Returns:
+        Tuple of (success_rate_percentage, successful_points, total_points)
+    """
+    total_points = len(lateral_deviations)
+    successful_points = np.sum(lateral_deviations <= threshold)
+    success_rate = (successful_points / total_points * 100) if total_points > 0 else 0.0
+
+    return success_rate, successful_points, total_points
+
+
 def visualize_trajectory(data, save_path=None):
     """
     Create comprehensive visualization of trajectory vs route.
@@ -102,10 +128,11 @@ def visualize_trajectory(data, save_path=None):
     # Calculate metrics
     lateral_deviations = calculate_lateral_deviation(trajectory, route_waypoints)
     total_distance = np.sum(np.linalg.norm(np.diff(positions[:, :2], axis=0), axis=1))
+    success_rate, successful_points, total_points = calculate_success_rate(lateral_deviations)
     
     # Create figure with subplots
-    fig = plt.figure(figsize=(20, 12))
-    gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+    fig = plt.figure(figsize=(20, 13))
+    gs = fig.add_gridspec(3, 3, hspace=0.35, wspace=0.3)
     
     # ========== Plot 1: Full route overview ==========
     ax1 = fig.add_subplot(gs[0:2, 0:2])
@@ -156,12 +183,14 @@ def visualize_trajectory(data, save_path=None):
                    label=f'Collisions ({len(collision_indices)})', zorder=6)
     
     # Mark start and end
-    ax1.plot(positions[0, 0], positions[0, 1], 'g^', markersize=12, 
+    ax1.plot(positions[0, 0], positions[0, 1], 'g^', markersize=12,
              label='Start', zorder=5)
-    ax1.plot(positions[-1, 0], positions[-1, 1], 'rs', markersize=12, 
+    ax1.plot(positions[-1, 0], positions[-1, 1], 'rs', markersize=12,
              label='End', zorder=5)
-    
-    ax1.legend(loc='upper right', fontsize=10)
+
+    # Position legend at bottom inside plot area to avoid covering trajectory
+    ax1.legend(loc='lower center', fontsize=9, ncol=3, framealpha=0.95,
+               edgecolor='black', fancybox=True)
     ax1.set_aspect('equal')
     
     # ========== Plot 2: Zoomed start area ==========
@@ -208,11 +237,13 @@ def visualize_trajectory(data, save_path=None):
     ax3.set_xlabel('Distance Traveled (m)', fontsize=10)
     ax3.set_ylabel('Deviation (m)', fontsize=10)
     ax3.grid(True, alpha=0.3)
-    
+
     ax3.plot(distances_traveled, lateral_deviations, 'b-', linewidth=2)
-    ax3.axhline(y=lateral_deviations.mean(), color='r', linestyle='--', 
+    ax3.axhline(y=SUCCESS_THRESHOLD_METERS, color='green', linestyle=':', linewidth=2,
+               label=f'Success Threshold: {SUCCESS_THRESHOLD_METERS:.1f}m')
+    ax3.axhline(y=lateral_deviations.mean(), color='r', linestyle='--',
                label=f'Mean: {lateral_deviations.mean():.2f}m')
-    ax3.axhline(y=lateral_deviations.max(), color='orange', linestyle='--', 
+    ax3.axhline(y=lateral_deviations.max(), color='orange', linestyle='--',
                label=f'Max: {lateral_deviations.max():.2f}m')
     ax3.legend(fontsize=9)
     
@@ -244,33 +275,34 @@ def visualize_trajectory(data, save_path=None):
     # ========== Plot 6: Summary statistics ==========
     ax6 = fig.add_subplot(gs[2, 2])
     ax6.axis('off')
-    ax6.set_title('Summary Statistics', fontsize=12, fontweight='bold')
-    
-    stats_text = f"""
-Total Steps: {metadata['total_steps']}
-Total Time: {metadata['total_time']:.1f} s
-Total Distance: {total_distance:.1f} m
+    ax6.set_title('Summary Statistics', fontsize=11, fontweight='bold', pad=10, y=0.98)
 
+    stats_text = f"""Steps: {metadata['total_steps']}
+Time: {metadata['total_time']:.1f} s
+Distance: {total_distance:.1f} m
 Collisions: {metadata['collision_count']}
+
+Success: {success_rate:.1f}%
+  ({successful_points}/{total_points} pts
+   ≤{SUCCESS_THRESHOLD_METERS:.1f}m)
 
 Speed:
   Mean: {speeds.mean():.2f} m/s
   Max: {speeds.max():.2f} m/s
-  Min: {speeds.min():.2f} m/s
 
-Lateral Deviation:
+Lateral Dev:
   Mean: {lateral_deviations.mean():.2f} m
   Max: {lateral_deviations.max():.2f} m
   Std: {lateral_deviations.std():.2f} m
 
 Steering:
   Mean: {steerings.mean():.3f}
-  Max: {steerings.max():.3f}
-  Min: {steerings.min():.3f}
-"""
-    
-    ax6.text(0.1, 0.9, stats_text, transform=ax6.transAxes, 
-            fontsize=10, verticalalignment='top', fontfamily='monospace',
+  Range: [{steerings.min():.2f}, {steerings.max():.2f}]"""
+
+    # Position text centered below title
+    ax6.text(0.5, 0.88, stats_text, transform=ax6.transAxes,
+            fontsize=8, verticalalignment='top', horizontalalignment='center',
+            fontfamily='monospace',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
     
     # Save figure
@@ -289,6 +321,8 @@ Steering:
     print(f"Total Time: {metadata['total_time']:.1f} seconds")
     print(f"Total Distance Traveled: {total_distance:.1f} meters")
     print(f"Collisions: {metadata['collision_count']}")
+    print(f"\nSuccess Rate: {success_rate:.1f}% (within {SUCCESS_THRESHOLD_METERS:.1f}m threshold)")
+    print(f"  Successful points: {successful_points}/{total_points}")
     print(f"\nSpeed: Mean={speeds.mean():.2f} m/s, Max={speeds.max():.2f} m/s")
     print(f"Lateral Deviation: Mean={lateral_deviations.mean():.2f} m, Max={lateral_deviations.max():.2f} m")
     print(f"Steering: Mean={steerings.mean():.3f}, Range=[{steerings.min():.3f}, {steerings.max():.3f}]")
