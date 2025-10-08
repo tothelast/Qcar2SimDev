@@ -11,7 +11,8 @@ Qcar2SimDev/
 ├── src/                    # Integration code (our code)
 ├── python/                 # Quanser HAL library (original, don't modify)
 ├── simlingo/              # Simlingo model code (original, don't modify)
-├── models/                # Model checkpoints
+├── models/                # Model checkpoints (LoRA weights)
+├── pretrained/            # Hugging Face model cache (~1.8GB, DO NOT DELETE)
 ├── debug_output/          # Test results and logs
 └── README.md              # Project overview
 ```
@@ -114,8 +115,9 @@ Key files to reference:
 
 ---
 
-## Model Checkpoint
+## Model Files
 
+### Model Checkpoint
 **Location:** `models/simlingo/checkpoints/epoch=013.ckpt`
 
 **Model Details:**
@@ -124,6 +126,21 @@ Key files to reference:
 - Training: CARLA simulator data
 - Input: 2 image patches (448×448 each) + speed
 - Output: 20 route waypoints + 10 speed waypoints
+
+### Pretrained Model Cache
+**Location:** `pretrained/InternVL2-1B/`
+
+**Purpose:**
+- Hugging Face cache for InternVL2-1B base model
+- Size: ~1.8 GB
+- **DO NOT DELETE** - Required for model loading
+- Avoids re-downloading model from Hugging Face
+- Essential for offline use
+
+**What's Cached:**
+- InternVL2-1B vision encoder weights
+- Tokenizer files
+- Model configuration files
 
 ---
 
