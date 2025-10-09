@@ -159,6 +159,18 @@ class SimlingoQCar2Controller:
         route_waypoints = route_wps[0].cpu().numpy()
         speed_waypoints = speed_wps[0].cpu().numpy()
 
+        # Update commentary widget if language output available
+        # Handle both list and string types
+        if isinstance(language, list):
+            commentary_text = language[0] if (language and len(language) > 0 and language[0]) else ""
+        elif isinstance(language, str):
+            commentary_text = language
+        else:
+            commentary_text = ""
+
+        if commentary_text and commentary_text.strip():
+            self.qcar_interface.update_commentary(commentary_text.strip())
+
         # NOTE: Bias correction disabled for trajectory logging test
         # The model has a systematic leftward bias (avg Y = 0.34 for straight scenarios)
         # BIAS_SCALE_FACTOR = 0.5  # Reduce Y predictions by 50%

@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pyt
 from qvl.qlabs import QuanserInteractiveLabs
 from qvl.qcar2 import QLabsQCar2
 from qvl.spline_line import QLabsSplineLine
+from commentary_window import CommentaryWindow
 
 
 class QCar2Interface:
@@ -162,6 +163,9 @@ class QCar2Interface:
 
             if self.config.enable_planned_route_tracer:
                 self._initialize_planned_route_tracer()
+
+            # Initialize commentary window
+            self._initialize_commentary_widget()
 
             return True
             
@@ -440,4 +444,25 @@ class QCar2Interface:
         except Exception as e:
             print(f"WARNING: Failed to initialize planned route tracer: {e}")
             self.planned_route_tracer = None
+
+    def _initialize_commentary_widget(self):
+        """Initialize commentary display window."""
+        try:
+            print("Initializing commentary window...")
+            self.commentary_widget = CommentaryWindow()
+            self.commentary_widget.start()
+            print("Commentary window initialized successfully")
+        except Exception as e:
+            print(f"WARNING: Failed to initialize commentary window: {e}")
+            self.commentary_widget = None
+
+    def update_commentary(self, text: str):
+        """
+        Update the commentary window with new text.
+
+        Args:
+            text: Commentary text to display
+        """
+        if self.commentary_widget is not None and text:
+            self.commentary_widget.update_commentary(text)
 
