@@ -43,7 +43,30 @@ class SimlingoModelWrapper:
 
         # Special token IDs
         self.special_token_ids = {}
-        
+
+        # Custom high-level command (HLC)
+        self.custom_hlc = None
+
+    def set_hlc(self, command: str = None):
+        """
+        Set a custom high-level command to guide the vehicle's behavior.
+
+        Args:
+            command: Natural language instruction (e.g., "Drive carefully", "Speed up", "Turn left at the intersection")
+                    Set to None to use default behavior
+
+        Examples:
+            - "Drive carefully and slow down"
+            - "Speed up to match traffic"
+            - "Prepare to turn left"
+            - "Avoid the obstacle on the right"
+        """
+        self.custom_hlc = command
+        if command:
+            print(f"HLC set: '{command}'")
+        else:
+            print("HLC cleared (using default behavior)")
+
     def load_model(self, checkpoint_path: str = None):
         """
         Load Simlingo model from DeepSpeed checkpoint.
@@ -224,15 +247,19 @@ class SimlingoModelWrapper:
         # This is because the Simlingo code will try to look up all special tokens
         # in the placeholder_values dictionary.
         #
-        # For image tokens, we provide empty arrays so the lookup succeeds but
-        # no waypoint embeddings are created (since the array is empty).
+        # For image tokens and special mode tokens, we provide empty arrays so the
+        # lookup succeeds but no waypoint embeddings are created (since the array is empty).
         placeholder_values = {
             '<TARGET_POINT>': target_points,
             # Image tokens - provide empty arrays to avoid KeyError
             # These won't actually be used because they're replaced by vision embeddings
             '<img>': np.array([]),
             '</img>': np.array([]),
-            '<IMG_CONTEXT>': np.array([])
+            '<IMG_CONTEXT>': np.array([]),
+            # Special mode tokens - provide empty arrays to avoid KeyError
+            # These are just text tokens, not placeholders for embeddings
+            '<INSTRUCTION_FOLLOWING>': np.array([]),
+            '<SAFETY>': np.array([])
         }
 
         # Convert to token IDs
@@ -323,8 +350,17 @@ class SimlingoModelWrapper:
         if self.tokenizer is None:
             raise RuntimeError("Tokenizer not loaded. Call load_tokenizer() first.")
         
-        # Create prompt
-        prompt = self.config.get_prompt_template(vehicle_speed)
+        # Create prompt (with optional custom HLC)
+        if self.custom_hlc:
+            # Use Dreamer dataset format for instruction following
+            # Format: "<INSTRUCTION_FOLLOWING> Current speed: X m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. {instruction}"
+            # This matches the Dreamer training data (50% of Dreamer samples)
+            base_prompt = f"Current speed: {vehicle_speed:.2f} m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. {self.custom_hlc}"
+            prompt = f"<INSTRUCTION_FOLLOWING> {base_prompt}"
+        else:
+            # Use default prompt (matches standard driving data)
+            # Format: "Current speed: X m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. What should the ego do next?"
+            prompt = self.config.get_prompt_template(vehicle_speed)
 
         # Create target points array
         target_points = np.array([target_point, next_target_point], dtype=np.float32)
@@ -375,6 +411,19 @@ class SimlingoModelWrapper:
                     print(f"DEBUG output: language type = {type(language)}")
                     print(f"DEBUG output: language = {language}")
                     self._output_debug_printed = True
+
+                # Debug HLC effect on waypoints
+                if self.custom_hlc:
+                    if speed_wps is not None:
+                        # Calculate target speed from last two speed waypoints
+                        speed_wps_np = speed_wps[0].float().cpu().numpy()  # Convert bfloat16 to float32 first
+                        last_wp = speed_wps_np[-1]
+                        second_last_wp = speed_wps_np[-2]
+                        delta = last_wp - second_last_wp
+                        target_speed = np.linalg.norm(delta) * 4.0  # 0.25s intervals, so *4 for m/s
+                        print(f"[HLC DEBUG] Instruction: '{self.custom_hlc}'")
+                        print(f"[HLC DEBUG] Target speed from waypoints: {target_speed:.2f} m/s")
+                        print(f"[HLC DEBUG] Current speed: {vehicle_speed:.2f} m/s")
 
                 # Convert to float if not None
                 if speed_wps is not None:

@@ -72,8 +72,8 @@ class SimlingoQCar2Controller:
         if not self.qcar_interface.connect():
             return False
 
-        # Spawn QCar2
-        if not self.qcar_interface.spawn_qcar(spawn_obstacles=self.spawn_obstacles):
+        # Spawn QCar2 (pass model_wrapper for HLC support)
+        if not self.qcar_interface.spawn_qcar(spawn_obstacles=self.spawn_obstacles, model_wrapper=self.model_wrapper):
             return False
         
         # Possess camera for visualization
@@ -170,6 +170,9 @@ class SimlingoQCar2Controller:
 
         if commentary_text and commentary_text.strip():
             self.qcar_interface.update_commentary(commentary_text.strip())
+
+        # Update speed display in commentary window
+        self.qcar_interface.update_speed(velocity)
 
         # NOTE: Bias correction disabled for trajectory logging test
         # The model has a systematic leftward bias (avg Y = 0.34 for straight scenarios)

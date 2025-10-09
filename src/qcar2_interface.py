@@ -72,12 +72,13 @@ class QCar2Interface:
             traceback.print_exc()
             return False
     
-    def spawn_qcar(self, spawn_obstacles=False) -> bool:
+    def spawn_qcar(self, spawn_obstacles=False, model_wrapper=None) -> bool:
         """
         Spawn QCar2 in QLabs.
 
         Args:
             spawn_obstacles: Whether to spawn obstacle vehicles
+            model_wrapper: SimlingoModelWrapper instance for HLC support
 
         Returns:
             True if spawn successful, False otherwise
@@ -164,8 +165,8 @@ class QCar2Interface:
             if self.config.enable_planned_route_tracer:
                 self._initialize_planned_route_tracer()
 
-            # Initialize commentary window
-            self._initialize_commentary_widget()
+            # Initialize commentary window (with HLC support)
+            self._initialize_commentary_widget(model_wrapper=model_wrapper)
 
             return True
             
@@ -445,11 +446,11 @@ class QCar2Interface:
             print(f"WARNING: Failed to initialize planned route tracer: {e}")
             self.planned_route_tracer = None
 
-    def _initialize_commentary_widget(self):
+    def _initialize_commentary_widget(self, model_wrapper=None):
         """Initialize commentary display window."""
         try:
             print("Initializing commentary window...")
-            self.commentary_widget = CommentaryWindow()
+            self.commentary_widget = CommentaryWindow(model_wrapper=model_wrapper)
             self.commentary_widget.start()
             print("Commentary window initialized successfully")
         except Exception as e:
@@ -465,4 +466,14 @@ class QCar2Interface:
         """
         if self.commentary_widget is not None and text:
             self.commentary_widget.update_commentary(text)
+
+    def update_speed(self, speed):
+        """
+        Update the speed display in the commentary window.
+
+        Args:
+            speed: Current vehicle speed in m/s
+        """
+        if self.commentary_widget is not None:
+            self.commentary_widget.update_speed(speed)
 
