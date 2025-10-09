@@ -71,10 +71,13 @@ class QCar2Interface:
             traceback.print_exc()
             return False
     
-    def spawn_qcar(self) -> bool:
+    def spawn_qcar(self, spawn_obstacles=False) -> bool:
         """
         Spawn QCar2 in QLabs.
-        
+
+        Args:
+            spawn_obstacles: Whether to spawn obstacle vehicles
+
         Returns:
             True if spawn successful, False otherwise
         """
@@ -104,6 +107,50 @@ class QCar2Interface:
                 return False
             
             print("QCar2 spawned successfully")
+
+            # Spawn obstacle if requested
+            if spawn_obstacles:
+                print("\nSpawning obstacle vehicles...")
+
+                # Obstacle 1: Parked car on west section (user-corrected position)
+                obstacle_car_1 = QLabsQCar2(self.qlabs)
+                obstacle_car_1.spawn_id(
+                    actorNumber=50,
+                    location=[6.170, 46.374, 0.001],  # West section, right shoulder
+                    rotation=[0, 0, 3.1416],  # Facing west
+                    waitForConfirmation=True
+                )
+                print("  ✓ Obstacle 1: Parked car at [6.170, 46.374] facing west")
+
+                # Obstacle 2: Parked car (user-corrected position)
+                obstacle_car_2 = QLabsQCar2(self.qlabs)
+                obstacle_car_2.spawn_id(
+                    actorNumber=51,
+                    location=[24.0, 34.0, 0.001],  # North section, right shoulder
+                    rotation=[0, 0, 1.5708],  # Facing north
+                    waitForConfirmation=True
+                )
+                print("  ✓ Obstacle 2: Parked car at [24.0, 34.0] facing north")
+
+                # Obstacle 3: Moving car - same direction (NEEDS VERIFICATION)
+                obstacle_car_3 = QLabsQCar2(self.qlabs)
+                obstacle_car_3.spawn_id(
+                    actorNumber=52,
+                    location=[-10, 42.374, 0.001],  # West section, right shoulder
+                    rotation=[0, 0, 0],  # Facing west
+                    waitForConfirmation=True
+                )
+                # Set velocity for moving car
+                obstacle_car_3.set_velocity_and_request_state(
+                    forward=0.1,  # 0.5 m/s forward
+                    turn=0.0,
+                    headlights=True,
+                    leftTurnSignal=False,
+                    rightTurnSignal=False,
+                    brakeSignal=False,
+                    reverseSignal=False
+                )
+                print("  ✓ Obstacle 3: Moving car at [8.0, 29.0] heading northeast, velocity 0.5 m/s")
 
             # Initialize state
             self.current_location = np.array(self.config.qcar2_spawn_location, dtype=np.float32)

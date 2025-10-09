@@ -32,7 +32,7 @@ class SimlingoQCar2Config:
         self.qcar2_camera_height = 410
         
         # Camera field of view
-        self.camera_fov = 110  # degrees
+        self.camera_fov = 160  # degrees - Match QCar2 CSI camera FOV (was 110, which was incorrect)
         
         # Camera position in CARLA coordinates (x, y, z)
         # x: forward, y: right, z: up

@@ -1,0 +1,1434 @@
+{
+  "metadata": {
+    "timestamp": "20251008_172517",
+    "total_steps": 56,
+    "total_time": 10.668541431427002,
+    "collision_count": 0,
+    "route_waypoints": [
+      [
+        2.686000108718872,
+        18.49799919128418,
+        0.0
+      ],
+      [
+        2.686000108718872,
+        20.99799919128418,
+        0.0
+      ],
+      [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      [
+        6.452000141143799,
+        27.27400016784668,
+        0.0
+      ],
+      [
+        8.362000465393066,
+        28.993000030517578,
+        0.0
+      ],
+      [
+        10.27299976348877,
+        30.606000900268555,
+        0.0
+      ],
+      [
+        12.685999870300293,
+        31.523000717163086,
+        0.0
+      ],
+      [
+        15.258999824523926,
+        31.440000534057617,
+        0.0
+      ],
+      [
+        17.826000213623047,
+        31.739999771118164,
+        0.0
+      ],
+      [
+        20.0939998626709,
+        32.97800064086914,
+        0.0
+      ],
+      [
+        21.732999801635742,
+        34.97600173950195,
+        0.0
+      ],
+      [
+        22.5049991607666,
+        37.44200134277344,
+        0.0
+      ],
+      [
+        22.29800033569336,
+        40.018001556396484,
+        0.0
+      ],
+      [
+        21.142000198364258,
+        42.32899856567383,
+        0.0
+      ],
+      [
+        19.20400047302246,
+        44.03900146484375,
+        0.0
+      ],
+      [
+        16.76799964904785,
+        44.900001525878906,
+        0.0
+      ],
+      [
+        14.270000457763672,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        11.770000457763672,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        9.170000076293945,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        6.570000171661377,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        3.9700000286102295,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        1.3700000047683716,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        -1.2000000476837158,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        -3.700000047683716,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        -6.199999809265137,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        -8.800000190734863,
+        44.9739990234375,
+        0.0
+      ],
+      [
+        -11.32800006866455,
+        44.96500015258789,
+        0.0
+      ],
+      [
+        -13.871999740600586,
+        44.472999572753906,
+        0.0
+      ],
+      [
+        -16.16699981689453,
+        43.270999908447266,
+        0.0
+      ],
+      [
+        -18.018999099731445,
+        41.459999084472656,
+        0.0
+      ],
+      [
+        -19.273000717163086,
+        39.19300079345703,
+        0.0
+      ],
+      [
+        -19.820999145507812,
+        36.6609992980957,
+        0.0
+      ],
+      [
+        -19.840999603271484,
+        34.15999984741211,
+        0.0
+      ],
+      [
+        -19.840999603271484,
+        31.65999984741211,
+        0.0
+      ],
+      [
+        -19.840999603271484,
+        29.760000228881836,
+        0.0
+      ]
+    ],
+    "spawn_location": [
+      2.686,
+      18.498,
+      0.005
+    ],
+    "spawn_rotation": [
+      0.0,
+      0.0,
+      1.5708
+    ]
+  },
+  "trajectory": [
+    {
+      "step": 0,
+      "timestamp": 0.40184974670410156,
+      "position": [
+        2.686000108718872,
+        18.49799919128418,
+        0.004999999888241291
+      ],
+      "heading_deg": 90.00021424034244,
+      "speed": 0.0,
+      "steering": -0.859,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.979109287261963,
+      "collision": false
+    },
+    {
+      "step": 1,
+      "timestamp": 0.585148811340332,
+      "position": [
+        2.685999631881714,
+        18.49799919128418,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.95324302942026,
+      "speed": 1.0540617743443473e-06,
+      "steering": -0.806,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.979109287261963,
+      "collision": false
+    },
+    {
+      "step": 2,
+      "timestamp": 0.7684898376464844,
+      "position": [
+        2.686001777648926,
+        18.5031681060791,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.9092292904087,
+      "speed": 0.014053428911515948,
+      "steering": -0.559,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.973962306976318,
+      "collision": false
+    },
+    {
+      "step": 3,
+      "timestamp": 0.95182204246521,
+      "position": [
+        2.6860079765319824,
+        18.508338928222656,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.86357630599633,
+      "speed": 0.018719137483652063,
+      "steering": -0.833,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.968812942504883,
+      "collision": false
+    },
+    {
+      "step": 4,
+      "timestamp": 1.135155200958252,
+      "position": [
+        2.686023235321045,
+        18.51607322692871,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.78802758358682,
+      "speed": 0.024690287628660917,
+      "steering": -0.607,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.9611101150512695,
+      "collision": false
+    },
+    {
+      "step": 5,
+      "timestamp": 1.3351502418518066,
+      "position": [
+        2.686049699783325,
+        18.52466583251953,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.72025844664195,
+      "speed": 0.02831968793294013,
+      "steering": -0.91,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.95255184173584,
+      "collision": false
+    },
+    {
+      "step": 6,
+      "timestamp": 1.5185236930847168,
+      "position": [
+        2.686095714569092,
+        18.535242080688477,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.62072893005653,
+      "speed": 0.03987255684122787,
+      "steering": -0.915,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.9420166015625,
+      "collision": false
+    },
+    {
+      "step": 7,
+      "timestamp": 1.7018351554870605,
+      "position": [
+        2.6861562728881836,
+        18.545595169067383,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.50021024215165,
+      "speed": 0.045556846086958674,
+      "steering": -1.0,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.931702613830566,
+      "collision": false
+    },
+    {
+      "step": 8,
+      "timestamp": 1.8851525783538818,
+      "position": [
+        2.686253070831299,
+        18.558069229125977,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.35750709982258,
+      "speed": 0.053598809321517324,
+      "steering": -0.64,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.919273376464844,
+      "collision": false
+    },
+    {
+      "step": 9,
+      "timestamp": 2.0685176849365234,
+      "position": [
+        2.686389446258545,
+        18.571592330932617,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.25614709253959,
+      "speed": 0.059849299573647576,
+      "steering": -0.608,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.905796527862549,
+      "collision": false
+    },
+    {
+      "step": 10,
+      "timestamp": 2.2684926986694336,
+      "position": [
+        2.686572313308716,
+        18.586576461791992,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.14309380139754,
+      "speed": 0.06625578549725444,
+      "steering": -0.239,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.890860557556152,
+      "collision": false
+    },
+    {
+      "step": 11,
+      "timestamp": 2.4518332481384277,
+      "position": [
+        2.6868197917938232,
+        18.604185104370117,
+        -0.002556876977905631
+      ],
+      "heading_deg": 89.09943523222282,
+      "speed": 0.07386595037535224,
+      "steering": -0.79,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.8733062744140625,
+      "collision": false
+    },
+    {
+      "step": 12,
+      "timestamp": 2.635143756866455,
+      "position": [
+        2.6870858669281006,
+        18.621492385864258,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.94335857949885,
+      "speed": 0.08146539936976767,
+      "steering": -0.496,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.856050491333008,
+      "collision": false
+    },
+    {
+      "step": 13,
+      "timestamp": 2.818530559539795,
+      "position": [
+        2.6874074935913086,
+        18.64019775390625,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.83794143984888,
+      "speed": 0.08807515777776817,
+      "steering": -0.786,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.837398529052734,
+      "collision": false
+    },
+    {
+      "step": 14,
+      "timestamp": 3.0018301010131836,
+      "position": [
+        2.6877968311309814,
+        18.66029930114746,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.66108052148057,
+      "speed": 0.09501075865828312,
+      "steering": -0.611,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.817349910736084,
+      "collision": false
+    },
+    {
+      "step": 15,
+      "timestamp": 3.2018356323242188,
+      "position": [
+        2.688265085220337,
+        18.681608200073242,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.50212835911603,
+      "speed": 0.10166574962052943,
+      "steering": -0.309,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.796092987060547,
+      "collision": false
+    },
+    {
+      "step": 16,
+      "timestamp": 3.385152578353882,
+      "position": [
+        2.688877820968628,
+        18.70623207092285,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.42442812711796,
+      "speed": 0.10930315997933579,
+      "steering": -0.748,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.771522521972656,
+      "collision": false
+    },
+    {
+      "step": 17,
+      "timestamp": 3.5685126781463623,
+      "position": [
+        2.6895174980163574,
+        18.730026245117188,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.22536226375794,
+      "speed": 0.11627677247318371,
+      "steering": -0.653,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.747776031494141,
+      "collision": false
+    },
+    {
+      "step": 18,
+      "timestamp": 3.751823902130127,
+      "position": [
+        2.690258502960205,
+        18.755216598510742,
+        -0.002556876977905631
+      ],
+      "heading_deg": 88.04278447705434,
+      "speed": 0.12381643546068584,
+      "steering": -0.727,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.722630500793457,
+      "collision": false
+    },
+    {
+      "step": 19,
+      "timestamp": 3.935171604156494,
+      "position": [
+        2.691124439239502,
+        18.78168296813965,
+        -0.002556876977905631
+      ],
+      "heading_deg": 87.8289380843304,
+      "speed": 0.13090005508390065,
+      "steering": -0.352,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.696203708648682,
+      "collision": false
+    },
+    {
+      "step": 20,
+      "timestamp": 4.135151147842407,
+      "position": [
+        2.6921327114105225,
+        18.809532165527344,
+        -0.002556876977905631
+      ],
+      "heading_deg": 87.7106596984733,
+      "speed": 0.13702586589409851,
+      "steering": -1.0,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.668387413024902,
+      "collision": false
+    },
+    {
+      "step": 21,
+      "timestamp": 4.3185014724731445,
+      "position": [
+        2.6933741569519043,
+        18.841320037841797,
+        -0.002556876977905631
+      ],
+      "heading_deg": 87.39080193964159,
+      "speed": 0.14499718860950978,
+      "steering": -0.411,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.636629104614258,
+      "collision": false
+    },
+    {
+      "step": 22,
+      "timestamp": 4.50189471244812,
+      "position": [
+        2.694676399230957,
+        18.8715763092041,
+        -0.002556876977905631
+      ],
+      "heading_deg": 87.25310532597413,
+      "speed": 0.15199526308552452,
+      "steering": -0.81,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.60638952255249,
+      "collision": false
+    },
+    {
+      "step": 23,
+      "timestamp": 4.685171127319336,
+      "position": [
+        2.6961636543273926,
+        18.90329360961914,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.9707043245508,
+      "speed": 0.159124968244092,
+      "steering": -0.789,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.574678897857666,
+      "collision": false
+    },
+    {
+      "step": 24,
+      "timestamp": 4.868529796600342,
+      "position": [
+        2.6978354454040527,
+        18.936283111572266,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.68468332286734,
+      "speed": 0.1663841828680774,
+      "steering": -0.217,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.541684627532959,
+      "collision": false
+    },
+    {
+      "step": 25,
+      "timestamp": 5.068497180938721,
+      "position": [
+        2.6997432708740234,
+        18.97056770324707,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.59539909003693,
+      "speed": 0.1729987323921768,
+      "steering": -0.392,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.507378578186035,
+      "collision": false
+    },
+    {
+      "step": 26,
+      "timestamp": 5.25187349319458,
+      "position": [
+        2.702026605606079,
+        19.009414672851562,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.44268972057378,
+      "speed": 0.1805354508701039,
+      "steering": -0.287,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.468495845794678,
+      "collision": false
+    },
+    {
+      "step": 27,
+      "timestamp": 5.43519139289856,
+      "position": [
+        2.704270362854004,
+        19.046228408813477,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.32663114619693,
+      "speed": 0.1879638416541502,
+      "steering": 0.182,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.431640625,
+      "collision": false
+    },
+    {
+      "step": 28,
+      "timestamp": 5.618499755859375,
+      "position": [
+        2.70668625831604,
+        19.08441734313965,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.40273311392922,
+      "speed": 0.19487483689248825,
+      "steering": -0.237,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.393401145935059,
+      "collision": false
+    },
+    {
+      "step": 29,
+      "timestamp": 5.801876783370972,
+      "position": [
+        2.7091963291168213,
+        19.12396240234375,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.3003554084599,
+      "speed": 0.20166499858284892,
+      "steering": -0.167,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.353802680969238,
+      "collision": false
+    },
+    {
+      "step": 30,
+      "timestamp": 6.0018470287323,
+      "position": [
+        2.711801290512085,
+        19.16476821899414,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.21911713847176,
+      "speed": 0.20859666660754286,
+      "steering": -0.358,
+      "throttle": 0.43644502196478147,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.312941074371338,
+      "collision": false
+    },
+    {
+      "step": 31,
+      "timestamp": 6.185170888900757,
+      "position": [
+        2.7148025035858154,
+        19.21063232421875,
+        -0.002556876977905631
+      ],
+      "heading_deg": 86.06603210860426,
+      "speed": 0.2162385902097282,
+      "steering": -0.618,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.267007350921631,
+      "collision": false
+    },
+    {
+      "step": 32,
+      "timestamp": 6.368510961532593,
+      "position": [
+        2.717531681060791,
+        19.25103759765625,
+        -0.002556876977905631
+      ],
+      "heading_deg": 85.77365220080353,
+      "speed": 0.21994635575184454,
+      "steering": -0.473,
+      "throttle": 0.4684755169406848,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.226532936096191,
+      "collision": false
+    },
+    {
+      "step": 33,
+      "timestamp": 6.551860094070435,
+      "position": [
+        2.7207303047180176,
+        19.295732498168945,
+        -0.002556876977905631
+      ],
+      "heading_deg": 85.56017463829478,
+      "speed": 0.22680912573443104,
+      "steering": -0.509,
+      "throttle": 0.9987824440583664,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.181743621826172,
+      "collision": false
+    },
+    {
+      "step": 34,
+      "timestamp": 6.735213041305542,
+      "position": [
+        2.7239668369293213,
+        19.33835220336914,
+        -0.002556876977905631
+      ],
+      "heading_deg": 85.30908322402676,
+      "speed": 0.23088455116304787,
+      "steering": -0.35,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.139015197753906,
+      "collision": false
+    },
+    {
+      "step": 35,
+      "timestamp": 6.93529486656189,
+      "position": [
+        2.7276968955993652,
+        19.38494300842285,
+        -0.002556876977905631
+      ],
+      "heading_deg": 85.11754422913211,
+      "speed": 0.23634441639758355,
+      "steering": -0.337,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.092286109924316,
+      "collision": false
+    },
+    {
+      "step": 36,
+      "timestamp": 7.118540048599243,
+      "position": [
+        2.732027530670166,
+        19.436573028564453,
+        -0.002556876977905631
+      ],
+      "heading_deg": 84.94499316013007,
+      "speed": 0.24268040237205285,
+      "steering": -0.469,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 4.0404839515686035,
+      "collision": false
+    },
+    {
+      "step": 37,
+      "timestamp": 7.301847696304321,
+      "position": [
+        2.736233711242676,
+        19.48488426208496,
+        -0.002556876977905631
+      ],
+      "heading_deg": 84.6989970669829,
+      "speed": 0.2514098172571589,
+      "steering": -0.396,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 3.9919955730438232,
+      "collision": false
+    },
+    {
+      "step": 38,
+      "timestamp": 7.4851861000061035,
+      "position": [
+        2.740725040435791,
+        19.534337997436523,
+        -0.002556876977905631
+      ],
+      "heading_deg": 84.48467256101706,
+      "speed": 0.2572878106621329,
+      "steering": -0.451,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 3.9423418045043945,
+      "collision": false
+    },
+    {
+      "step": 39,
+      "timestamp": 7.668590545654297,
+      "position": [
+        2.7455649375915527,
+        19.58536720275879,
+        -0.002556876977905631
+      ],
+      "heading_deg": 84.23546627895998,
+      "speed": 0.26584361461284667,
+      "steering": -0.037,
+      "throttle": 0.7599614228735232,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 3.891085147857666,
+      "collision": false
+    },
+    {
+      "step": 40,
+      "timestamp": 7.868537187576294,
+      "position": [
+        2.750718593597412,
+        19.637447357177734,
+        -0.002556876977905631
+      ],
+      "heading_deg": 84.21288567356392,
+      "speed": 0.27144151610155254,
+      "steering": -0.319,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 3.8387510776519775,
+      "collision": false
+    },
+    {
+      "step": 41,
+      "timestamp": 8.05185341835022,
+      "position": [
+        2.7565011978149414,
+        19.694604873657227,
+        -0.002556876977905631
+      ],
+      "heading_deg": 84.02785584894826,
+      "speed": 0.2781918809614402,
+      "steering": -0.102,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 0,
+      "target_waypoint": [
+        3.1440000534057617,
+        23.45599937438965,
+        0.0
+      ],
+      "distance_to_target": 3.781301736831665,
+      "collision": false
+    },
+    {
+      "step": 42,
+      "timestamp": 8.235198259353638,
+      "position": [
+        2.762136220932007,
+        19.74924659729004,
+        -0.002556876977905631
+      ],
+      "heading_deg": 83.96734037290196,
+      "speed": 0.28517824065594155,
+      "steering": -0.422,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 6.123250961303711,
+      "collision": false
+    },
+    {
+      "step": 43,
+      "timestamp": 8.418544054031372,
+      "position": [
+        2.768012046813965,
+        19.805105209350586,
+        -0.002556876977905631
+      ],
+      "heading_deg": 83.71129707148569,
+      "speed": 0.29232103408598686,
+      "steering": -0.303,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 6.068196773529053,
+      "collision": false
+    },
+    {
+      "step": 44,
+      "timestamp": 8.601880311965942,
+      "position": [
+        2.774188756942749,
+        19.862220764160156,
+        -0.002556876977905631
+      ],
+      "heading_deg": 83.5233166051486,
+      "speed": 0.2989439913713946,
+      "steering": -0.297,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 6.011874675750732,
+      "collision": false
+    },
+    {
+      "step": 45,
+      "timestamp": 8.801903247833252,
+      "position": [
+        2.780729293823242,
+        19.920610427856445,
+        -0.002556876977905631
+      ],
+      "heading_deg": 83.3181650432381,
+      "speed": 0.3056272550721911,
+      "steering": -0.33,
+      "throttle": 0.3,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.954249382019043,
+      "collision": false
+    },
+    {
+      "step": 46,
+      "timestamp": 8.98522424697876,
+      "position": [
+        2.7882347106933594,
+        19.98560333251953,
+        -0.002556876977905631
+      ],
+      "heading_deg": 83.1174326137206,
+      "speed": 0.3136999014316631,
+      "steering": -0.303,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.890064716339111,
+      "collision": false
+    },
+    {
+      "step": 47,
+      "timestamp": 9.168540716171265,
+      "position": [
+        2.795044183731079,
+        20.042781829833984,
+        -0.002556876977905631
+      ],
+      "heading_deg": 82.91667286344641,
+      "speed": 0.31685476201823765,
+      "steering": -0.244,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.833556652069092,
+      "collision": false
+    },
+    {
+      "step": 48,
+      "timestamp": 9.351899147033691,
+      "position": [
+        2.802673816680908,
+        20.104991912841797,
+        -0.002556876977905631
+      ],
+      "heading_deg": 82.75353379512065,
+      "speed": 0.3233083127446671,
+      "steering": -0.342,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.772031784057617,
+      "collision": false
+    },
+    {
+      "step": 49,
+      "timestamp": 9.53523874282837,
+      "position": [
+        2.8105711936950684,
+        20.167753219604492,
+        -0.002556876977905631
+      ],
+      "heading_deg": 82.52075411801745,
+      "speed": 0.3307166428226413,
+      "steering": -0.28,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.709924221038818,
+      "collision": false
+    },
+    {
+      "step": 50,
+      "timestamp": 9.735204219818115,
+      "position": [
+        2.8188412189483643,
+        20.231658935546875,
+        -0.002556876977905631
+      ],
+      "heading_deg": 82.30839670653258,
+      "speed": 0.33609335582579736,
+      "steering": -0.295,
+      "throttle": 0.8172343507075834,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.646638870239258,
+      "collision": false
+    },
+    {
+      "step": 51,
+      "timestamp": 9.918555736541748,
+      "position": [
+        2.8283259868621826,
+        20.302806854248047,
+        -0.002556876977905631
+      ],
+      "heading_deg": 82.10325880500042,
+      "speed": 0.34303039483882936,
+      "steering": -0.261,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.576124668121338,
+      "collision": false
+    },
+    {
+      "step": 52,
+      "timestamp": 10.101924896240234,
+      "position": [
+        2.8372654914855957,
+        20.3680362701416,
+        -0.002556876977905631
+      ],
+      "heading_deg": 81.91560618774348,
+      "speed": 0.35209641526416763,
+      "steering": -0.254,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.511427879333496,
+      "collision": false
+    },
+    {
+      "step": 53,
+      "timestamp": 10.2852201461792,
+      "position": [
+        2.8467354774475098,
+        20.435428619384766,
+        -0.002556876977905631
+      ],
+      "heading_deg": 81.72858877807937,
+      "speed": 0.3578955755100048,
+      "steering": -0.089,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.4445390701293945,
+      "collision": false
+    },
+    {
+      "step": 54,
+      "timestamp": 10.468554496765137,
+      "position": [
+        2.8566627502441406,
+        20.504432678222656,
+        -0.002556876977905631
+      ],
+      "heading_deg": 81.66185782988835,
+      "speed": 0.3647872284474244,
+      "steering": -0.096,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.376006603240967,
+      "collision": false
+    },
+    {
+      "step": 55,
+      "timestamp": 10.668541431427002,
+      "position": [
+        2.8668899536132812,
+        20.574472427368164,
+        -0.002556876977905631
+      ],
+      "heading_deg": 81.5820334090584,
+      "speed": 0.37129228178483764,
+      "steering": -0.183,
+      "throttle": 1.0,
+      "brake": false,
+      "current_waypoint_index": 1,
+      "target_waypoint": [
+        4.591000080108643,
+        25.593000411987305,
+        0.0
+      ],
+      "distance_to_target": 5.306427955627441,
+      "collision": false
+    }
+  ]
+}

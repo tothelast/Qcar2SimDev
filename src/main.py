@@ -26,16 +26,18 @@ from control_converter import ControlConverter
 class SimlingoQCar2Controller:
     """Main controller for Simlingo-QCar2 integration."""
     
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, spawn_obstacles=False):
         """
         Initialize controller.
-        
+
         Args:
             config_path: Path to custom config file (optional)
+            spawn_obstacles: Whether to spawn obstacle vehicles (optional)
         """
         # Load configuration
         self.config = SimlingoQCar2Config()
-        
+        self.spawn_obstacles = spawn_obstacles
+
         # Initialize components
         self.qcar_interface = QCar2Interface(self.config)
         self.camera_processor = CameraProcessor(self.config)
@@ -43,7 +45,7 @@ class SimlingoQCar2Controller:
         self.route_manager = RouteManager(self.config)
         self.model_wrapper = SimlingoModelWrapper(self.config)
         self.control_converter = ControlConverter(self.config)
-        
+
         # Control loop state
         self.running = False
         self.step_count = 0
@@ -69,9 +71,9 @@ class SimlingoQCar2Controller:
         # Connect to QLabs
         if not self.qcar_interface.connect():
             return False
-        
+
         # Spawn QCar2
-        if not self.qcar_interface.spawn_qcar():
+        if not self.qcar_interface.spawn_qcar(spawn_obstacles=self.spawn_obstacles):
             return False
         
         # Possess camera for visualization
@@ -384,11 +386,13 @@ def main():
     parser = argparse.ArgumentParser(description='Simlingo-QCar2 Integration')
     parser.add_argument('--config', type=str, default=None,
                         help='Path to custom config file')
+    parser.add_argument('--spawn-obstacles', action='store_true',
+                        help='Spawn obstacle vehicles along the route')
 
     args = parser.parse_args()
 
     # Create controller
-    controller = SimlingoQCar2Controller(config_path=args.config)
+    controller = SimlingoQCar2Controller(config_path=args.config, spawn_obstacles=args.spawn_obstacles)
 
     # Initialize
     if not controller.initialize():
