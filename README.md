@@ -1,41 +1,63 @@
-# SimLingo ↔ QCar2 (QLabs) Integration
+# QCar2 SimLingo Integration
 
-Real SimLingo Vision–Language–Action (VLA) inference driving a QCar2 in QLabs. GPU‑accelerated on RTX 5070 (CUDA 12.8).
+Adapting SimLingo Vision-Language-Action (VLA) model from CARLA simulator to QCar2 in QLabs simulation. GPU-accelerated inference on RTX 5070 (CUDA 12.8).
 
-## Highlights
-- True neural inference: InternVL2‑1B backbone with LoRA (PEFT), loading epoch=013.ckpt
-- End‑to‑end pipeline: QLabs → QCar2 camera → preprocessing → SimLingo VLA → waypoint→control → vehicle commands
+## What is This?
+
+**SimLingo** is a vision-language model for autonomous driving, originally trained on CARLA simulator data. It uses InternVL2-1B (vision-language backbone) to predict driving waypoints from camera images, target points, and optional natural language instructions.
+
+**This project** adapts SimLingo to run on Quanser's QCar2 platform in QLabs simulation, replacing CARLA-specific code with QCar2 equivalents while preserving the core AI model.
+
+## Key Features
+
+- **Real SimLingo Model**: InternVL2-1B backbone with LoRA adapters (epoch=013.ckpt)
+- **Route Following**: Predefined waypoint routes with lookahead algorithm
+- **Control System**: Lateral PID + Longitudinal Linear Regression + Kinematic Bicycle Model (exact SimLingo parameters)
+- **HLC Support**: Natural language instructions via interactive commentary window
+- **Full Pipeline**: Camera → Preprocessing → Model Inference → Waypoint Prediction → Control Conversion → QCar2
 
 ## Project Structure
+
 ```
-simlingo_qcar2_integration/
+Qcar2SimDev/
 ├── src/
-│   ├── adapters/
-│   │   ├── data_adapter.py          # QCar2 camera → model input
-│   │   └── control_adapter.py       # SimLingo outputs → QCar2 controls
-│   ├── models/
-│   │   └── simlingo_wrapper.py      # Real model load + inference
-│   └── integration/
-│   |    └── main_bridge.py          # QLabs orchestration + control loop
-|   └── main.py                      # Entry point
-├── models/
-    └── simlingo/
-        └── checkpoints/epoch=013.ckpt/pytorch_model.pt
+│   ├── main.py                  # Main control loop
+│   ├── simlingo_model.py        # Model wrapper (loads checkpoint, runs inference)
+│   ├── camera_processor.py      # Camera preprocessing (JPEG compression, patching)
+│   ├── route_manager.py         # Route following with lookahead algorithm
+│   ├── control_converter.py     # PID controllers + bicycle model
+│   ├── qcar2_interface.py       # QLabs/QCar2 interface
+│   ├── commentary_window.py     # GUI for model commentary + HLC input
+│   ├── config.py                # Configuration (PID params, routes, model paths)
+│   └── state_estimator.py       # State estimation and filtering
+├── simlingo/
+│   ├── simlingo_training/       # SimLingo model code (from original repo)
+│   └── team_code/               # Reference implementations
+├── models/simlingo/
+│   └── checkpoints/epoch=013.ckpt/  # Trained model weights
+├── pretrained/InternVL2-1B/     # Base vision-language model
+└── docs/                        # Technical documentation
 ```
 
-## Requirements (GPU stack)
-- Ubuntu 24.04, Python 3.12 (project uses venv: `simlingo_env/`)
-- NVIDIA GPU with CUDA 12.8 support (tested on RTX 5070, works with other CUDA-capable GPUs)
-- Core ML/AI: PyTorch 2.7+, transformers, pytorch-lightning, peft
-- Computer Vision: opencv-python, pillow, numpy
-- Configuration: hydra-core, omegaconf
-- Utilities: einops, timm, huggingface-hub, safetensors
+## Requirements
+
+**System:**
+- Ubuntu 24.04, Python 3.12
+- NVIDIA GPU with CUDA 12.8 (tested on RTX 5070)
+- QLabs with QCar2 environment
+
+**Python Dependencies:**
+- PyTorch 2.7+ (CUDA 12.8), transformers, pytorch-lightning, peft
+- opencv-python, pillow, numpy
+- hydra-core, omegaconf, einops, timm
+- Quanser libraries: `qvl`, `pal`
 
 ## Setup
 
 ### 1) Create and activate virtual environment
 ```bash
-python3 -m venv simlingo_env
+# Create venv with system packages (required for Quanser libraries)
+python3 -m venv --system-site-packages simlingo_env
 source simlingo_env/bin/activate
 ```
 
@@ -56,46 +78,116 @@ pip install -r requirements.txt
 python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None')"
 ```
 
-### 5) Check model assets
-The project loads models from these locations:
+### 5) Model Assets
 
 **SimLingo Checkpoint** (required):
-- Path: `models/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt`
-- Config: `models/simlingo/.hydra/config.yaml`
-- Status: ✅ Present in repository
+- `models/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt`
+- `models/simlingo/.hydra/config.yaml`
 
-**InternVL2-1B Pretrained Model** (auto-downloaded):
-- Path: `pretrained/InternVL2-1B/`
-- Source: Auto-downloaded from HuggingFace (`OpenGVLab/InternVL2-1B`)
-- Status: ✅ Present in repository
-- Size: ~2GB (includes model.safetensors, tokenizer, config files)
+**InternVL2-1B Base Model** (auto-downloaded from HuggingFace):
+- `pretrained/InternVL2-1B/` (~2GB)
 
-**SimLingo Training Code** (required):
-- Path: `simlingo_training/` directory
-- Status: ✅ Present in repository
-- Contains: Model architectures, utilities, data loaders
+**SimLingo Code** (required):
+- `simlingo/simlingo_training/` - Model architectures, utilities
+- `simlingo/team_code/` - Reference implementations
 
 ## Usage
-Run with QLabs open and a scene loaded.
+
+**1. Start QLabs** with QCar2 environment loaded
+
+**2. Run the integration:**
 ```bash
 source simlingo_env/bin/activate
-python src/main.py --duration 30 --hz 10 --try-load-weights
+python src/main.py
 ```
-CLI options:
-- `--duration` (s): How long to run the simulation (default: 30)
-- `--hz` (float): Control loop frequency (default: 10.0)
-- `--try-load-weights`: Attempt to load the large checkpoint weights into CPU memory (optional)
 
+**CLI Options:**
+- `--config` - Path to custom config file (optional)
+- `--spawn-obstacles` - Spawn obstacle vehicles along the route (optional)
 
-## Control Loop Architecture
-QLabs → QCar2 camera → image preprocessing → SimLingo VLA inference → waypoint→control → QCar2 commands
-- Data: CSI/RGB camera → resize/normalize to model input
-- Model: InternVL2‑1B + PEFT (LoRA) → loads epoch=013.ckpt → predicts waypoints/route
-- Control: waypoints → forward speed & steering via proportional mapping → `set_velocity_and_request_state`
-- Safety: on `ModelInferenceError`, stop vehicle and exit (no fallback policy)
+**Note:** Route waypoints are defined in `src/config.py` (hardcoded). Control loop runs until route completion (within 2m of final waypoint) or manual stop (Ctrl+C).
 
-## Spawn System
-- Default spawn: `(x=0.0, y=0.0, z=0.1, yaw=90°)`
-- Auto‑search: tries several nearby safe candidates if bumpers report collision
-- Override exact pose with CLI for your layout
+**3. Commentary Window** opens automatically:
+- **Left panel**: Model's natural language commentary
+- **Right panel**: Current speed + HLC input field
+- **To use HLC**: Type instruction (e.g., "Turn left at intersection") and press Enter
+- **To clear HLC**: Delete text and press Enter (returns to default mode)
+
+## How It Works
+
+### Complete Pipeline
+
+```
+1. Route Manager
+   ↓ Finds target waypoints using lookahead algorithm
+   ↓ Converts to ego frame (vehicle-centric coordinates)
+
+2. Camera Processing
+   ↓ QCar2 camera → JPEG compression → Dynamic preprocessing
+   ↓ Splits into 2 patches of 448x448 patches 
+
+3. SimLingo Model Inference
+   ↓ Input: camera patches + target points + speed + optional HLC
+   ↓ Prompt (default): "Current speed: X m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. What should the ego do next?"
+   ↓ Prompt (with HLC): "<INSTRUCTION_FOLLOWING> Current speed: X m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. {instruction}"
+   ↓ Output: route_waypoints (predicted path) + speed_waypoints (predicted speeds) + commentary
+
+4. Control Conversion
+   ↓ Lateral PID Controller: route_waypoints → steering
+   ↓ Longitudinal Linear Regression: speed_waypoints → throttle/brake
+   ↓ Kinematic Bicycle Model: converts to QCar2 format
+
+5. QCar2 Execution
+   ↓ forward_velocity + turn_angle → vehicle motion
+```
+
+### Key Components
+
+**Route Manager** (`route_manager.py`):
+- Uses predefined waypoint routes from `config.py` (hardcoded in global coordinates)
+- Lookahead algorithm: finds target points at fixed distance ahead
+- World-to-ego transformation: converts global waypoints to vehicle frame
+
+**SimLingo Model** (`simlingo_model.py`):
+- InternVL2-1B vision-language model with LoRA adapters
+- Processes camera + target points + optional HLC
+- Predicts waypoints and speeds for next 2 seconds
+- Generates natural language commentary
+
+**Control Converter** (`control_converter.py`):
+- **Lateral PID**: Kp=3.25, Ki=1.0, Kd=1.0 (exact SimLingo params)
+- **Longitudinal Linear Regression**: 7-parameter model (exact SimLingo params)
+- **Kinematic Bicycle Model**: Converts to QCar2's forward_velocity + turn_angle
+
+**Camera Processor** (`camera_processor.py`):
+- JPEG compression (matches CARLA training data)
+- Dynamic preprocessing: splits image into 448x448 patches
+- ImageNet normalization
+
+## High-Level Commands (HLC)
+
+This project supports natural language instructions via the commentary window:
+
+**Example Instructions:**
+- "Turn left at the intersection"
+- "Slow down and prepare to stop"
+- "Change lanes to the right"
+- "Follow the road carefully"
+
+**How it works:**
+- Type instruction in commentary window → Press Enter
+- Prompt changes to `<INSTRUCTION_FOLLOWING>` mode
+- Model receives instruction along with camera and target points
+- Model predicts waypoints that follow both the instruction and the route
+
+**Training:** SimLingo was trained on the Dreamer dataset with instruction following, so it can handle natural language commands while maintaining safe driving behavior.
+
+## Documentation
+
+See `docs/` folder for detailed technical documentation:
+- `SIMLINGO_FILES_USED.md` - Which SimLingo files we use and why
+- `CUSTOM_IMPLEMENTATION.md` - Our QCar2-specific implementations
+- `ROUTE_MANAGER_EXPLAINED.md` - How route following works
+- `CAMERA_PROCESSOR_VS_INTERNVL2_UTILS.md` - Camera preprocessing details
+- `QCAR2_CONTROL_EXPLAINED.md` - Control system implementation
 
