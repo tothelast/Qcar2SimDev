@@ -193,17 +193,30 @@ class SimlingoQCar2Controller:
             import os
             os.makedirs("debug_output", exist_ok=True)
             # camera_images shape: [1, 1, num_patches, 3, 448, 448]
+            num_patches = camera_images.shape[2]
+
+            # Denormalize parameters
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+
             # Save the first patch
             img_tensor = camera_images[0, 0, 0].cpu().numpy()  # [3, 448, 448]
             img_tensor = np.transpose(img_tensor, (1, 2, 0))  # [448, 448, 3]
-            # Denormalize from ImageNet normalization
-            mean = np.array([0.485, 0.456, 0.406])
-            std = np.array([0.229, 0.224, 0.225])
             img = img_tensor * std + mean
             img = np.clip(img * 255, 0, 255).astype(np.uint8)
             img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             cv2.imwrite("debug_output/camera_patch0_step0.jpg", img_bgr)
             print(f"DEBUG: Saved camera image to debug_output/camera_patch0_step0.jpg")
+
+            # Save the second patch if it exists
+            if num_patches > 1:
+                img_tensor = camera_images[0, 0, 1].cpu().numpy()  # [3, 448, 448]
+                img_tensor = np.transpose(img_tensor, (1, 2, 0))  # [448, 448, 3]
+                img = img_tensor * std + mean
+                img = np.clip(img * 255, 0, 255).astype(np.uint8)
+                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite("debug_output/camera_patch1_step0.jpg", img_bgr)
+                print(f"DEBUG: Saved camera image to debug_output/camera_patch1_step0.jpg")
 
         # Compute control using PID
         steer, throttle, brake = self.control_converter.control_pid(

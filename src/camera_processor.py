@@ -61,13 +61,8 @@ class CameraProcessor:
         # Convert back to RGB
         image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-        # Crop bottom of image (conservative 10% crop)
-        # Original CARLA preprocessing removed 30% to eliminate hood/dashboard
-        # QCar2 camera does NOT show hood (verified), so we use minimal 10% crop
-        # This gives model 20% more road visibility while maintaining safety margin
-        # Formula: 1.6/16 = 10% crop (was 4.8/16 = 30% crop)
-        crop_height = int(image.shape[0] - (image.shape[0] * 1.6) // 16)
-        image = image[:crop_height, :, :]
+        # No crop - use full image
+        # QCar2 camera does NOT show hood, so no cropping needed
 
         # Convert numpy array to PIL Image
         pil_image = Image.fromarray(image)

@@ -104,6 +104,9 @@ data_cache/
 captures/
 recordings/
 
+# Debug output
+debug_output/
+
 # HuggingFace/Transformers caches (if placed locally under this project)
 hf_cache/
 huggingface/
