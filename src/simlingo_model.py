@@ -363,7 +363,14 @@ class SimlingoModelWrapper:
             prompt = self.config.get_prompt_template(vehicle_speed)
 
         # Create target points array
-        target_points = np.array([target_point, next_target_point], dtype=np.float32)
+        # EXPERIMENT: Set to zeros to test model without route information
+        USE_REAL_TARGET_POINTS = True  # Set to True to use real target points
+        if USE_REAL_TARGET_POINTS:
+            target_points = np.array([target_point, next_target_point], dtype=np.float32)
+        else:
+            # Pass dummy zeros - model still expects <TARGET_POINT> tokens but gets no route info
+            target_points = np.array([[0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
+            print("DEBUG: Using ZERO target points (no route information)")
 
         # Get number of patches from camera_images shape
         # camera_images shape: [1, 1, num_patches, 3, 448, 448]
