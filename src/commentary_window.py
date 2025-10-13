@@ -15,6 +15,7 @@ class CommentaryWindow:
         self.text_widget = None
         self.hlc_entry = None
         self.current_hlc_display = None
+        self.waypoint_display = None
         self.running = False
         self.thread = None
         self.message_queue = queue.Queue()
@@ -86,7 +87,27 @@ class CommentaryWindow:
         tk.Label(right_hlc, text="Active:", font=("Segoe UI", 9), bg='#0f1419', fg='#7a8fb5').pack(anchor=tk.W, pady=(10, 5))
         self.current_hlc_display = tk.Label(right_hlc, text="[Default]", font=("Consolas", 9, "italic"), bg='#1a1f3a', fg='#7a8fb5', padx=10, pady=8, anchor=tk.W, wraplength=220, justify=tk.LEFT)
         self.current_hlc_display.pack(fill=tk.X)
-        
+
+        # Waypoint display section (below HLC controls)
+        waypoint_section = tk.Frame(right, bg='#0a0e27')
+        waypoint_section.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+
+        tk.Label(waypoint_section, text="Model Waypoints", font=("Segoe UI", 14, "bold"), bg='#1a1f3a', fg='#00d4ff', pady=10).pack(fill=tk.X)
+
+        waypoint_container = tk.Frame(waypoint_section, bg='#0f1419', padx=15, pady=15)
+        waypoint_container.pack(fill=tk.BOTH, expand=True, pady=(5, 10))
+
+        # Waypoint text display
+        self.waypoint_display = tk.Text(waypoint_container, wrap=tk.WORD, height=10, font=("Consolas", 10),
+                                        bg='#0f1419', fg='#e6f1ff', padx=10, pady=10, state='disabled',
+                                        borderwidth=0, highlightthickness=0)
+        self.waypoint_display.pack(fill=tk.BOTH, expand=True)
+
+        # Configure tags for waypoint display
+        self.waypoint_display.tag_config('header', foreground='#ff9500', font=("Consolas", 10, "bold"))
+        self.waypoint_display.tag_config('waypoint', foreground='#00d4ff', font=("Consolas", 10))
+        self.waypoint_display.tag_config('speed', foreground='#00ff00', font=("Consolas", 11, "bold"))
+
         self._append_text("Waiting for AI commentary...")
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
         self._process_queue()
@@ -166,7 +187,70 @@ class CommentaryWindow:
                 self.current_speed_display.config(text=f"{speed:.2f} m/s")
             except:
                 pass
-    
+
+    def update_waypoints(self, route_waypoints, speed_waypoints):
+        """
+        Update the waypoint display with model predictions (thread-safe).
+
+        Args:
+            route_waypoints: Route waypoints array [F, 2] in ego frame
+            speed_waypoints: Speed waypoints array [F, 2] in ego frame
+        """
+        if not hasattr(self, 'waypoint_display') or self.waypoint_display is None:
+            return
+
+        try:
+            import numpy as np
+
+            # Calculate target speed from last two speed waypoints
+            # Waypoints are 0.25s apart, so multiply by 4 to get m/s
+            if speed_waypoints is not None and len(speed_waypoints) >= 2:
+                last_wp = speed_waypoints[-1]
+                second_last_wp = speed_waypoints[-2]
+                delta = last_wp - second_last_wp
+                target_speed = np.linalg.norm(delta) * 4.0
+            else:
+                target_speed = 0.0
+
+            # Format waypoint text - show first 4 waypoints to keep it concise
+            waypoint_text = ""
+
+            # Target speed section
+            waypoint_text += "Target Speed:\n"
+            waypoint_text += f"  {target_speed:.2f} m/s\n\n"
+
+            # Route waypoints section
+            if route_waypoints is not None and len(route_waypoints) > 0:
+                waypoint_text += "Route Waypoints (ego frame):\n"
+                num_to_show = min(4, len(route_waypoints))
+                for i in range(num_to_show):
+                    x, y = route_waypoints[i]
+                    waypoint_text += f"  [{i}] x:{x:6.2f}m  y:{y:6.2f}m\n"
+
+                if len(route_waypoints) > num_to_show:
+                    waypoint_text += f"  ... ({len(route_waypoints) - num_to_show} more)\n"
+
+            # Update display
+            self.waypoint_display.configure(state='normal')
+            self.waypoint_display.delete(1.0, tk.END)
+
+            # Insert with formatting
+            lines = waypoint_text.split('\n')
+            for line in lines:
+                if 'Target Speed:' in line or 'Route Waypoints' in line:
+                    self.waypoint_display.insert(tk.END, line + '\n', 'header')
+                elif 'm/s' in line and 'Target Speed' not in line:
+                    self.waypoint_display.insert(tk.END, line + '\n', 'speed')
+                elif line.strip().startswith('['):
+                    self.waypoint_display.insert(tk.END, line + '\n', 'waypoint')
+                else:
+                    self.waypoint_display.insert(tk.END, line + '\n')
+
+            self.waypoint_display.configure(state='disabled')
+
+        except Exception as e:
+            print(f"DEBUG: Failed to update waypoints: {e}")
+
     def update_commentary(self, text):
         if not self.running:
             return
@@ -176,7 +260,7 @@ class CommentaryWindow:
             self.message_queue.put(text)
         except Exception as e:
             print(f"DEBUG: Failed to queue commentary: {e}")
-            
+
     def stop(self):
         self.running = False
         if self.window:

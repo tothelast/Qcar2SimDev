@@ -80,14 +80,11 @@ class RouteManager:
 
         # Ensure we don't go past the end
         target_idx = min(target_idx, len(self.route_waypoints) - 1)
-        
         # Get target point
         target_point = self.route_waypoints[target_idx]
-        
         # Get next target point (one waypoint ahead)
         next_target_idx = min(target_idx + 1, len(self.route_waypoints) - 1)
         next_target_point = self.route_waypoints[next_target_idx]
-        
         return target_point, next_target_point
     
     def get_target_point_ego(self, current_position: np.ndarray, current_heading: float) -> Tuple[np.ndarray, np.ndarray]:

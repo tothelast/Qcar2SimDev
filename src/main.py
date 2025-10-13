@@ -174,6 +174,9 @@ class SimlingoQCar2Controller:
         # Update speed display in commentary window
         self.qcar_interface.update_speed(velocity)
 
+        # Update waypoint display in commentary window
+        self.qcar_interface.update_waypoints(route_waypoints, speed_waypoints)
+
         # NOTE: Bias correction disabled for trajectory logging test
         # The model has a systematic leftward bias (avg Y = 0.34 for straight scenarios)
         # BIAS_SCALE_FACTOR = 0.5  # Reduce Y predictions by 50%
@@ -274,6 +277,7 @@ class SimlingoQCar2Controller:
             'timestamp': float(time.time() - self.start_time if self.start_time else 0),
             'position': current_position.tolist(),
             'heading_deg': float(rotation[2] * 180 / np.pi),
+            'heading_rad': float(rotation[2]),  # Store heading in radians for coordinate transformation
             'speed': float(velocity),
             'steering': float(steer),
             'throttle': float(throttle),
@@ -281,7 +285,10 @@ class SimlingoQCar2Controller:
             'current_waypoint_index': int(self.route_manager.current_waypoint_index),
             'target_waypoint': target_world.tolist(),
             'distance_to_target': float(distance_to_target),
-            'collision': bool(collision_detected)
+            'collision': bool(collision_detected),
+            # Model predicted waypoints (in ego frame)
+            'predicted_route_waypoints': route_waypoints.tolist() if route_waypoints is not None else None,
+            'predicted_speed_waypoints': speed_waypoints.tolist() if speed_waypoints is not None else None
         }
         self.trajectory_log.append(trajectory_entry)
         

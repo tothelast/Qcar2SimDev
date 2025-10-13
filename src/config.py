@@ -175,10 +175,8 @@ class SimlingoQCar2Config:
 
         # Lookahead distance for target point selection
         # This determines how far ahead the vehicle looks for the target point
-        # Set to 5.0m for this 89m route (appropriate for curved roads and roundabout)
-        # Original SimLingo uses 10m for highway driving
-        # Route length: 89m, so lookahead should be < 44m
-        self.target_point_lookahead = 5.0  # meters
+        # Set to 7.5m to match SimLingo training (was 5.0m)
+        self.target_point_lookahead = 7.5 # meters
         
         # -------------------------------------------------------------------------
         # Visualization and Debugging
