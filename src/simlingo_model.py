@@ -413,10 +413,12 @@ class SimlingoModelWrapper:
 
                 # Debug: Check outputs
                 if not hasattr(self, '_output_debug_printed'):
-                    print(f"DEBUG output: speed_wps = {speed_wps.shape if speed_wps is not None else None}")
-                    print(f"DEBUG output: route_wps = {route_wps.shape if route_wps is not None else None}")
-                    print(f"DEBUG output: language type = {type(language)}")
-                    print(f"DEBUG output: language = {language}")
+                    print(f"\n=== SimLingo Model Raw Output ===")
+                    print(f"Speed waypoints shape: {speed_wps.shape if speed_wps is not None else None} (expected: [1, 10, 2])")
+                    print(f"Route waypoints shape: {route_wps.shape if route_wps is not None else None} (expected: [1, 20, 2])")
+                    print(f"Language type: {type(language)}")
+                    print(f"Language output: {language}")
+                    print("=" * 35 + "\n")
                     self._output_debug_printed = True
 
                 # Debug HLC effect on waypoints

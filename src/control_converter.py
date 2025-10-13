@@ -217,9 +217,19 @@ class ControlConverter:
             Tuple of (steer, throttle, brake)
         """
         # Calculate desired speed from speed waypoints
-        # NOTE: The model was trained with data_save_freq=4, so it predicts 10 waypoints
-        # Original: one_second = carla_fps // (wp_dilation * data_save_freq) = 20 // 4 = 5
-        # With 10 waypoints, we use indices 3 and 8 (half_second-2=3, one_second-2=8)
+        # NOTE: The model outputs 10 speed waypoints, but empirically the original
+        # calculation using indices [0, 3] works better than the "correct" [2, 4].
+        # This may be compensating for a systematic bias in the model's speed predictions.
+        #
+        # Original calculation (empirically better):
+        # - Uses data_save_freq=4 (waypoints at 0.25s intervals)
+        # - one_second = carla_fps // (wp_dilation * data_save_freq) = 20 // 4 = 5
+        # - half_second = 5 // 2 = 2
+        # - Indices: [half_second-2, one_second-2] = [0, 3]
+        # - Time between waypoints[0] and [3]: 0.75s
+        # - Formula: distance * 2.0 (assumes 0.5s, so underestimates by 33%)
+        # - This underestimation appears to compensate for model over-prediction
+
         model_data_save_freq = 4
         one_second = int(self.config.carla_fps // (self.config.wp_dilation * model_data_save_freq))
         half_second = one_second // 2

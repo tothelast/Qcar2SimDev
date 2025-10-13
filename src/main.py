@@ -184,12 +184,20 @@ class SimlingoQCar2Controller:
 
         # Debug: Print waypoint information and save camera image
         if self.step_count == 0:
-            print(f"DEBUG: route_waypoints shape: {route_waypoints.shape}")
-            print(f"DEBUG: speed_waypoints shape: {speed_waypoints.shape}")
-            print(f"DEBUG: First 3 route waypoints:\n{route_waypoints[:3]}")
-            print(f"DEBUG: First 3 speed waypoints:\n{speed_waypoints[:3]}")
-            print(f"DEBUG: Target point (ego): {target_point}")
-            print(f"DEBUG: Next target point (ego): {next_target_point}")
+            print(f"\n=== SimLingo Model Output ===")
+            print(f"Route waypoints shape: {route_waypoints.shape} (expected: (20, 2))")
+            print(f"Speed waypoints shape: {speed_waypoints.shape} (expected: (10, 2))")
+            print(f"\nFirst 3 route waypoints:\n{route_waypoints[:3]}")
+            print(f"\nFirst 3 speed waypoints:\n{speed_waypoints[:3]}")
+            print(f"\nTarget point (ego): {target_point}")
+            print(f"Next target point (ego): {next_target_point}")
+
+            # Validate shapes
+            if route_waypoints.shape != (20, 2):
+                print(f"WARNING: Route waypoints shape mismatch! Expected (20, 2), got {route_waypoints.shape}")
+            if speed_waypoints.shape != (10, 2):
+                print(f"WARNING: Speed waypoints shape mismatch! Expected (10, 2), got {speed_waypoints.shape}")
+            print("=" * 30 + "\n")
 
             # Save camera image to inspect what the model sees
             import cv2

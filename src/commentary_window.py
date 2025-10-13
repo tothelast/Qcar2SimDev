@@ -107,6 +107,7 @@ class CommentaryWindow:
         self.waypoint_display.tag_config('header', foreground='#ff9500', font=("Consolas", 10, "bold"))
         self.waypoint_display.tag_config('waypoint', foreground='#00d4ff', font=("Consolas", 10))
         self.waypoint_display.tag_config('speed', foreground='#00ff00', font=("Consolas", 11, "bold"))
+        self.waypoint_display.tag_config('separator', foreground='#7a8fb5', font=("Consolas", 10))
 
         self._append_text("Waiting for AI commentary...")
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -212,23 +213,47 @@ class CommentaryWindow:
             else:
                 target_speed = 0.0
 
-            # Format waypoint text - show first 4 waypoints to keep it concise
+            # Format waypoint text
+            # SimLingo outputs: 10 speed waypoints, 20 route waypoints
             waypoint_text = ""
 
             # Target speed section
             waypoint_text += "Target Speed:\n"
             waypoint_text += f"  {target_speed:.2f} m/s\n\n"
 
-            # Route waypoints section
+            # Prepare route and speed waypoint data
+            # Show first 5 waypoints for each to keep display compact
+            num_to_show = 5
+            route_lines = []
+            speed_lines = []
+
+            # Route waypoints section (geometric path) - Model outputs 20 waypoints
             if route_waypoints is not None and len(route_waypoints) > 0:
-                waypoint_text += "Route Waypoints (ego frame):\n"
-                num_to_show = min(4, len(route_waypoints))
-                for i in range(num_to_show):
+                for i in range(min(num_to_show, len(route_waypoints))):
                     x, y = route_waypoints[i]
-                    waypoint_text += f"  [{i}] x:{x:6.2f}m  y:{y:6.2f}m\n"
+                    route_lines.append(f"[{i}] x:{x:6.2f}m y:{y:6.2f}m")
 
                 if len(route_waypoints) > num_to_show:
-                    waypoint_text += f"  ... ({len(route_waypoints) - num_to_show} more)\n"
+                    route_lines.append(f"... ({len(route_waypoints) - num_to_show} more)")
+
+            # Speed waypoints section (velocity-based path) - Model outputs 10 waypoints
+            if speed_waypoints is not None and len(speed_waypoints) > 0:
+                for i in range(min(num_to_show, len(speed_waypoints))):
+                    x, y = speed_waypoints[i]
+                    speed_lines.append(f"[{i}] x:{x:6.2f}m y:{y:6.2f}m")
+
+                if len(speed_waypoints) > num_to_show:
+                    speed_lines.append(f"... ({len(speed_waypoints) - num_to_show} more)")
+
+            # Create side-by-side display
+            waypoint_text += "Route (geometric)          Speed (velocity)\n"
+            waypoint_text += "─" * 27 + "│" + "─" * 27 + "\n"
+
+            max_lines = max(len(route_lines), len(speed_lines))
+            for i in range(max_lines):
+                route_part = route_lines[i] if i < len(route_lines) else ""
+                speed_part = speed_lines[i] if i < len(speed_lines) else ""
+                waypoint_text += f"{route_part:<27}│ {speed_part}\n"
 
             # Update display
             self.waypoint_display.configure(state='normal')
@@ -237,11 +262,17 @@ class CommentaryWindow:
             # Insert with formatting
             lines = waypoint_text.split('\n')
             for line in lines:
-                if 'Target Speed:' in line or 'Route Waypoints' in line:
+                if 'Target Speed:' in line:
                     self.waypoint_display.insert(tk.END, line + '\n', 'header')
+                elif 'Route (geometric)' in line and 'Speed (velocity)' in line:
+                    # Header line for side-by-side display
+                    self.waypoint_display.insert(tk.END, line + '\n', 'header')
+                elif '─' in line or '│' in line:
+                    # Separator line
+                    self.waypoint_display.insert(tk.END, line + '\n', 'separator')
                 elif 'm/s' in line and 'Target Speed' not in line:
                     self.waypoint_display.insert(tk.END, line + '\n', 'speed')
-                elif line.strip().startswith('['):
+                elif line.strip().startswith('[') or '│' in line:
                     self.waypoint_display.insert(tk.END, line + '\n', 'waypoint')
                 else:
                     self.waypoint_display.insert(tk.END, line + '\n')
