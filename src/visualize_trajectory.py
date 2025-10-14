@@ -196,44 +196,7 @@ def visualize_trajectory(data, save_path=None):
     ax1.add_collection(lc)
     cbar = plt.colorbar(lc, ax=ax1, label='Speed (m/s)', pad=0.02)
 
-    # Plot model predicted waypoints (sample every Nth prediction to avoid clutter)
-    sample_interval = 10  # Show every 10th prediction
-    prediction_added_to_legend = False
-
-    for i in range(0, len(trajectory), sample_interval):
-        entry = trajectory[i]
-
-        # Check if predicted waypoints exist in this entry
-        if 'predicted_route_waypoints' in entry and entry['predicted_route_waypoints'] is not None:
-            ego_waypoints = np.array(entry['predicted_route_waypoints'])
-            vehicle_pos = np.array(entry['position'])
-            vehicle_heading = entry['heading_rad']
-
-            # Transform from ego frame to world frame
-            world_waypoints = ego_to_world_transform(ego_waypoints, vehicle_pos, vehicle_heading)
-
-            if world_waypoints is not None and len(world_waypoints) > 0:
-                # Plot predicted trajectory as semi-transparent line with arrows
-                label = 'Model Predictions' if not prediction_added_to_legend else None
-
-                # Draw line connecting predicted waypoints
-                ax1.plot(world_waypoints[:, 0], world_waypoints[:, 1],
-                        color='lime', linewidth=1.5, alpha=0.4, zorder=2, label=label)
-
-                # Draw arrow from vehicle position to first predicted waypoint
-                if len(world_waypoints) > 0:
-                    dx = world_waypoints[0, 0] - vehicle_pos[0]
-                    dy = world_waypoints[0, 1] - vehicle_pos[1]
-                    ax1.arrow(vehicle_pos[0], vehicle_pos[1], dx, dy,
-                             head_width=0.5, head_length=0.3,
-                             fc='lime', ec='lime', alpha=0.3, zorder=2,
-                             length_includes_head=True)
-
-                # Mark the end of prediction horizon
-                ax1.plot(world_waypoints[-1, 0], world_waypoints[-1, 1],
-                        'yo', markersize=3, alpha=0.5, zorder=2)
-
-                prediction_added_to_legend = True
+    # Waypoint predictions removed - see visualize_waypoint_analysis.py for detailed waypoint analysis
 
     # Plot spawn location
     ax1.plot(spawn_location[0], spawn_location[1], 'go', markersize=15, 
@@ -295,26 +258,7 @@ def visualize_trajectory(data, save_path=None):
             ax2.plot(first_30m_positions[i, 0], first_30m_positions[i, 1], 'ro',
                     markersize=4, alpha=0.6)
 
-        # Plot predicted waypoints in start area (sample every 3rd for more detail)
-        prediction_added_zoom = False
-        for i in range(0, min(len(first_30m_idx), len(trajectory)), 3):
-            idx = first_30m_idx[i] if i < len(first_30m_idx) else i
-            if idx >= len(trajectory):
-                break
-            entry = trajectory[idx]
-
-            if 'predicted_route_waypoints' in entry and entry['predicted_route_waypoints'] is not None:
-                ego_waypoints = np.array(entry['predicted_route_waypoints'])
-                vehicle_pos = np.array(entry['position'])
-                vehicle_heading = entry['heading_rad']
-
-                world_waypoints = ego_to_world_transform(ego_waypoints, vehicle_pos, vehicle_heading)
-
-                if world_waypoints is not None and len(world_waypoints) > 0:
-                    label = 'Predictions' if not prediction_added_zoom else None
-                    ax2.plot(world_waypoints[:, 0], world_waypoints[:, 1],
-                            color='lime', linewidth=1, alpha=0.4, label=label)
-                    prediction_added_zoom = True
+        # Waypoint predictions removed from zoomed view
 
         # Plot spawn
         ax2.plot(spawn_location[0], spawn_location[1], 'go', markersize=12,

@@ -142,8 +142,10 @@ def create_roundabout_route(roadmap):
 
         print(f"\nTotal route distance: {total_dist:.1f} meters")
 
-        # Downsample to ~2-3m spacing for smooth control
-        target_spacing = 2.5
+        # Downsample to ~1m spacing to match SimLingo training
+        # SimLingo uses CARLA GlobalRoutePlanner with hop_resolution=1.0
+        # which creates waypoints ~1m apart for target point selection
+        target_spacing = 1.0
         downsampled = downsample_waypoints(waypoints_qlabs, target_spacing=target_spacing)
         print(f"Downsampled to {len(downsampled)} waypoints (~{target_spacing}m spacing)")
 
