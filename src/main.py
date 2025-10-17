@@ -80,20 +80,11 @@ class SimlingoQCar2Controller:
         self.qcar_interface.possess_camera()
         
         # Load Simlingo model
-        try:
-            print("\nLoading Simlingo model...")
-            self.model_wrapper.load_tokenizer()
-            self.model_wrapper.load_model()
-            print("Model loaded successfully")
-        except Exception as e:
-            print(f"ERROR: Failed to load model: {e}")
-            import traceback
-            traceback.print_exc()
-            print("\nModel loading failed. Please check:")
-            print(f"1. Checkpoint path: {self.config.model_checkpoint_path}")
-            print(f"2. Hydra config path: {self.config.hydra_config_path}")
-            return False
-        
+        print("\nLoading Simlingo model...")
+        self.model_wrapper.load_tokenizer()
+        self.model_wrapper.load_model()
+        print("Model loaded successfully")
+ 
         print("\nInitialization complete!")
         print("=" * 80)
         
@@ -108,9 +99,6 @@ class SimlingoQCar2Controller:
         """
         # Get camera image
         image = self.qcar_interface.get_camera_image()
-        if image is None:
-            print("ERROR: Failed to get camera image")
-            return False
 
         # Save raw camera image (before preprocessing) for debugging
         if self.step_count == 0:
@@ -151,9 +139,6 @@ class SimlingoQCar2Controller:
             next_target_point=next_target_point
         )
 
-        if speed_wps is None or route_wps is None:
-            print("ERROR: Model inference failed")
-            return False
         
         # Convert to numpy
         route_waypoints = route_wps[0].cpu().numpy()
@@ -177,10 +162,6 @@ class SimlingoQCar2Controller:
         # Update waypoint display in commentary window
         self.qcar_interface.update_waypoints(route_waypoints, speed_waypoints)
 
-        # NOTE: Bias correction disabled for trajectory logging test
-        # The model has a systematic leftward bias (avg Y = 0.34 for straight scenarios)
-        # BIAS_SCALE_FACTOR = 0.5  # Reduce Y predictions by 50%
-        # route_waypoints[:, 1] *= BIAS_SCALE_FACTOR
 
         # Debug: Print waypoint information and save camera image
         if self.step_count == 0:
@@ -267,9 +248,6 @@ class SimlingoQCar2Controller:
             forward_velocity, turn_angle
         )
 
-        if not success:
-            print("ERROR: Failed to send control")
-            return False
 
         # Log trajectory data
         target_world, _ = self.route_manager.get_target_point(current_position)
