@@ -100,15 +100,6 @@ class SimlingoQCar2Controller:
         # Get camera image
         image = self.qcar_interface.get_camera_image()
 
-        # Save raw camera image (before preprocessing) for debugging
-        if self.step_count == 0:
-            import cv2
-            import os
-            os.makedirs("debug_output", exist_ok=True)
-            img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imwrite("debug_output/camera_raw_step0.jpg", img_bgr)
-            print(f"DEBUG: Saved raw camera image to debug_output/camera_raw_step0.jpg")
-
         # Process camera image
         camera_images, image_sizes = self.camera_processor.process_image(image)
         camera_intrinsics = self.camera_processor.get_camera_intrinsics_tensor()
@@ -162,54 +153,6 @@ class SimlingoQCar2Controller:
         # Update waypoint display in commentary window
         self.qcar_interface.update_waypoints(route_waypoints, speed_waypoints)
 
-
-        # Debug: Print waypoint information and save camera image
-        if self.step_count == 0:
-            print(f"\n=== SimLingo Model Output ===")
-            print(f"Route waypoints shape: {route_waypoints.shape} (expected: (20, 2))")
-            print(f"Speed waypoints shape: {speed_waypoints.shape} (expected: (10, 2))")
-            print(f"\nFirst 3 route waypoints:\n{route_waypoints[:3]}")
-            print(f"\nFirst 3 speed waypoints:\n{speed_waypoints[:3]}")
-            print(f"\nTarget point (ego): {target_point}")
-            print(f"Next target point (ego): {next_target_point}")
-
-            # Validate shapes
-            if route_waypoints.shape != (20, 2):
-                print(f"WARNING: Route waypoints shape mismatch! Expected (20, 2), got {route_waypoints.shape}")
-            if speed_waypoints.shape != (10, 2):
-                print(f"WARNING: Speed waypoints shape mismatch! Expected (10, 2), got {speed_waypoints.shape}")
-            print("=" * 30 + "\n")
-
-            # Save camera image to inspect what the model sees
-            import cv2
-            import os
-            os.makedirs("debug_output", exist_ok=True)
-            # camera_images shape: [1, 1, num_patches, 3, 448, 448]
-            num_patches = camera_images.shape[2]
-
-            # Denormalize parameters
-            mean = np.array([0.485, 0.456, 0.406])
-            std = np.array([0.229, 0.224, 0.225])
-
-            # Save the first patch
-            img_tensor = camera_images[0, 0, 0].cpu().numpy()  # [3, 448, 448]
-            img_tensor = np.transpose(img_tensor, (1, 2, 0))  # [448, 448, 3]
-            img = img_tensor * std + mean
-            img = np.clip(img * 255, 0, 255).astype(np.uint8)
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            cv2.imwrite("debug_output/camera_patch0_step0.jpg", img_bgr)
-            print(f"DEBUG: Saved camera image to debug_output/camera_patch0_step0.jpg")
-
-            # Save the second patch if it exists
-            if num_patches > 1:
-                img_tensor = camera_images[0, 0, 1].cpu().numpy()  # [3, 448, 448]
-                img_tensor = np.transpose(img_tensor, (1, 2, 0))  # [448, 448, 3]
-                img = img_tensor * std + mean
-                img = np.clip(img * 255, 0, 255).astype(np.uint8)
-                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                cv2.imwrite("debug_output/camera_patch1_step0.jpg", img_bgr)
-                print(f"DEBUG: Saved camera image to debug_output/camera_patch1_step0.jpg")
-
         # Compute control using PID
         steer, throttle, brake = self.control_converter.control_pid(
             route_waypoints, velocity, speed_waypoints
@@ -222,12 +165,9 @@ class SimlingoQCar2Controller:
             self.stuck_detector = 0
 
         # Initial startup boost (first 50 steps or until moving)
-        # The Simlingo model is trained on moving vehicles, so we need to get it moving first
         if self.step_count < 50 and velocity < 0.5:
-            throttle = max(0.3, throttle)  # Minimum 30% throttle
+            throttle = max(0.3, throttle)
             brake = False
-            if self.step_count == 0:
-                print("DEBUG: Applying initial startup boost to get vehicle moving")
 
         # Stuck recovery (after initial startup period)
         elif self.stuck_detector > self.config.stuck_threshold:

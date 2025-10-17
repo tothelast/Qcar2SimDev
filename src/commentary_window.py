@@ -279,8 +279,8 @@ class CommentaryWindow:
 
             self.waypoint_display.configure(state='disabled')
 
-        except Exception as e:
-            print(f"DEBUG: Failed to update waypoints: {e}")
+        except Exception:
+            pass
 
     def update_commentary(self, text):
         if not self.running:
@@ -289,8 +289,8 @@ class CommentaryWindow:
             text = "(empty)"
         try:
             self.message_queue.put(text)
-        except Exception as e:
-            print(f"DEBUG: Failed to queue commentary: {e}")
+        except Exception:
+            pass
 
     def stop(self):
         self.running = False

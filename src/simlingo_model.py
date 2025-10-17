@@ -297,23 +297,6 @@ class SimlingoModelWrapper:
             loss_masking=None
         )
 
-        # Debug: Print prompt details (first call only)
-        if not hasattr(self, '_prompt_debug_printed'):
-            print(f"DEBUG prompt: prompt_with_image length = {len(prompt_with_image)}")
-            print(f"DEBUG prompt: prompt_with_image = {prompt_with_image[:200]}...")
-            print(f"DEBUG prompt: phrase_ids shape = {tokenized['input_ids'].shape}")
-            print(f"DEBUG prompt: placeholder_values keys = {list(placeholder_batch_list[0].keys()) if placeholder_batch_list else 'None'}")
-            if placeholder_batch_list:
-                for key, value in placeholder_batch_list[0].items():
-                    if hasattr(value, 'shape'):
-                        print(f"DEBUG prompt: placeholder {key} -> shape {value.shape}, values = {value}")
-                    else:
-                        print(f"DEBUG prompt: placeholder {key} -> type {type(value)}")
-            # Print the actual target points being passed
-            print(f"DEBUG prompt: target_points input = {target_points}")
-            print(f"DEBUG prompt: <TARGET_POINT> token ID = {self.special_token_ids.get('<TARGET_POINT>')}")
-            self._prompt_debug_printed = True
-
         return language_label
     
     def inference(
@@ -402,37 +385,8 @@ class SimlingoModelWrapper:
         # Run inference
         with torch.no_grad():
             try:
-                # Debug: Check model state
-                if not hasattr(self, '_model_debug_printed'):
-                    print(f"DEBUG model: predict_language = {self.model.predict_language}")
-                    print(f"DEBUG model: language_model variant = {self.model.language_model.variant}")
-                    self._model_debug_printed = True
-
                 # Call model
                 speed_wps, route_wps, language = self.model(driving_input)
-
-                # Debug: Check outputs
-                if not hasattr(self, '_output_debug_printed'):
-                    print(f"\n=== SimLingo Model Raw Output ===")
-                    print(f"Speed waypoints shape: {speed_wps.shape if speed_wps is not None else None} (expected: [1, 10, 2])")
-                    print(f"Route waypoints shape: {route_wps.shape if route_wps is not None else None} (expected: [1, 20, 2])")
-                    print(f"Language type: {type(language)}")
-                    print(f"Language output: {language}")
-                    print("=" * 35 + "\n")
-                    self._output_debug_printed = True
-
-                # Debug HLC effect on waypoints
-                if self.custom_hlc:
-                    if speed_wps is not None:
-                        # Calculate target speed from last two speed waypoints
-                        speed_wps_np = speed_wps[0].float().cpu().numpy()  # Convert bfloat16 to float32 first
-                        last_wp = speed_wps_np[-1]
-                        second_last_wp = speed_wps_np[-2]
-                        delta = last_wp - second_last_wp
-                        target_speed = np.linalg.norm(delta) * 4.0  # 0.25s intervals, so *4 for m/s
-                        print(f"[HLC DEBUG] Instruction: '{self.custom_hlc}'")
-                        print(f"[HLC DEBUG] Target speed from waypoints: {target_speed:.2f} m/s")
-                        print(f"[HLC DEBUG] Current speed: {vehicle_speed:.2f} m/s")
 
                 # Convert to float if not None
                 if speed_wps is not None:
