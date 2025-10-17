@@ -36,8 +36,8 @@ class CameraProcessor:
         # Build InternVL2 transform (448x448 images)
         self.transform = build_transform(input_size=448)
         self.image_size = 448
-        self.use_global_img = False  # Don't use thumbnail (matches original Simlingo default)
-        self.max_num_grid = 2  # Maximum number of image patches
+        self.use_global_img = False  
+        self.max_num_grid = 2  
         
     def process_image(self, image: np.ndarray) -> Tuple[torch.Tensor, None]:
         """
@@ -61,14 +61,10 @@ class CameraProcessor:
         # Convert back to RGB
         image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-        # No crop - use full image
-        # QCar2 camera does NOT show hood, so no cropping needed
-
         # Convert numpy array to PIL Image
         pil_image = Image.fromarray(image)
 
         # Apply dynamic preprocessing (splits image into patches)
-        # This handles aspect ratio and creates multiple 448x448 patches
         images = dynamic_preprocess(
             pil_image,
             image_size=self.image_size,

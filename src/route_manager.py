@@ -40,8 +40,6 @@ class RouteManager:
             Both are [x, y, z] arrays
         """
         # Find nearest waypoint AHEAD of current position to update progress
-        # Only search from current index forward to avoid jumping to waypoints behind
-        # This is critical for routes that loop back or have parallel sections
         search_start = self.current_waypoint_index
         search_end = min(self.current_waypoint_index + 10, len(self.route_waypoints))  # Look ahead max 10 waypoints
 
@@ -102,24 +100,9 @@ class RouteManager:
         # Get target points in world frame
         target_world, next_target_world = self.get_target_point(current_position)
 
-        # Debug: Print world frame info (first call only)
-        if not hasattr(self, '_target_debug_printed'):
-            print(f"DEBUG route: current_position (world) = {current_position}")
-            print(f"DEBUG route: current_heading (world) = {current_heading:.4f} rad = {np.degrees(current_heading):.1f}°")
-            print(f"DEBUG route: target_world = {target_world}")
-            print(f"DEBUG route: next_target_world = {next_target_world}")
-            print(f"DEBUG route: route_waypoints[0:5] (world) = {self.route_waypoints[:5]}")
-            self._target_debug_printed = True
-
         # Convert to ego frame
         target_ego = self._world_to_ego(target_world[:2], current_position[:2], current_heading)
         next_target_ego = self._world_to_ego(next_target_world[:2], current_position[:2], current_heading)
-
-        # Debug: Print ego frame info (first call only)
-        if not hasattr(self, '_target_ego_debug_printed'):
-            print(f"DEBUG route: target_ego = {target_ego}")
-            print(f"DEBUG route: next_target_ego = {next_target_ego}")
-            self._target_ego_debug_printed = True
 
         return target_ego, next_target_ego
     
