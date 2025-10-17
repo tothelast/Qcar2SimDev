@@ -10,19 +10,13 @@ class SimlingoQCar2Config:
     """Configuration class containing all Simlingo parameters and QCar2 settings."""
     
     def __init__(self):
-        # -------------------------------------------------------------------------
-        # Simlingo Model Configuration
-        # -------------------------------------------------------------------------
-        # Path to the Simlingo model checkpoint (DeepSpeed ZeRO checkpoint directory)
+
         self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
 
         # Path to Hydra config (needed for model instantiation)
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
         
-        # -------------------------------------------------------------------------
-        # Camera Configuration (Exact Simlingo Settings)
-        # -------------------------------------------------------------------------
         # Target resolution after preprocessing
         self.camera_width = 1024
         self.camera_height = 512
@@ -32,7 +26,7 @@ class SimlingoQCar2Config:
         self.qcar2_camera_height = 410
         
         # Camera field of view
-        self.camera_fov = 160  # degrees - Match QCar2 CSI camera FOV (was 110, which was incorrect)
+        self.camera_fov = 160  
         
         # Camera position in CARLA coordinates (x, y, z)
         # x: forward, y: right, z: up
@@ -45,62 +39,46 @@ class SimlingoQCar2Config:
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         
-        # -------------------------------------------------------------------------
         # PID Controller Parameters (Exact Simlingo Values)
-        # -------------------------------------------------------------------------
-        # Lateral PID Controller (Simple - from config_simlingo.py)
         self.turn_kp = 3.25
         self.turn_ki = 1.0
         self.turn_kd = 1.0
         self.turn_n = 20  # Buffer size
 
-        # -------------------------------------------------------------------------
         # Control Parameters (Exact Simlingo Values)
-        # -------------------------------------------------------------------------
         self.clip_throttle = 1.0
         self.max_throttle = 1.0
         
-        # -------------------------------------------------------------------------
         # Kinematic Bicycle Model Parameters (Exact Simlingo Values)
-        # -------------------------------------------------------------------------
         self.front_wheel_base = -0.090769015
         self.rear_wheel_base = 1.4178275
         self.steering_gain = 0.36848336
         self.brake_acceleration = -4.952399
         self.throttle_acceleration = 0.5633837
         
-        # -------------------------------------------------------------------------
         # Timing and Control Loop Configuration
-        # -------------------------------------------------------------------------
+
         self.carla_frame_rate = 1.0 / 20.0  # 50ms per frame
         self.carla_fps = 20  # 20 Hz
         self.control_frequency = 20  # Hz
         self.dt = 1.0 / self.control_frequency  # Time step
         
-        # -------------------------------------------------------------------------
         # Waypoint Configuration
-        # -------------------------------------------------------------------------
         self.wp_dilation = 1
         self.data_save_freq = 1
         self.interpolation_spacing = 0.1  # meters between interpolated waypoints
         
-        # -------------------------------------------------------------------------
         # Stuck Detection and Recovery
-        # -------------------------------------------------------------------------
         self.stuck_threshold = 800  # frames
         self.creep_duration = 15  # frames
         self.creep_throttle = 0.4
         self.initial_frames_delay = 5  # frames to wait before starting
         
-        # -------------------------------------------------------------------------
         # Route and Navigation Configuration
-        # -------------------------------------------------------------------------
         self.eval_route_as = 'target_point'  # "target_point" or "command"
         self.use_cot = True  # Use Chain-of-Thought prompts
         
-        # -------------------------------------------------------------------------
         # QCar2 QLabs Configuration
-        # -------------------------------------------------------------------------
         self.qlabs_host = "localhost"
         self.qcar2_actor_number = 0
 
@@ -232,9 +210,7 @@ class SimlingoQCar2Config:
         # Set to 7.5m to match SimLingo training (was 5.0m)
         self.target_point_lookahead = 7.5 # meters
         
-        # -------------------------------------------------------------------------
         # Visualization and Debugging
-        # -------------------------------------------------------------------------
         self.enable_visualization = True
         self.save_images = False
         self.save_path = "output"
@@ -250,9 +226,7 @@ class SimlingoQCar2Config:
         self.planned_route_tracer_color = [0.0, 1.0, 0.0]  # RGB color (green for planned route)
         self.planned_route_tracer_width = 0.05  # Line width in meters
         
-        # -------------------------------------------------------------------------
         # Special Tokens for Language Model
-        # -------------------------------------------------------------------------
         self.special_tokens = [
             '<WAYPOINTS>',
             '<WAYPOINTS_DIFF>',
