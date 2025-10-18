@@ -334,6 +334,54 @@ def spawn_pedestrian_generic(qlabs, actor_number, curb_1, curb_2, crossing_direc
         return None
 
 
+def spawn_parked_vehicles(qlabs):
+    """
+    Spawn parked vehicles for testing and adjustment.
+
+    Once positions are confirmed, more vehicles can be added.
+    """
+    print("\n" + "-"*70)
+    print("Spawning Parked Vehicles...")
+    print("-"*70)
+
+    # Parking spots (above node 8)
+    # Format: [x, y, z], rotation_degrees
+    parking_spots = [
+        ([-6.0, 15.0, 0.001], 90.0),
+        ([-11.5, 17.5, 0.001], -90.0),
+        ([-2.0, 32.0, 0.001], -45.0),
+        ([-13.0, -7.5, 0.001], -40.0)
+    ]
+
+    parked_cars = []
+
+    for i, (location, rotation) in enumerate(parking_spots):
+        try:
+            car = QLabsQCar2(qlabs)
+            status = car.spawn_id_degrees(
+                actorNumber=100 + i,
+                location=location,
+                rotation=[0.0, 0.0, rotation],
+                scale=[1.0, 1.0, 1.0],
+                configuration=0,
+                waitForConfirmation=True
+            )
+
+            if status == 0:
+                parked_cars.append(car)
+                print(f"  ✓ Parked car {i+1}/2 at: [{location[0]:.1f}, {location[1]:.1f}], rotation: {rotation}°")
+            else:
+                print(f"  ✗ Failed to spawn parked car {i+1}/2. Status: {status}")
+
+        except Exception as e:
+            print(f"  ✗ Error spawning parked car {i+1}/2: {e}")
+
+    print("-"*70)
+    print(f"Total parked vehicles: {len(parked_cars)}/2")
+
+    return parked_cars
+
+
 def spawn_all_pedestrians(qlabs):
     """
     Spawn all pedestrians across the map at strategic crossing locations.
@@ -555,6 +603,11 @@ def main():
         roundabout_qcar = None
 
     print("-"*70)
+
+    # =========================================================================
+    # SPAWN PARKED VEHICLES
+    # =========================================================================
+    parked_vehicles = spawn_parked_vehicles(qlabs)
 
     # =========================================================================
     # SPAWN PEDESTRIANS
