@@ -29,6 +29,7 @@ from python.qvl.qlabs import QuanserInteractiveLabs
 from python.qvl.qcar2 import QLabsQCar2
 from python.qvl.system import QLabsSystem
 from python.qvl.person import QLabsPerson
+from python.qvl.stop_sign import QLabsStopSign
 from hal.products.mats import SDCSRoadMap
 
 
@@ -382,6 +383,55 @@ def spawn_parked_vehicles(qlabs):
     return parked_cars
 
 
+def spawn_stop_signs(qlabs):
+    """
+    Spawn stop signs at strategic locations.
+
+    Stop signs are static actors spawned once at startup.
+    """
+    print("\n" + "-"*70)
+    print("Spawning Stop Signs...")
+    print("-"*70)
+
+    # Stop sign locations
+    # Format: [x, y, z], rotation_degrees
+    # Node 19 is at (7.916, 28.592), Node 17 is at (14.660, 31.512)
+    # Stop sign placed on approach to roundabout from node 19
+    stop_sign_locations = [
+        ([11.0, 29.0, 0.001], -135.0),  # After node 19, before roundabout entrance
+    ]
+
+    stop_signs = []
+
+    for i, (location, rotation) in enumerate(stop_sign_locations):
+        try:
+            sign = QLabsStopSign(qlabs)
+            status = sign.spawn_id_degrees(
+                actorNumber=200 + i,  # Start from actor 200
+                location=location,
+                rotation=[0.0, 0.0, rotation],
+                scale=[1.0, 1.0, 1.0],
+                configuration=0,
+                waitForConfirmation=True
+            )
+
+            if status == 0:
+                stop_signs.append(sign)
+                print(f"  ✓ Stop sign {i+1} at: [{location[0]:.1f}, {location[1]:.1f}], rotation: {rotation}°")
+            else:
+                print(f"  ✗ Failed to spawn stop sign {i+1}. Status: {status}")
+
+        except Exception as e:
+            print(f"  ✗ Error spawning stop sign {i+1}: {e}")
+
+    if len(stop_signs) == 0:
+        print("  (No stop signs configured)")
+
+    print("-"*70)
+
+    return stop_signs
+
+
 def spawn_all_pedestrians(qlabs):
     """
     Spawn all pedestrians across the map at strategic crossing locations.
@@ -608,6 +658,11 @@ def main():
     # SPAWN PARKED VEHICLES
     # =========================================================================
     parked_vehicles = spawn_parked_vehicles(qlabs)
+
+    # =========================================================================
+    # SPAWN STOP SIGNS
+    # =========================================================================
+    stop_signs = spawn_stop_signs(qlabs)
 
     # =========================================================================
     # SPAWN PEDESTRIANS
