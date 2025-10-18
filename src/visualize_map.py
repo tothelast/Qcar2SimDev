@@ -68,22 +68,22 @@ def get_all_edges():
 def get_pedestrian_positions():
     """Get current pedestrian crossing positions."""
     return {
-        'Ped 1': {'curb1': (-2.0, 23.5), 'curb2': (8.0, 23.5)},
-        'Ped 2': {'curb1': (-19.841, 26.0), 'curb2': (-19.841, 36.0)},
-        'Ped 3': {'curb1': (0.0, 42.0), 'curb2': (0.0, 48.0)},
-        'Ped 4': {'curb1': (-5.0, 5.0), 'curb2': (5.0, 5.0)},
-        'Ped 5': {'curb1': (17.0, 12.0), 'curb2': (23.0, 12.0)},
+        'Ped 1': {'curb1': (-2.500, 18.498), 'curb2': (5.186, 18.426)},
+        'Ped 2': {'curb1': (-21.891, 14.043), 'curb2': (-14.508, 16.190)},
+        'Ped 3': {'curb1': (-0.019, 39.767), 'curb2': (-0.019, 47.474)},
+        'Ped 4': {'curb1': (16.921, 15.008), 'curb2': (24.777, 15.008)},
     }
 
 
-def calculate_offset_polyline(x_center, y_center, offset_distance):
+def calculate_offset_polyline(x_center, y_center, offset_distance, side='left'):
     """
     Calculate an offset polyline parallel to the centerline.
 
     Args:
         x_center: X coordinates of centerline
         y_center: Y coordinates of centerline
-        offset_distance: Distance to offset (positive = left, negative = right)
+        offset_distance: Distance to offset in meters
+        side: 'left' or 'right' - which side to offset
 
     Returns:
         x_offset, y_offset: Coordinates of offset polyline
@@ -91,6 +91,9 @@ def calculate_offset_polyline(x_center, y_center, offset_distance):
     n_points = len(x_center)
     x_offset = np.zeros(n_points)
     y_offset = np.zeros(n_points)
+
+    # Determine sign based on side
+    sign = 1.0 if side == 'left' else -1.0
 
     for i in range(n_points):
         # Calculate tangent direction at this point
@@ -117,9 +120,9 @@ def calculate_offset_polyline(x_center, y_center, offset_distance):
         perp_x = -dy
         perp_y = dx
 
-        # Apply offset
-        x_offset[i] = x_center[i] + perp_x * offset_distance
-        y_offset[i] = y_center[i] + perp_y * offset_distance
+        # Apply offset with sign
+        x_offset[i] = x_center[i] + perp_x * offset_distance * sign
+        y_offset[i] = y_center[i] + perp_y * offset_distance * sign
 
     return x_offset, y_offset
 
@@ -132,6 +135,10 @@ def generate_road_polylines():
     edges = get_all_edges()
     road_polylines = {}
 
+    # Road width (half-width from center to curb)
+    # Based on typical road lane width of ~3m, half is ~1.5m
+    road_half_width = 1.5  # meters
+
     print(f"\nGenerating polylines for {len(edges)} edges...")
     for i, edge in enumerate(edges):
         n1, n2 = edge[0], edge[1]
@@ -143,9 +150,17 @@ def generate_road_polylines():
             x_center = path[0, :] * 10.0
             y_center = path[1, :] * 10.0
 
+            # Calculate left and right curb lines (offset from centerline)
+            x_left, y_left = calculate_offset_polyline(x_center, y_center, road_half_width, side='left')
+            x_right, y_right = calculate_offset_polyline(x_center, y_center, road_half_width, side='right')
+
             road_polylines[f"{n1}→{n2}"] = {
                 'x_center': x_center,
                 'y_center': y_center,
+                'x_left': x_left,
+                'y_left': y_left,
+                'x_right': x_right,
+                'y_right': y_right,
                 'from': n1,
                 'to': n2,
                 'points': len(x_center)
@@ -154,7 +169,7 @@ def generate_road_polylines():
         except Exception as e:
             print(f"  Edge {i+1:2d}: {n1:2d}→{n2:2d} - ERROR: {e}")
 
-    print(f"\n✓ Generated {len(road_polylines)} road polylines")
+    print(f"\n✓ Generated {len(road_polylines)} road polylines with curbs")
     return road_polylines
 
 
@@ -507,23 +522,47 @@ def create_directional_map(road_polylines, lane_dividers, output_path):
 
     _, ax = plt.subplots(figsize=(26, 22))
 
-    # Plot all roads with green centerlines
-    print("\nPlotting road centerlines...")
+    # Plot all roads with green centerlines and curbs
+    print("\nPlotting road centerlines and curbs...")
     for edge_data in road_polylines.values():
-        # Downsample to ~1m spacing to show actual waypoints
-        x_down, y_down = downsample_path(
+        # Downsample centerline to ~1m spacing to show actual waypoints
+        x_center_down, y_center_down = downsample_path(
             edge_data['x_center'],
             edge_data['y_center'],
             target_spacing=1.0
         )
 
+        # Downsample curb lines
+        x_left_down, y_left_down = downsample_path(
+            edge_data['x_left'],
+            edge_data['y_left'],
+            target_spacing=1.0
+        )
+        x_right_down, y_right_down = downsample_path(
+            edge_data['x_right'],
+            edge_data['y_right'],
+            target_spacing=1.0
+        )
+
         # Plot green centerline (the actual road path)
-        ax.plot(x_down, y_down, '-',
+        ax.plot(x_center_down, y_center_down, '-',
                 color='green', linewidth=2.5, alpha=0.8, zorder=1)
 
         # Plot individual waypoints as small dots
-        ax.plot(x_down, y_down, 'o',
+        ax.plot(x_center_down, y_center_down, 'o',
                 color='darkgreen', markersize=3, alpha=0.6, zorder=1)
+
+        # Plot left curb (blue line)
+        ax.plot(x_left_down, y_left_down, '-',
+                color='blue', linewidth=2.0, alpha=0.7, zorder=1)
+        ax.plot(x_left_down, y_left_down, 'o',
+                color='darkblue', markersize=2, alpha=0.5, zorder=1)
+
+        # Plot right curb (blue line)
+        ax.plot(x_right_down, y_right_down, '-',
+                color='blue', linewidth=2.0, alpha=0.7, zorder=1)
+        ax.plot(x_right_down, y_right_down, 'o',
+                color='darkblue', markersize=2, alpha=0.5, zorder=1)
 
     # Plot yellow lane dividers (between bidirectional roads)
     print("Plotting lane dividers...")
@@ -567,6 +606,7 @@ def create_directional_map(road_polylines, lane_dividers, output_path):
     # Legend for colors
     legend_elements = [
         Line2D([0], [0], color='green', linewidth=3, label='Road Centerlines'),
+        Line2D([0], [0], color='blue', linewidth=3, label='Road Curbs'),
         Line2D([0], [0], color='yellow', linewidth=3, label='Lane Dividers'),
         Line2D([0], [0], color='red', linewidth=3, label='Direction Arrows', marker='>'),
     ]
@@ -604,27 +644,37 @@ def create_directional_map(road_polylines, lane_dividers, output_path):
         mid_x = (c1[0] + c2[0]) / 2
         mid_y = (c1[1] + c2[1]) / 2
         color = ped_colors[i]
-        
+
         # Draw thick crossing line
         ax.plot([c1[0], c2[0]], [c1[1], c2[1]], '-', color=color, linewidth=8, alpha=0.95, zorder=6)
-        ax.plot(c1[0], c1[1], 'o', color=color, markersize=18, zorder=7, 
+        ax.plot(c1[0], c1[1], 'o', color=color, markersize=18, zorder=7,
                 markeredgecolor='black', markeredgewidth=3)
         ax.plot(c2[0], c2[1], 's', color=color, markersize=18, zorder=7,
                 markeredgecolor='black', markeredgewidth=3)
-        
+
         # Arrow
         dx = c2[0] - c1[0]
         dy = c2[1] - c1[1]
         if abs(dx) > 0.1 or abs(dy) > 0.1:
-            ax.arrow(c1[0], c1[1], dx*0.5, dy*0.5, 
-                    head_width=2.0, head_length=1.5, fc=color, ec='black', 
+            ax.arrow(c1[0], c1[1], dx*0.5, dy*0.5,
+                    head_width=2.0, head_length=1.5, fc=color, ec='black',
                     linewidth=3, alpha=0.95, zorder=7)
-        
-        # Label
+
+        # Label - offset perpendicular to crossing direction to avoid covering markers
         dist = np.sqrt(dx**2 + dy**2)
-        ax.text(mid_x, mid_y + 3.5, f'{ped_name}\n{dist:.1f}m', 
+        # Determine label offset based on crossing direction
+        if abs(dx) > abs(dy):
+            # Horizontal crossing - offset label vertically
+            label_x = mid_x
+            label_y = mid_y + 3.5
+        else:
+            # Vertical crossing - offset label horizontally
+            label_x = mid_x + 4.5
+            label_y = mid_y
+
+        ax.text(label_x, label_y, f'{ped_name}\n{dist:.1f}m',
                 fontsize=14, fontweight='bold', ha='center',
-                bbox=dict(boxstyle='round,pad=0.8', facecolor=color, 
+                bbox=dict(boxstyle='round,pad=0.8', facecolor=color,
                          edgecolor='black', linewidth=3, alpha=0.98), zorder=8)
     
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)

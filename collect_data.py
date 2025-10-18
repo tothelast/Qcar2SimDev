@@ -5,9 +5,8 @@ QLabs Data Collection Script
 This script:
 1. Connects to QLabs (Cityscape Lite workspace)
 2. Spawns a QCar2 at a predefined location
-3. Spawns obstacles (traffic cones and basic shapes) in the scene
-4. Spawns a pedestrian crossing the road
-5. Will be extended to collect driving data for SimLingo fine-tuning
+3. Spawns pedestrians crossing the roads
+4. Will be extended to collect driving data for SimLingo fine-tuning
 
 Coordinate System (Cityscape Lite):
 - World size: 500m x 500m (±250m from origin)
@@ -20,129 +19,11 @@ Coordinate System (Cityscape Lite):
 
 import sys
 import time
-import math
 import threading
 from python.qvl.qlabs import QuanserInteractiveLabs
 from python.qvl.qcar2 import QLabsQCar2
 from python.qvl.system import QLabsSystem
-from python.qvl.traffic_cone import QLabsTrafficCone
-from python.qvl.basic_shape import QLabsBasicShape
 from python.qvl.person import QLabsPerson
-
-
-def spawn_obstacles(qlabs):
-    """
-    Spawn obstacles in the scene for testing lane-keeping and obstacle avoidance.
-
-    Uses precise coordinates based on Cityscape Lite coordinate system:
-    - Origin: [0, 0, 0]
-    - QCar2 spawn: [0, -1.300, 0.005] facing 90° (along +Y axis)
-    - Route follows existing waypoints from config.py
-
-    Args:
-        qlabs: QuanserInteractiveLabs instance
-
-    Returns:
-        List of spawned obstacle actors
-    """
-    obstacles = []
-
-    print("\nSpawning obstacles...")
-
-    # =========================================================================
-    # TRAFFIC CONES - Placed along the route from config.py
-    # =========================================================================
-    # Route goes from [2.686, 18.498] northward and curves around
-    # Place cones to test obstacle avoidance
-
-    cone_locations = [
-        # Along the straight section (Y: 18-25)
-        [3.5, 22.0, 0.0],    # Cone 1: Right side of road
-        [2.0, 24.0, 0.0],    # Cone 2: Left side of road
-
-        # Along the curve (Y: 25-31, X: 4-14)
-        [6.0, 27.0, 0.0],    # Cone 3: On the curve
-        [10.0, 30.0, 0.0],   # Cone 4: Mid-curve
-
-        # Along the straight section (X: 14-22, Y: ~31-40)
-        [18.0, 32.5, 0.0],   # Cone 5: Right side
-        [20.5, 34.0, 0.0],   # Cone 6: Right side
-    ]
-
-    for i, location in enumerate(cone_locations):
-        cone = QLabsTrafficCone(qlabs)
-        status = cone.spawn_id(
-            actorNumber=100 + i,
-            location=location,
-            rotation=[0.0, 0.0, 0.0],
-            scale=[1.0, 1.0, 1.0],
-            configuration=0,
-            waitForConfirmation=True
-        )
-        if status == 0:
-            print(f"  ✓ Traffic cone {i+1} spawned at [{location[0]:.1f}, {location[1]:.1f}, {location[2]:.1f}]")
-            obstacles.append(cone)
-        else:
-            print(f"  ✗ Failed to spawn traffic cone {i+1}")
-
-    # =========================================================================
-    # CUBE OBSTACLES - Simulating parked cars or barriers
-    # =========================================================================
-    # Using official parking spot coordinates from Cityscape Lite docs
-
-    cube_obstacles = [
-        # Parking Spot 1 (from official docs)
-        {
-            'location': [-5.987, 14.643, 0.5],
-            'rotation': [0.0, 0.0, math.pi/2],  # 90 degrees
-            'scale': [2.0, 1.0, 1.0],
-            'color': [0.8, 0.2, 0.2],  # Dark red
-            'description': 'Parked car at Parking Spot 1'
-        },
-        # Near the route - obstacle to avoid
-        {
-            'location': [8.0, 28.5, 0.5],
-            'rotation': [0.0, 0.0, 0.0],
-            'scale': [1.5, 1.5, 1.0],
-            'color': [1.0, 0.5, 0.0],  # Orange barrier
-            'description': 'Barrier on curve'
-        },
-        # Road Parking 1 (from official docs)
-        {
-            'location': [-13.093, -7.572, 0.5],
-            'rotation': [0.0, 0.0, -42*math.pi/180],  # -42 degrees
-            'scale': [2.0, 1.0, 1.0],
-            'color': [0.2, 0.2, 0.8],  # Blue car
-            'description': 'Parked car at Road Parking 1'
-        },
-    ]
-
-    shape = QLabsBasicShape(qlabs)
-    for i, obstacle in enumerate(cube_obstacles):
-        status = shape.spawn_id(
-            actorNumber=200 + i,
-            location=obstacle['location'],
-            rotation=obstacle['rotation'],
-            scale=obstacle['scale'],
-            configuration=shape.SHAPE_CUBE,
-            waitForConfirmation=True
-        )
-        if status == 0:
-            # Set material properties
-            shape.set_material_properties(
-                color=obstacle['color'],
-                roughness=0.5,
-                metallic=False,
-                waitForConfirmation=True
-            )
-            loc = obstacle['location']
-            print(f"  ✓ {obstacle['description']} at [{loc[0]:.1f}, {loc[1]:.1f}, {loc[2]:.1f}]")
-            obstacles.append(shape)
-        else:
-            print(f"  ✗ Failed to spawn {obstacle['description']}")
-
-    print(f"Total obstacles spawned: {len(obstacles)}")
-    return obstacles
 
 
 def pedestrian_movement_loop(pedestrian, curb_1, curb_2, wait_offset_1, wait_offset_2):
@@ -281,17 +162,16 @@ def spawn_all_pedestrians(qlabs):
     Spawn all pedestrians across the map at strategic crossing locations.
 
     Based on the Cityscape Lite map:
-    - Node 13 is at approximately (0.13, 1.85) on the map (scaled coordinates)
-    - Vehicle spawns at Node 13 pointing toward the roundabout (north)
+    - Vehicle spawns at Node 1 pointing north
     - Pedestrians are placed on STRAIGHT road sections only (not roundabouts)
     - All crossings are perpendicular to the road direction
+    - Each pedestrian crosses both parallel roads (from outer curb to outer curb)
 
     Pedestrian placement strategy:
-    1. Near spawn (before roundabout) - straight section
-    2. After roundabout exit - straight section going west
-    3. Far west section - straight section
-    4. South section - straight section
-    5. East section - straight section
+    1. Near Node 13 - crossing edges 12→7 and 6→13
+    2. West section - crossing edges 22→9 and 8→23
+    3. North section - crossing edges 23→21 and 20→22
+    4. East section - crossing edges 15→6 and 7→14
 
     Args:
         qlabs: QuanserInteractiveLabs instance
@@ -305,90 +185,76 @@ def spawn_all_pedestrians(qlabs):
 
     pedestrians = []
 
-    # Pedestrian 1: Near spawn (before roundabout) - Straight North-South road
-    # Node 13 area, vehicle heading north toward roundabout
-    # This is the straight section from Node 13 toward Node 19
-    # Map shows this is around X≈0.13, Y≈1.85 (map coords) → X≈1.3, Y≈18.5 (QLabs)
-    # Road width: ~10m (conservative for straight section)
+    # Pedestrian 1: Near Node 13 (Edges 6→13 and 12→7 - parallel roads)
+    # Two parallel road edges running North-South near Node 13
+    # Pedestrian crosses BOTH roads East-West (perpendicular)
+    # Crosses from outer curb of edge 12→7 to outer curb of edge 6→13
+    # Total crossing: ~7.7m (sidewalk + road + yellow divider + road + sidewalk)
+    # crossing_direction='vertical' because the ROADS run North-South
     ped1 = spawn_pedestrian_generic(
         qlabs=qlabs,
         actor_number=300,
-        curb_1=[-2.0, 23.5, 1.0],   # West curb
-        curb_2=[8.0, 23.5, 1.0],    # East curb
+        curb_1=[-2.500, 18.498, 1.0],   # West curb (outer edge of 12→7)
+        curb_2=[5.186, 18.426, 1.0],    # East curb (outer edge of 6→13)
         crossing_direction='vertical',
-        description="Before roundabout (Node 13→19) - Straight section"
+        description="Near spawn (Edges 12→7 ↔ 6→13) - Crossing both parallel roads"
     )
     if ped1:
         pedestrians.append(ped1)
 
-    # Pedestrian 2: West straight section (Node 22→23 area)
-    # Long straight horizontal road on the west side (runs East-West)
-    # Map shows this is around X≈-2.0, Y≈3.0 (map coords) → X≈-20, Y≈30 (QLabs)
-    # This is the straight section going west from the roundabout
-    # Road runs HORIZONTAL (East-West), so pedestrian crosses NORTH-SOUTH (perpendicular)
-    # Curbs at SAME X, DIFFERENT Y
-    # crossing_direction='horizontal' because the ROAD is horizontal
+    # Pedestrian 2: West section (Edges 22→9 and 8→23 - parallel roads)
+    # Two parallel road edges running mostly North-South
+    # Pedestrian crosses BOTH roads East-West (perpendicular)
+    # Crosses from outer curb of edge 22→9 to outer curb of edge 8→23
+    # Total crossing: ~7.7m (sidewalk + road + yellow divider + road + sidewalk)
+    # crossing_direction='vertical' because the ROADS run North-South
     ped2 = spawn_pedestrian_generic(
         qlabs=qlabs,
         actor_number=301,
-        curb_1=[-19.841, 26.0, 1.0],   # South curb
-        curb_2=[-19.841, 36.0, 1.0],   # North curb
-        crossing_direction='horizontal',
-        description="West section (Node 22→23) - Crossing horizontal road"
+        curb_1=[-21.891, 14.043, 1.0],   # West curb (outer edge of 22→9)
+        curb_2=[-14.508, 16.190, 1.0],   # East curb (outer edge of 8→23)
+        crossing_direction='vertical',
+        description="West section (Edges 22→9 ↔ 8→23) - Crossing both parallel roads"
     )
     if ped2:
         pedestrians.append(ped2)
 
-    # Pedestrian 3: Long horizontal road (waypoint 45-55 area)
-    # Straight East-West road in the middle-north section
-    # Map shows this is around X≈0.0, Y≈4.5 (map coords) → X≈0, Y≈45 (QLabs)
-    # Road runs EAST-WEST (horizontal), so pedestrian crosses NORTH-SOUTH (perpendicular)
-    # Curbs should be at SAME X, DIFFERENT Y (north and south sides of the road)
-    # crossing_direction='horizontal' because the ROAD is horizontal
+    # Pedestrian 3: North section (Edges 23→21 and 20→22 - parallel roads)
+    # Two parallel road edges running East-West near the top of the map
+    # Pedestrian crosses BOTH roads North-South (perpendicular, vertical crossing)
+    # Crosses from outer curb of edge 23→21 to outer curb of edge 20→22
+    # Total crossing: ~7.7m (sidewalk + road + yellow divider + road + sidewalk)
+    # crossing_direction='horizontal' because the ROADS run East-West
     ped3 = spawn_pedestrian_generic(
         qlabs=qlabs,
         actor_number=302,
-        curb_1=[0.0, 42.0, 1.0],   # South curb
-        curb_2=[0.0, 48.0, 1.0],   # North curb
+        curb_1=[-0.019, 39.767, 1.0],   # South curb (outer edge of 23→21)
+        curb_2=[-0.019, 47.474, 1.0],   # North curb (outer edge of 20→22)
         crossing_direction='horizontal',
-        description="North horizontal road (waypoint 45-55) - Crossing perpendicular"
+        description="North section (Edges 23→21 ↔ 20→22) - Crossing both parallel roads"
     )
     if ped3:
         pedestrians.append(ped3)
 
-    # Pedestrian 4: South section (Node 0→1 area)
-    # Straight vertical road on the south side
-    # Map shows this is around X≈0.0, Y≈0.0 (map coords) → X≈0, Y≈0 (QLabs)
+    # Pedestrian 4: East section (Edges 15→6 and 7→14 - parallel roads)
+    # Two parallel road edges running mostly North-South near Node 15
+    # Pedestrian crosses BOTH roads East-West (perpendicular, horizontal crossing)
+    # Crosses from outer curb of edge 15→6 to outer curb of edge 7→14
+    # Total crossing: ~7.9m (sidewalk + road + yellow divider + road + sidewalk)
+    # crossing_direction='vertical' because the ROADS run North-South
     ped4 = spawn_pedestrian_generic(
         qlabs=qlabs,
         actor_number=303,
-        curb_1=[-5.0, 5.0, 1.0],   # West curb
-        curb_2=[5.0, 5.0, 1.0],    # East curb
+        curb_1=[16.921, 15.008, 1.0],  # West curb (outer edge of 15→6)
+        curb_2=[24.777, 15.008, 1.0],  # East curb (outer edge of 7→14)
         crossing_direction='vertical',
-        description="South section (Node 0→1) - Straight vertical road"
+        description="East section (Edges 15→6 ↔ 7→14) - Crossing both parallel roads"
     )
     if ped4:
         pedestrians.append(ped4)
 
-    # Pedestrian 5: East section (Node 4→5 area)
-    # Straight vertical road on the east side
-    # Map shows this is around X≈2.0, Y≈1.5 (map coords) → X≈20, Y≈15 (QLabs)
-    # Road runs NORTH-SOUTH (vertical), so pedestrian crosses EAST-WEST (perpendicular)
-    # Curbs should be at SAME Y, DIFFERENT X (east and west sides of the road)
-    # crossing_direction='vertical' because the ROAD is vertical
-    ped5 = spawn_pedestrian_generic(
-        qlabs=qlabs,
-        actor_number=304,
-        curb_1=[17.0, 12.0, 1.0],  # West curb
-        curb_2=[23.0, 12.0, 1.0],  # East curb
-        crossing_direction='vertical',
-        description="East section (Node 4→5) - Crossing perpendicular"
-    )
-    if ped5:
-        pedestrians.append(ped5)
-
     print("-"*70)
-    print(f"Total pedestrians spawned: {len(pedestrians)}/5")
+    print(f"Total pedestrians spawned: {len(pedestrians)}/4")
 
     return pedestrians
 
@@ -423,16 +289,16 @@ def main():
     # =========================================================================
     # SPAWN QCAR2
     # =========================================================================
-    # Using spawn location from config.py (Node 13 - roundabout route start)
-    # Location: [2.686, 18.498, 0.005]
-    # Rotation: 90° (1.5708 radians) - facing along +Y axis (north)
+    # Spawn at Node 1
+    # Location: [2.686, 0.814, 0.005]
+    # Rotation: 90° - facing along +Y axis (north)
 
     print("\n" + "-"*70)
     print("Spawning QCar2...")
     print("-"*70)
     qcar = QLabsQCar2(qlabs)
 
-    spawn_location = [2.686, 18.498, 0.005]  # Node 13 (matches config.py)
+    spawn_location = [2.686, 0.814, 0.005]  # Node 1
     spawn_rotation = [0.0, 0.0, 90.0]  # 90 degrees yaw (facing along +Y axis)
 
     status = qcar.spawn_id_degrees(
@@ -454,13 +320,6 @@ def main():
         return False
 
     # =========================================================================
-    # SPAWN OBSTACLES
-    # =========================================================================
-    print("\n" + "-"*70)
-    obstacles = spawn_obstacles(qlabs)
-    print("-"*70)
-
-    # =========================================================================
     # SPAWN PEDESTRIANS
     # =========================================================================
     pedestrians = spawn_all_pedestrians(qlabs)
@@ -478,15 +337,13 @@ def main():
     print("\n" + "="*70)
     print("SCENE SETUP COMPLETE")
     print("="*70)
-    print(f"QCar2:        Spawned at Node 13 [2.686, 18.498]")
-    print(f"Obstacles:    {len(obstacles)} objects (cones + cubes)")
-    print(f"Pedestrians:  {len(pedestrians)}/5 active")
-    print("\nPedestrian Locations (on straight roads only):")
-    print("  1. Before roundabout (Y=23.5)  - Near spawn")
-    print("  2. West section (X=-19.8)      - After roundabout")
-    print("  3. North horizontal (X=5.0)    - Long straight road")
-    print("  4. South section (Y=5.0)       - Bottom of map")
-    print("  5. East section (Y=12.0)       - Right side of map")
+    print(f"QCar2:        Spawned at Node 1 [2.686, 0.814]")
+    print(f"Pedestrians:  {len(pedestrians)}/4 active")
+    print("\nPedestrian Crossing Locations:")
+    print("  1. Near spawn (Edges 12→7 ↔ 6→13)   - Crossing both parallel roads")
+    print("  2. West section (Edges 22→9 ↔ 8→23) - Crossing both parallel roads")
+    print("  3. North section (Edges 23→21 ↔ 20→22) - Crossing both parallel roads")
+    print("  4. East section (Edges 15→6 ↔ 7→14) - Crossing both parallel roads")
     print("\nCoordinate System:")
     print("  - World size: 500m × 500m (±250m from origin)")
     print("  - Origin: [0, 0, 0]")
