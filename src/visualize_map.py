@@ -75,6 +75,54 @@ def get_pedestrian_positions():
     }
 
 
+def get_circular_car_route():
+    """Get the circular car route waypoints (0 → 2 → 4 → 6 → 0)."""
+    roadmap = SDCSRoadMap(leftHandTraffic=False, useSmallMap=False)
+
+    route_nodes = [0, 2, 4, 6]
+    all_waypoints = []
+
+    for i in range(len(route_nodes)):
+        from_node = route_nodes[i]
+        to_node = route_nodes[(i + 1) % len(route_nodes)]  # Wrap around for circular route
+
+        # Generate path for this edge
+        path = roadmap.generate_path([from_node, to_node])
+        x_coords = path[0, :] * 10.0  # Scale to QLabs coordinates
+        y_coords = path[1, :] * 10.0
+
+        # Add waypoints (skip first point if not the first edge to avoid duplicates)
+        start_idx = 1 if i > 0 else 0
+        for j in range(start_idx, len(x_coords)):
+            all_waypoints.append([x_coords[j], y_coords[j]])
+
+    return np.array(all_waypoints)
+
+
+def get_roundabout_car_route():
+    """Get the roundabout car route waypoints (16 → 17 → 16)."""
+    roadmap = SDCSRoadMap(leftHandTraffic=False, useSmallMap=False)
+
+    route_nodes = [16, 17]
+    all_waypoints = []
+
+    for i in range(len(route_nodes)):
+        from_node = route_nodes[i]
+        to_node = route_nodes[(i + 1) % len(route_nodes)]  # Wrap around for circular route
+
+        # Generate path for this edge
+        path = roadmap.generate_path([from_node, to_node])
+        x_coords = path[0, :] * 10.0  # Scale to QLabs coordinates
+        y_coords = path[1, :] * 10.0
+
+        # Add waypoints (skip first point if not the first edge to avoid duplicates)
+        start_idx = 1 if i > 0 else 0
+        for j in range(start_idx, len(x_coords)):
+            all_waypoints.append([x_coords[j], y_coords[j]])
+
+    return np.array(all_waypoints)
+
+
 def calculate_offset_polyline(x_center, y_center, offset_distance, side='left'):
     """
     Calculate an offset polyline parallel to the centerline.
@@ -603,12 +651,70 @@ def create_directional_map(road_polylines, lane_dividers, output_path):
                         fc='red', ec='red', linewidth=2.5,
                         alpha=0.9, zorder=4, length_includes_head=True)
 
+    # Plot circular car route
+    circular_route = get_circular_car_route()
+    if len(circular_route) > 0:
+        ax.plot(circular_route[:, 0], circular_route[:, 1],
+                color='saddlebrown', linewidth=5, alpha=0.9,
+                linestyle='--', dashes=(8, 4), zorder=5, label='Circular Car Route')
+
+        # Mark start position (Node 0)
+        ax.plot(circular_route[0, 0], circular_route[0, 1],
+                marker='D', color='saddlebrown', markersize=20, zorder=6,
+                markeredgecolor='black', markeredgewidth=3)
+
+        # Add arrow to show direction
+        # Sample a few points along the route to show direction
+        num_arrows = 4
+        arrow_indices = [len(circular_route) * i // num_arrows for i in range(num_arrows)]
+        for idx in arrow_indices:
+            if idx < len(circular_route) - 5:
+                x1, y1 = circular_route[idx]
+                x2, y2 = circular_route[idx + 5]
+                dx = x2 - x1
+                dy = y2 - y1
+                ax.arrow(x1, y1, dx*0.6, dy*0.6,
+                        head_width=1.5, head_length=1.0,
+                        fc='saddlebrown', ec='black', linewidth=2,
+                        alpha=0.9, zorder=5)
+
+    # Plot roundabout car route
+    roundabout_route = get_roundabout_car_route()
+    if len(roundabout_route) > 0:
+        ax.plot(roundabout_route[:, 0], roundabout_route[:, 1],
+                color='darkorchid', linewidth=5, alpha=0.9,
+                linestyle='--', dashes=(8, 4), zorder=5, label='Roundabout Car Route')
+
+        # Mark start position (Node 16)
+        ax.plot(roundabout_route[0, 0], roundabout_route[0, 1],
+                marker='D', color='darkorchid', markersize=20, zorder=6,
+                markeredgecolor='black', markeredgewidth=3)
+
+        # Add arrow to show direction
+        # Sample a few points along the route to show direction
+        num_arrows = 3
+        arrow_indices = [len(roundabout_route) * i // num_arrows for i in range(num_arrows)]
+        for idx in arrow_indices:
+            if idx < len(roundabout_route) - 5:
+                x1, y1 = roundabout_route[idx]
+                x2, y2 = roundabout_route[idx + 5]
+                dx = x2 - x1
+                dy = y2 - y1
+                ax.arrow(x1, y1, dx*0.6, dy*0.6,
+                        head_width=1.5, head_length=1.0,
+                        fc='darkorchid', ec='black', linewidth=2,
+                        alpha=0.9, zorder=5)
+
     # Legend for colors
     legend_elements = [
         Line2D([0], [0], color='green', linewidth=3, label='Road Centerlines'),
         Line2D([0], [0], color='blue', linewidth=3, label='Road Curbs'),
         Line2D([0], [0], color='yellow', linewidth=3, label='Lane Dividers'),
         Line2D([0], [0], color='red', linewidth=3, label='Direction Arrows', marker='>'),
+        Line2D([0], [0], color='saddlebrown', linewidth=5, linestyle='--', dashes=(8, 4),
+               label='Circular Car Route (0→2→4→6→0)'),
+        Line2D([0], [0], color='darkorchid', linewidth=5, linestyle='--', dashes=(8, 4),
+               label='Roundabout Car Route (16→17→16)'),
     ]
     
     # Plot nodes
@@ -619,22 +725,28 @@ def create_directional_map(road_polylines, lane_dividers, output_path):
                 bbox=dict(boxstyle='round,pad=0.4', facecolor='lightyellow', 
                          edgecolor='black', alpha=0.95), zorder=4)
     
-    # Highlight route nodes
-    route_nodes = [13, 19, 17, 20, 22]
-    for node_id in route_nodes:
+    # Highlight main car spawn node (Node 1)
+    spawn_node_id = 1
+    x, y = nodes[spawn_node_id]
+    ax.plot(x, y, 'o', color='limegreen', markersize=20, zorder=5,
+            markeredgecolor='white', markeredgewidth=3)
+    legend_elements.append(Line2D([0], [0], marker='o', color='w',
+                                 markerfacecolor='limegreen', markersize=12,
+                                 label='Main Car Spawn (Node 1)'))
+
+    # Highlight circular car route nodes
+    circular_route_nodes = [0, 2, 4, 6]
+    for node_id in circular_route_nodes:
         x, y = nodes[node_id]
-        if node_id == 13:
-            ax.plot(x, y, 'o', color='green', markersize=20, zorder=5, 
-                    markeredgecolor='white', markeredgewidth=3)
-            legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                         markerfacecolor='green', markersize=12, 
-                                         label='START (Node 13)'))
-        elif node_id == 22:
-            ax.plot(x, y, 's', color='darkred', markersize=20, zorder=5,
-                    markeredgecolor='white', markeredgewidth=3)
-            legend_elements.append(Line2D([0], [0], marker='s', color='w', 
-                                         markerfacecolor='darkred', markersize=12, 
-                                         label='END (Node 22)'))
+        ax.plot(x, y, 'D', color='saddlebrown', markersize=16, zorder=5,
+                markeredgecolor='black', markeredgewidth=2, alpha=0.9)
+
+    # Highlight roundabout car route nodes
+    roundabout_route_nodes = [16, 17]
+    for node_id in roundabout_route_nodes:
+        x, y = nodes[node_id]
+        ax.plot(x, y, 'D', color='darkorchid', markersize=16, zorder=5,
+                markeredgecolor='black', markeredgewidth=2, alpha=0.9)
     
     # Plot pedestrians
     ped_colors = ['orange', 'purple', 'cyan', 'magenta', 'yellow']

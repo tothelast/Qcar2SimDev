@@ -20,10 +20,187 @@ Coordinate System (Cityscape Lite):
 import sys
 import time
 import threading
+import math
+import numpy as np
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent / 'python'))
+
 from python.qvl.qlabs import QuanserInteractiveLabs
 from python.qvl.qcar2 import QLabsQCar2
 from python.qvl.system import QLabsSystem
 from python.qvl.person import QLabsPerson
+from hal.products.mats import SDCSRoadMap
+
+
+def circular_qcar_loop(qcar, route_nodes):
+    """
+    Infinite loop for QCar2 to follow a circular route.
+
+    Uses Stanley controller for steering (similar to QCarDriveController in HAL library).
+
+    Args:
+        qcar: QLabsQCar2 instance
+        route_nodes: List of node IDs forming a circular route (e.g., [0, 2, 4, 6])
+    """
+    print(f"  Starting circular route loop for QCar2...")
+
+    # Initialize roadmap
+    roadmap = SDCSRoadMap(leftHandTraffic=False, useSmallMap=False)
+
+    # Generate full route waypoints
+    all_waypoints = []
+    for i in range(len(route_nodes)):
+        from_node = route_nodes[i]
+        to_node = route_nodes[(i + 1) % len(route_nodes)]  # Wrap around for circular route
+
+        # Generate path for this edge
+        path = roadmap.generate_path([from_node, to_node])
+        x_coords = path[0, :] * 10.0  # Scale to QLabs coordinates
+        y_coords = path[1, :] * 10.0
+
+        # Add waypoints (skip first point if not the first edge to avoid duplicates)
+        start_idx = 1 if i > 0 else 0
+        for j in range(start_idx, len(x_coords)):
+            all_waypoints.append([x_coords[j], y_coords[j]])
+
+    all_waypoints = np.array(all_waypoints)
+    print(f"  Generated {len(all_waypoints)} waypoints for circular route")
+
+    # Control parameters
+    # NOTE: QCar2 in QLabs is 10x scale, so speeds are in full-scale m/s
+    target_speed = 2.5  # m/s (full-scale speed) - increased for smoother motion
+    k_stanley = 0.3  # Stanley controller gain (lower for smoother control)
+    max_steering_angle = np.pi / 6  # 30 degrees max
+    lookahead_distance = 3.0  # meters - look ahead for smoother path following
+    current_waypoint_idx = 0
+
+    print(f"  Target speed: {target_speed} m/s (full-scale)")
+    print(f"  Stanley gain: {k_stanley}")
+    print(f"  Lookahead: {lookahead_distance}m")
+    print(f"  Max steering: {np.degrees(max_steering_angle):.1f}°")
+
+    # Wait before starting
+    time.sleep(2.0)
+    print(f"  Circular QCar2 starting movement...")
+
+    # Error tracking
+    consecutive_errors = 0
+    max_consecutive_errors = 10
+
+    # Control loop timing
+    dt = 0.1  # 10 Hz control loop
+    iteration = 0
+
+    # State variables
+    current_pos = None
+    current_yaw = None
+    steering_angle = 0.0
+
+    while True:
+        try:
+            iteration += 1
+
+            # Query state every iteration (needed for accurate control)
+            try:
+                success, location, rotation, _, _ = qcar.set_velocity_and_request_state(
+                    forward=target_speed if current_pos is not None else 0.0,
+                    turn=steering_angle,
+                    headlights=True,
+                    leftTurnSignal=False,
+                    rightTurnSignal=False,
+                    brakeSignal=False,
+                    reverseSignal=False
+                )
+            except Exception:
+                consecutive_errors += 1
+                if consecutive_errors > max_consecutive_errors:
+                    print(f"  ✗ Too many consecutive errors, stopping thread")
+                    break
+                time.sleep(0.2)
+                continue
+
+            if not success:
+                consecutive_errors += 1
+                if consecutive_errors > max_consecutive_errors:
+                    print(f"  ✗ Too many consecutive failures, stopping thread")
+                    break
+                time.sleep(0.2)
+                continue
+
+            # Reset error counter on success
+            consecutive_errors = 0
+            current_pos = np.array([location[0], location[1]])
+            current_yaw = rotation[2]
+
+            # Find nearest waypoint on path
+            distances = np.linalg.norm(all_waypoints - current_pos, axis=1)
+            nearest_idx = np.argmin(distances)
+            current_waypoint_idx = nearest_idx
+
+            # Find lookahead waypoint (for smoother path following)
+            lookahead_idx = current_waypoint_idx
+            accumulated_dist = 0.0
+
+            for i in range(1, min(100, len(all_waypoints))):
+                idx = (current_waypoint_idx + i) % len(all_waypoints)
+                prev_idx = (current_waypoint_idx + i - 1) % len(all_waypoints)
+
+                segment_dist = np.linalg.norm(all_waypoints[idx] - all_waypoints[prev_idx])
+                accumulated_dist += segment_dist
+
+                if accumulated_dist >= lookahead_distance:
+                    lookahead_idx = idx
+                    break
+
+            # Get target waypoint (lookahead point)
+            target_wp = all_waypoints[lookahead_idx]
+
+            # Calculate cross-track error (perpendicular distance to path)
+            # Vector from current position to target waypoint
+            path_vector = target_wp - current_pos
+            path_distance = np.linalg.norm(path_vector)
+
+            if path_distance < 0.01:  # Too close, skip
+                time.sleep(dt)
+                continue
+
+            # Path heading
+            path_heading = math.atan2(path_vector[1], path_vector[0])
+
+            # Heading error
+            heading_error = path_heading - current_yaw
+
+            # Normalize to [-pi, pi]
+            while heading_error > math.pi:
+                heading_error -= 2 * math.pi
+            while heading_error < -math.pi:
+                heading_error += 2 * math.pi
+
+            # Cross-track error (simplified - distance to target)
+            cross_track_error = path_distance * math.sin(heading_error)
+
+            # Stanley controller: steering = heading_error + atan(k * cross_track_error / velocity)
+            # For low speeds, use simplified version
+            if target_speed > 0.01:
+                steering_correction = math.atan(k_stanley * cross_track_error / target_speed)
+            else:
+                steering_correction = 0.0
+
+            steering_angle = heading_error + steering_correction
+
+            # NEGATE steering angle - flip left/right convention
+            # (Testing if QCar2 convention is opposite to what we expect)
+            steering_angle = -steering_angle
+
+            # Clip steering angle
+            steering_angle = np.clip(steering_angle, -max_steering_angle, max_steering_angle)
+
+            # Control loop rate - 10 Hz
+            time.sleep(dt)
+
+        except Exception as e:
+            print(f"  ✗ Circular QCar2 error: {e}")
+            time.sleep(1.0)
 
 
 def pedestrian_movement_loop(pedestrian, curb_1, curb_2, wait_offset_1, wait_offset_2):
@@ -168,7 +345,7 @@ def spawn_all_pedestrians(qlabs):
     - Each pedestrian crosses both parallel roads (from outer curb to outer curb)
 
     Pedestrian placement strategy:
-    1. Near Node 13 - crossing edges 12→7 and 6→13
+    1. South section - crossing edges 12→7 and 6→13
     2. West section - crossing edges 22→9 and 8→23
     3. North section - crossing edges 23→21 and 20→22
     4. East section - crossing edges 15→6 and 7→14
@@ -185,8 +362,8 @@ def spawn_all_pedestrians(qlabs):
 
     pedestrians = []
 
-    # Pedestrian 1: Near Node 13 (Edges 6→13 and 12→7 - parallel roads)
-    # Two parallel road edges running North-South near Node 13
+    # Pedestrian 1: South section (Edges 6→13 and 12→7 - parallel roads)
+    # Two parallel road edges running North-South
     # Pedestrian crosses BOTH roads East-West (perpendicular)
     # Crosses from outer curb of edge 12→7 to outer curb of edge 6→13
     # Total crossing: ~7.7m (sidewalk + road + yellow divider + road + sidewalk)
@@ -320,9 +497,108 @@ def main():
         return False
 
     # =========================================================================
+    # SPAWN CIRCULAR ROUTE QCAR2
+    # =========================================================================
+    print("\n" + "-"*70)
+    print("Spawning Circular Route QCar2...")
+    print("-"*70)
+
+    circular_qcar = QLabsQCar2(qlabs)
+    circular_spawn_location = [0.000, 1.302, 0.005]  # Node 0
+    circular_spawn_rotation = [0.0, 0.0, -90.0]  # -90 degrees (facing south)
+
+    status = circular_qcar.spawn_id_degrees(
+        actorNumber=1,  # Different actor number from main QCar2
+        location=circular_spawn_location,
+        rotation=circular_spawn_rotation,
+        scale=[1.0, 1.0, 1.0],
+        configuration=0,
+        waitForConfirmation=True
+    )
+
+    if status == 0:
+        print(f"✓ Circular QCar2 spawned at Node 0 [{circular_spawn_location[0]:.3f}, {circular_spawn_location[1]:.3f}]")
+        print(f"  Route: 0 → 2 → 4 → 6 → 0 (infinite loop)")
+        print(f"  Movement will start after pedestrians are spawned")
+    else:
+        print(f"✗ Failed to spawn circular QCar2. Status code: {status}")
+        circular_qcar = None
+
+    print("-"*70)
+
+    # =========================================================================
+    # SPAWN ROUNDABOUT QCAR2
+    # =========================================================================
+    print("\n" + "-"*70)
+    print("Spawning Roundabout QCar2...")
+    print("-"*70)
+
+    roundabout_qcar = QLabsQCar2(qlabs)
+    roundabout_spawn_location = [9.076, 37.098, 0.005]  # Node 16
+    roundabout_spawn_rotation = [0.0, 0.0, -80.6]  # -80.6 degrees
+
+    status = roundabout_qcar.spawn_id_degrees(
+        actorNumber=2,  # Different actor number from other QCar2s
+        location=roundabout_spawn_location,
+        rotation=roundabout_spawn_rotation,
+        scale=[1.0, 1.0, 1.0],
+        configuration=0,
+        waitForConfirmation=True
+    )
+
+    if status == 0:
+        print(f"✓ Roundabout QCar2 spawned at Node 16 [{roundabout_spawn_location[0]:.3f}, {roundabout_spawn_location[1]:.3f}]")
+        print(f"  Route: 16 → 17 → 16 (infinite loop)")
+        print(f"  Movement will start after pedestrians are spawned")
+    else:
+        print(f"✗ Failed to spawn roundabout QCar2. Status code: {status}")
+        roundabout_qcar = None
+
+    print("-"*70)
+
+    # =========================================================================
     # SPAWN PEDESTRIANS
     # =========================================================================
     pedestrians = spawn_all_pedestrians(qlabs)
+
+    # =========================================================================
+    # START CIRCULAR QCAR2 MOVEMENT
+    # =========================================================================
+    if circular_qcar:
+        print("\n" + "-"*70)
+        print("Starting Circular QCar2 Movement...")
+        print("-"*70)
+
+        route_nodes = [0, 2, 4, 6]
+        circular_thread = threading.Thread(
+            target=circular_qcar_loop,
+            args=(circular_qcar, route_nodes),
+            daemon=True
+        )
+        circular_thread.start()
+        print(f"✓ Circular route thread started")
+        print("-"*70)
+
+    # =========================================================================
+    # START ROUNDABOUT QCAR2 MOVEMENT
+    # =========================================================================
+    if roundabout_qcar:
+        # Small delay to avoid simultaneous communication with circular car
+        time.sleep(1.0)
+
+        print("\n" + "-"*70)
+        print("Starting Roundabout QCar2 Movement...")
+        print("-"*70)
+
+        route_nodes = [16, 17]
+        roundabout_thread = threading.Thread(
+            target=circular_qcar_loop,
+            args=(roundabout_qcar, route_nodes),
+            daemon=True
+        )
+        roundabout_thread.start()
+        print(f"✓ Roundabout route thread started")
+        print("-"*70)
 
     # =========================================================================
     # CAMERA VIEW
@@ -337,13 +613,19 @@ def main():
     print("\n" + "="*70)
     print("SCENE SETUP COMPLETE")
     print("="*70)
-    print(f"QCar2:        Spawned at Node 1 [2.686, 0.814]")
-    print(f"Pedestrians:  {len(pedestrians)}/4 active")
+    print(f"QCar2 (Main):       Spawned at Node 1 [2.686, 0.814]")
+    print(f"QCar2 (Circular):   {'Spawned at Node 0 [0.000, 1.302]' if circular_qcar else 'Failed to spawn'}")
+    if circular_qcar:
+        print(f"                    Route: 0 → 2 → 4 → 6 → 0 (infinite loop)")
+    print(f"QCar2 (Roundabout): {'Spawned at Node 16 [9.076, 37.098]' if roundabout_qcar else 'Failed to spawn'}")
+    if roundabout_qcar:
+        print(f"                    Route: 16 → 17 → 16 (infinite loop)")
+    print(f"Pedestrians:        {len(pedestrians)}/4 active")
     print("\nPedestrian Crossing Locations:")
-    print("  1. Near spawn (Edges 12→7 ↔ 6→13)   - Crossing both parallel roads")
-    print("  2. West section (Edges 22→9 ↔ 8→23) - Crossing both parallel roads")
+    print("  1. South section (Edges 12→7 ↔ 6→13)   - Crossing both parallel roads")
+    print("  2. West section (Edges 22→9 ↔ 8→23)    - Crossing both parallel roads")
     print("  3. North section (Edges 23→21 ↔ 20→22) - Crossing both parallel roads")
-    print("  4. East section (Edges 15→6 ↔ 7→14) - Crossing both parallel roads")
+    print("  4. East section (Edges 15→6 ↔ 7→14)    - Crossing both parallel roads")
     print("\nCoordinate System:")
     print("  - World size: 500m × 500m (±250m from origin)")
     print("  - Origin: [0, 0, 0]")
