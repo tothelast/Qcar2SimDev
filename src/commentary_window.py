@@ -13,14 +13,20 @@ class CommentaryWindow:
     def __init__(self, model_wrapper=None):
         self.window = None
         self.text_widget = None
-        self.hlc_entry = None
-        self.current_hlc_display = None
         self.waypoint_display = None
         self.running = False
         self.thread = None
         self.message_queue = queue.Queue()
         self.last_message = None
         self.model_wrapper = model_wrapper
+
+        # Mode selection variables
+        self.mode_var = None
+        self.safety_var = None
+        self.safety_frame = None
+        self.qa_entry = None
+        self.dreamer_entry = None
+        self.target_speed = 0.0
         
     def start(self):
         if self.running:
@@ -34,15 +40,86 @@ class CommentaryWindow:
     def _run_window(self):
         self.window = tk.Tk()
         self.window.title("SimLingo AI")
-        self.window.geometry("1200x700")
+        self.window.geometry("1400x600")  # Optimized for wide/short layout (bottom half of screen)
         self.window.configure(bg='#0a0e27')
-        
-        # Header
-        header = tk.Frame(self.window, bg='#1a1f3a', height=70)
+
+        # Header - Compact
+        header = tk.Frame(self.window, bg='#1a1f3a', height=45)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
-        tk.Label(header, text="SimLingo AI - Commentary & Control", font=("Segoe UI", 18, "bold"), bg='#1a1f3a', fg='#00d4ff').pack(pady=20)
-        
+
+        # Title and nav mode indicator
+        header_container = tk.Frame(header, bg='#1a1f3a')
+        header_container.pack(expand=True, fill=tk.BOTH)
+
+        tk.Label(header_container, text="SimLingo AI - Commentary & Control",
+                font=("Segoe UI", 14, "bold"), bg='#1a1f3a', fg='#00d4ff').pack(side=tk.LEFT, padx=15, pady=10)
+
+        # Nav mode indicator (set by model wrapper)
+        self.nav_mode_label = tk.Label(header_container, text="",
+                                       font=("Segoe UI", 9), bg='#1a1f3a', fg='#7a8fb5')
+        self.nav_mode_label.pack(side=tk.RIGHT, padx=15, pady=10)
+
+        # Mode Selection Panel - Compact horizontal layout
+        mode_panel = tk.Frame(self.window, bg='#1a1f3a', height=60)
+        mode_panel.pack(fill=tk.X, padx=10, pady=(0, 5))
+        mode_panel.pack_propagate(False)
+
+        # Single row container for all controls
+        controls_row = tk.Frame(mode_panel, bg='#1a1f3a')
+        controls_row.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        # Left side: Task mode selection
+        mode_container = tk.Frame(controls_row, bg='#1a1f3a')
+        mode_container.pack(side=tk.LEFT)
+
+        tk.Label(mode_container, text="Task:", font=("Segoe UI", 10, "bold"), bg='#1a1f3a', fg='#ff9500').pack(side=tk.LEFT, padx=(0, 10))
+
+        # Radio buttons for mode selection
+        self.mode_var = tk.StringVar(value='commentary')
+
+        # Commentary mode
+        tk.Radiobutton(mode_container, text="Commentary", variable=self.mode_var, value='commentary',
+                      command=self._on_mode_change, bg='#1a1f3a', fg='#00d4ff', selectcolor='#0a0e27',
+                      font=("Segoe UI", 10), activebackground='#1a1f3a', activeforeground='#00ff00').pack(side=tk.LEFT, padx=(0, 15))
+
+        # Q&A mode
+        tk.Radiobutton(mode_container, text="Q&A", variable=self.mode_var, value='qa',
+                      command=self._on_mode_change, bg='#1a1f3a', fg='#00d4ff', selectcolor='#0a0e27',
+                      font=("Segoe UI", 10), activebackground='#1a1f3a', activeforeground='#00ff00').pack(side=tk.LEFT, padx=(0, 15))
+
+        # Dreamer mode
+        tk.Radiobutton(mode_container, text="Dreamer", variable=self.mode_var, value='dreamer',
+                      command=self._on_mode_change, bg='#1a1f3a', fg='#00d4ff', selectcolor='#0a0e27',
+                      font=("Segoe UI", 10), activebackground='#1a1f3a', activeforeground='#00ff00').pack(side=tk.LEFT, padx=(0, 15))
+
+        # Safety toggle (only visible when Dreamer is selected, default OFF)
+        self.safety_frame = tk.Frame(mode_container, bg='#1a1f3a')
+        self.safety_var = tk.BooleanVar(value=False)
+        self.safety_check = tk.Checkbutton(self.safety_frame, text="Safety", variable=self.safety_var,
+                                          command=self._on_safety_change, bg='#1a1f3a', fg='#ff9500', selectcolor='#0a0e27',
+                                          font=("Segoe UI", 9), activebackground='#1a1f3a', activeforeground='#00ff00')
+        self.safety_check.pack(side=tk.LEFT)
+        # Initially hidden - will be shown when Dreamer mode is selected
+
+        # Right side: Input fields (shown based on mode)
+        self.input_container = tk.Frame(controls_row, bg='#1a1f3a')
+        self.input_container.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(30, 0))
+
+        # Q&A input
+        self.qa_input_frame = tk.Frame(self.input_container, bg='#1a1f3a')
+        tk.Label(self.qa_input_frame, text="Question:", font=("Segoe UI", 9), bg='#1a1f3a', fg='#7a8fb5').pack(side=tk.LEFT, padx=(0, 8))
+        self.qa_entry = tk.Entry(self.qa_input_frame, font=("Consolas", 9), bg='#0f1419', fg='#e6f1ff', insertbackground='#00d4ff', width=50)
+        self.qa_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.qa_entry.bind('<Return>', self._on_qa_submit)
+
+        # Dreamer input
+        self.dreamer_input_frame = tk.Frame(self.input_container, bg='#1a1f3a')
+        tk.Label(self.dreamer_input_frame, text="Instruction:", font=("Segoe UI", 9), bg='#1a1f3a', fg='#7a8fb5').pack(side=tk.LEFT, padx=(0, 8))
+        self.dreamer_entry = tk.Entry(self.dreamer_input_frame, font=("Consolas", 9), bg='#0f1419', fg='#e6f1ff', insertbackground='#00d4ff', width=50)
+        self.dreamer_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.dreamer_entry.bind('<Return>', self._on_dreamer_submit)
+
         # Content
         content = tk.Frame(self.window, bg='#0a0e27')
         content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -56,37 +133,28 @@ class CommentaryWindow:
         self.text_widget.pack(fill=tk.BOTH, expand=True, pady=(5, 10))
         tk.Button(left, text="Clear History", command=self._clear_text, bg='#1e3a5f', fg='#ffffff', font=("Segoe UI", 10, "bold"), padx=20, pady=8).pack(pady=(0, 10))
         
-        # RIGHT: HLC (split into two columns)
+        # RIGHT: Vehicle Status & Waypoints
         right = tk.Frame(content, bg='#0a0e27')
         right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
-        tk.Label(right, text="High-Level Commands", font=("Segoe UI", 14, "bold"), bg='#1a1f3a', fg='#ff9500', pady=10).pack(fill=tk.X)
+        tk.Label(right, text="Vehicle Status", font=("Segoe UI", 14, "bold"), bg='#1a1f3a', fg='#ff9500', pady=10).pack(fill=tk.X)
 
-        # Container for side-by-side layout
-        hlc_container = tk.Frame(right, bg='#0f1419')
-        hlc_container.pack(fill=tk.BOTH, expand=True, pady=(5, 10))
+        # Speed display - Current and Target side by side
+        speed_container = tk.Frame(right, bg='#0f1419', padx=15, pady=15)
+        speed_container.pack(fill=tk.X, pady=(5, 10))
 
-        # LEFT: Current Speed
-        left_hlc = tk.Frame(hlc_container, bg='#0f1419', padx=15, pady=20)
-        left_hlc.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # Current speed display (prominent at top)
-        tk.Label(left_hlc, text="Current Speed:", font=("Segoe UI", 14, "bold"), bg='#0f1419', fg='#ff9500').pack(anchor=tk.W, pady=(0, 10))
-        self.current_speed_display = tk.Label(left_hlc, text="0.00 m/s", font=("Consolas", 20, "bold"), bg='#1a1f3a', fg='#00ff00', padx=20, pady=20, anchor=tk.CENTER)
+        # Left: Current Speed
+        current_speed_frame = tk.Frame(speed_container, bg='#0f1419')
+        current_speed_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        tk.Label(current_speed_frame, text="Current Speed", font=("Segoe UI", 11, "bold"), bg='#0f1419', fg='#ff9500').pack(anchor=tk.W, pady=(0, 5))
+        self.current_speed_display = tk.Label(current_speed_frame, text="0.00 m/s", font=("Consolas", 16, "bold"), bg='#1a1f3a', fg='#00ff00', padx=15, pady=15, anchor=tk.CENTER)
         self.current_speed_display.pack(fill=tk.X)
 
-        # RIGHT: Enter Command
-        right_hlc = tk.Frame(hlc_container, bg='#0f1419', padx=15, pady=20)
-        right_hlc.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-        tk.Label(right_hlc, text="Enter Command (Press Enter):", font=("Segoe UI", 11, "bold"), bg='#0f1419', fg='#ff9500').pack(anchor=tk.W, pady=(0, 10))
-        self.hlc_entry = tk.Entry(right_hlc, font=("Consolas", 11), bg='#1a1f3a', fg='#e6f1ff', insertbackground='#00d4ff')
-        self.hlc_entry.pack(fill=tk.X, pady=(0, 15), ipady=8)
-        self.hlc_entry.bind('<Return>', self._on_hlc_submit)
-
-        # Current command display (small, under text entry)
-        tk.Label(right_hlc, text="Active:", font=("Segoe UI", 9), bg='#0f1419', fg='#7a8fb5').pack(anchor=tk.W, pady=(10, 5))
-        self.current_hlc_display = tk.Label(right_hlc, text="[Default]", font=("Consolas", 9, "italic"), bg='#1a1f3a', fg='#7a8fb5', padx=10, pady=8, anchor=tk.W, wraplength=220, justify=tk.LEFT)
-        self.current_hlc_display.pack(fill=tk.X)
+        # Right: Target Speed
+        target_speed_frame = tk.Frame(speed_container, bg='#0f1419')
+        target_speed_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        tk.Label(target_speed_frame, text="Target Speed", font=("Segoe UI", 11, "bold"), bg='#0f1419', fg='#ff9500').pack(anchor=tk.W, pady=(0, 5))
+        self.target_speed_display = tk.Label(target_speed_frame, text="0.00 m/s", font=("Consolas", 16, "bold"), bg='#1a1f3a', fg='#00d4ff', padx=15, pady=15, anchor=tk.CENTER)
+        self.target_speed_display.pack(fill=tk.X)
 
         # Waypoint display section (below HLC controls)
         waypoint_section = tk.Frame(right, bg='#0a0e27')
@@ -110,6 +178,15 @@ class CommentaryWindow:
         self.waypoint_display.tag_config('separator', foreground='#7a8fb5', font=("Consolas", 10))
 
         self._append_text("Waiting for AI commentary...")
+
+        # Set nav mode indicator if model wrapper is available
+        if self.model_wrapper and hasattr(self.model_wrapper, 'nav_mode'):
+            nav_mode_text = "Target Point" if self.model_wrapper.nav_mode == 'target_point' else "HLC Command"
+            self.nav_mode_label.config(
+                text=f"Nav Mode: {nav_mode_text}",
+                fg='#00ff00' if self.model_wrapper.nav_mode == 'target_point' else '#ff9500'
+            )
+
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
         self._process_queue()
         self.window.mainloop()
@@ -125,22 +202,90 @@ class CommentaryWindow:
             self.text_widget.delete(1.0, tk.END)
             self.text_widget.configure(state='disabled')
     
-    def _on_hlc_submit(self, event=None):
-        if self.hlc_entry and self.model_wrapper:
-            command = self.hlc_entry.get().strip()
-            if command:
-                # Set new command
-                self.model_wrapper.set_hlc(command)
-                self.message_queue.put(f"[HLC SET] {command}")
-                if self.current_hlc_display:
-                    self.current_hlc_display.config(text=command, fg='#00ff00')
-                self.hlc_entry.delete(0, tk.END)
-            else:
-                # Empty entry = clear command
-                self.model_wrapper.set_hlc(None)
-                self.message_queue.put("[HLC CLEARED] Using default behavior")
-                if self.current_hlc_display:
-                    self.current_hlc_display.config(text="[Default]", fg='#7a8fb5')
+    def _on_mode_change(self):
+        """Handle mode selection change."""
+        mode = self.mode_var.get()
+
+        # Hide all input frames and safety toggle
+        self.qa_input_frame.pack_forget()
+        self.dreamer_input_frame.pack_forget()
+        if self.safety_frame:
+            self.safety_frame.pack_forget()
+
+        # Show appropriate input frame
+        if mode == 'qa':
+            self.qa_input_frame.pack(fill=tk.BOTH, expand=True)
+            self.qa_entry.focus()
+            # Don't update model until user enters a question
+            self.message_queue.put("[MODE] Q&A - Please enter a question and press Enter")
+        elif mode == 'dreamer':
+            # Show safety toggle next to Dreamer radio button
+            if self.safety_frame:
+                self.safety_frame.pack(side=tk.LEFT)
+            self.dreamer_input_frame.pack(fill=tk.BOTH, expand=True)
+            self.dreamer_entry.focus()
+            # Don't update model until user enters an instruction
+            self.message_queue.put("[MODE] Dreamer - Please enter an instruction and press Enter (Safety is OFF by default)")
+        else:
+            # Commentary mode - update immediately
+            self._update_model_task_type()
+
+    def _on_safety_change(self):
+        """Handle safety toggle change."""
+        # Only update if we're in Dreamer mode and have an instruction
+        if self.mode_var.get() == 'dreamer':
+            instruction = self.dreamer_entry.get().strip() if self.dreamer_entry else None
+            if instruction:
+                self._update_model_task_type()
+                safety_str = "ON (reject unsafe instructions)" if self.safety_var.get() else "OFF (follow all instructions)"
+                self.message_queue.put(f"[SAFETY] {safety_str}")
+
+    def _on_qa_submit(self, event=None):
+        """Handle Q&A question submission."""
+        if self.qa_entry:
+            question = self.qa_entry.get().strip()
+            if question:
+                self._update_model_task_type()
+                self.message_queue.put(f"[Q&A] Question: {question}")
+
+    def _on_dreamer_submit(self, event=None):
+        """Handle Dreamer instruction submission."""
+        if self.dreamer_entry:
+            instruction = self.dreamer_entry.get().strip()
+            if instruction:
+                self._update_model_task_type()
+                safety_str = "ON (reject unsafe instructions)" if self.safety_var.get() else "OFF (follow all instructions)"
+                self.message_queue.put(f"[DREAMER] Instruction: {instruction} | Safety: {safety_str}")
+
+    def _update_model_task_type(self):
+        """Update the model wrapper with current task type settings."""
+        if not self.model_wrapper:
+            return
+
+        mode = self.mode_var.get()
+
+        if mode == 'commentary':
+            self.model_wrapper.set_task_type('commentary')
+            self.message_queue.put("[MODE] Commentary (Chain-of-Thought)")
+
+        elif mode == 'qa':
+            question = self.qa_entry.get().strip() if self.qa_entry else None
+            if not question:
+                # Don't update model if no question is entered
+                self.message_queue.put("[WARNING] Please enter a question first")
+                return
+            self.model_wrapper.set_task_type('qa', question=question)
+
+        elif mode == 'dreamer':
+            instruction = self.dreamer_entry.get().strip() if self.dreamer_entry else None
+            if not instruction:
+                # Don't update model if no instruction is entered
+                self.message_queue.put("[WARNING] Please enter an instruction first")
+                return
+            safety_enabled = self.safety_var.get()
+            self.model_wrapper.set_task_type('dreamer', instruction=instruction, safety_enabled=safety_enabled)
+
+
     
 
     def _append_text(self, text):
@@ -212,6 +357,14 @@ class CommentaryWindow:
                 target_speed = np.linalg.norm(delta) * 4.0
             else:
                 target_speed = 0.0
+
+            # Update target speed display
+            self.target_speed = target_speed
+            if hasattr(self, 'target_speed_display') and self.target_speed_display:
+                try:
+                    self.target_speed_display.config(text=f"{target_speed:.2f} m/s")
+                except:
+                    pass
 
             # Format waypoint text
             # SimLingo outputs: 10 speed waypoints, 20 route waypoints

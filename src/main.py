@@ -26,24 +26,26 @@ from control_converter import ControlConverter
 class SimlingoQCar2Controller:
     """Main controller for Simlingo-QCar2 integration."""
     
-    def __init__(self, config_path=None, spawn_obstacles=False):
+    def __init__(self, config_path=None, spawn_obstacles=False, nav_mode='target_point'):
         """
         Initialize controller.
 
         Args:
             config_path: Path to custom config file (optional)
             spawn_obstacles: Whether to spawn obstacle vehicles (optional)
+            nav_mode: Navigational conditioning mode ('target_point' or 'command')
         """
         # Load configuration
         self.config = SimlingoQCar2Config()
         self.spawn_obstacles = spawn_obstacles
+        self.nav_mode = nav_mode
 
         # Initialize components
         self.qcar_interface = QCar2Interface(self.config)
         self.camera_processor = CameraProcessor(self.config)
         self.state_estimator = StateEstimator(self.config)
         self.route_manager = RouteManager(self.config)
-        self.model_wrapper = SimlingoModelWrapper(self.config)
+        self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode)
         self.control_converter = ControlConverter(self.config)
 
         # Control loop state
@@ -112,13 +114,13 @@ class SimlingoQCar2Controller:
         # Get velocity
         velocity = self.state_estimator.get_velocity()
         
-        # Get target points
+        # Get target points and HLC
         current_position = self.state_estimator.get_position()
         current_heading = self.state_estimator.get_heading()
-        target_point, next_target_point = self.route_manager.get_target_point_ego(
+        target_point, next_target_point, hlc = self.route_manager.get_target_point_ego(
             current_position, current_heading
         )
-        
+
         # Run model inference
         speed_wps, route_wps, language = self.model_wrapper.inference(
             camera_images=camera_images,
@@ -127,7 +129,8 @@ class SimlingoQCar2Controller:
             camera_extrinsics=camera_extrinsics,
             vehicle_speed=velocity,
             target_point=target_point,
-            next_target_point=next_target_point
+            next_target_point=next_target_point,
+            hlc=hlc  # Pass HLC for command mode
         )
 
         
@@ -190,7 +193,7 @@ class SimlingoQCar2Controller:
 
 
         # Log trajectory data
-        target_world, _ = self.route_manager.get_target_point(current_position)
+        target_world, _, _ = self.route_manager.get_target_point(current_position)
         distance_to_target = np.linalg.norm(target_world[:2] - current_position[:2])
 
         # Check for collision
@@ -349,11 +352,14 @@ def main():
                         help='Path to custom config file')
     parser.add_argument('--spawn-obstacles', action='store_true',
                         help='Spawn obstacle vehicles along the route')
+    parser.add_argument('--nav-mode', type=str, default='target_point',
+                        choices=['target_point', 'command'],
+                        help='Navigational conditioning mode: target_point (uses <TARGET_POINT> tokens) or command (uses HLC text)')
 
     args = parser.parse_args()
 
     # Create controller
-    controller = SimlingoQCar2Controller(config_path=args.config, spawn_obstacles=args.spawn_obstacles)
+    controller = SimlingoQCar2Controller(config_path=args.config, spawn_obstacles=args.spawn_obstacles, nav_mode=args.nav_mode)
 
     # Initialize
     if not controller.initialize():

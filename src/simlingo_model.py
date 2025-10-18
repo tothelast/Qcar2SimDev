@@ -7,13 +7,14 @@ import sys
 import os
 import torch
 import numpy as np
+import importlib.util
 from typing import Tuple, Optional, Dict, List
 from pathlib import Path
 
 # Add simlingo directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'simlingo'))
 
-from transformers import AutoTokenizer, AutoProcessor
+from transformers import AutoTokenizer, AutoProcessor, AutoConfig
 from simlingo_training.utils.custom_types import DrivingInput, LanguageLabel
 from omegaconf import OmegaConf
 import hydra
@@ -21,51 +22,71 @@ import hydra
 
 class SimlingoModelWrapper:
     """Wrapper for Simlingo model inference."""
-    
-    def __init__(self, config, device='cuda'):
+
+    def __init__(self, config, device='cuda', nav_mode='target_point'):
         """
         Initialize Simlingo model wrapper.
-        
+
         Args:
             config: SimlingoQCar2Config instance
             device: Device to run model on ('cuda' or 'cpu')
+            nav_mode: Navigational conditioning mode (SET ONCE, matches agent_simlingo.py config.eval_route_as)
+                     - 'target_point': Use target point tokens (<TARGET_POINT>)
+                     - 'command': Use HLC text only (no tokens)
         """
         self.config = config
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
-        
+
         print(f"Using device: {self.device}")
-        
+        print(f"Navigational conditioning mode: {nav_mode}")
+
         # Model and tokenizer
         self.model = None
         self.tokenizer = None
         self.processor = None
         self.cfg = None  # Hydra config
+        self.conv_module = None  # Conversation template module
+        self.tmp_config = None  # Model config for image token calculation
 
-        # Special token IDs
+        # Special token IDs (only for tokens added to tokenizer vocabulary)
         self.special_token_ids = {}
 
-        # Custom high-level command (HLC)
-        self.custom_hlc = None
+        # Image token calculation
+        self.num_image_token = None
 
-    def set_hlc(self, command: str = None):
+        # Navigational conditioning mode (set once at initialization, matches original SimLingo)
+        self.nav_mode = nav_mode
+
+        # Task type (can be changed in real-time via commentary window)
+        self.task_type = 'commentary'  # 'commentary', 'qa', 'dreamer'
+        self.safety_enabled = True  # For Dreamer mode only
+        self.user_question = None  # For Q&A mode
+        self.user_instruction = None  # For Dreamer mode
+
+    def set_task_type(self, task_type: str, question: str = None, instruction: str = None, safety_enabled: bool = True):
         """
-        Set a custom high-level command to guide the vehicle's behavior.
+        Set the task type for inference (can be changed in real-time).
 
         Args:
-            command: Natural language instruction (e.g., "Drive carefully", "Speed up", "Turn left at the intersection")
-                    Set to None to use default behavior
-
-        Examples:
-            - "Drive carefully and slow down"
-            - "Speed up to match traffic"
-            - "Prepare to turn left"
-            - "Avoid the obstacle on the right"
+            task_type: 'commentary', 'qa', or 'dreamer'
+            question: Question for Q&A mode (required if task_type='qa')
+            instruction: Instruction for Dreamer mode (required if task_type='dreamer')
+            safety_enabled: Safety flag for Dreamer mode (True = reject unsafe, False = follow all)
         """
-        self.custom_hlc = command
-        if command:
-            print(f"HLC set: '{command}'")
-        else:
-            print("HLC cleared (using default behavior)")
+        self.task_type = task_type
+        self.user_question = question
+        self.user_instruction = instruction
+        self.safety_enabled = safety_enabled
+
+        print(f"\n[TASK TYPE] Set to: {task_type}")
+        if task_type == 'qa' and question:
+            print(f"[Q&A] Question: {question}")
+        elif task_type == 'dreamer' and instruction:
+            safety_str = "ON (reject unsafe)" if safety_enabled else "OFF (follow all)"
+            print(f"[DREAMER] Instruction: {instruction}")
+            print(f"[DREAMER] Safety: {safety_str}")
+
+
 
     def load_model(self, checkpoint_path: str = None):
         """
@@ -195,103 +216,281 @@ class SimlingoModelWrapper:
                 trust_remote_code=True,
                 local_files_only=True
             )
-        
-        # Add special tokens
+
+        # CRITICAL: Add special tokens to tokenizer vocabulary
+        # Only add tokens that should be in the vocabulary (not <SAFETY> or <INSTRUCTION_FOLLOWING>)
+        # These are the tokens from agent_simlingo.py line 159
+        special_tokens_to_add = [
+            '<WAYPOINTS>',
+            '<WAYPOINTS_DIFF>',
+            '<ORG_WAYPOINTS_DIFF>',
+            '<ORG_WAYPOINTS>',
+            '<WAYPOINT_LAST>',
+            '<ROUTE>',
+            '<ROUTE_DIFF>',
+            '<TARGET_POINT>'
+        ]
+
+        # IMPORTANT: Preserve existing additional_special_tokens
+        # InternVL2 already has: <|im_start|>, <|im_end|>, <img>, </img>, <IMG_CONTEXT>, etc.
+        # We need to append our tokens to the existing list, not replace it
+        existing_tokens = self.tokenizer.additional_special_tokens.copy()
+        all_tokens = existing_tokens + special_tokens_to_add
+
         num_added = self.tokenizer.add_special_tokens({
-            'additional_special_tokens': self.config.special_tokens
+            'additional_special_tokens': all_tokens
         })
+
+        print(f"Added {num_added} special tokens to tokenizer vocabulary")
+        print(f"Total additional_special_tokens: {len(self.tokenizer.additional_special_tokens)}")
 
         # Set padding side
         self.tokenizer.padding_side = "left"
 
-        # Store special token IDs
-        for token in self.config.special_tokens:
+        # Store special token IDs (only for tokens we added)
+        for token in special_tokens_to_add:
             token_id = self.tokenizer.convert_tokens_to_ids(token)
             self.special_token_ids[token] = token_id
+            print(f"  {token}: {token_id}")
 
         print("Tokenizer loaded successfully")
     
-    def create_language_label(self, prompt: str, target_points: np.ndarray, num_patches: int = 2) -> LanguageLabel:
+    def load_conversation_template(self):
+        """Load conversation template module from pretrained model directory."""
+        if self.conv_module is not None:
+            return  # Already loaded
+
+        cache_dir = f"pretrained/{self.cfg.model.vision_model.variant.split('/')[1]}"
+        model_path = f"{cache_dir}/conversation.py"
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Conversation template not found: {model_path}")
+
+        # Import conversation module
+        spec = importlib.util.spec_from_file_location('get_conv_template', model_path)
+        self.conv_module = importlib.util.module_from_spec(spec)
+        sys.modules['get_conv_template'] = self.conv_module
+        spec.loader.exec_module(self.conv_module)
+
+        print(f"Loaded conversation template from {model_path}")
+
+    def calculate_num_image_tokens(self):
+        """Calculate number of image tokens per patch."""
+        if self.num_image_token is not None:
+            return  # Already calculated
+
+        if self.tmp_config is None:
+            self.tmp_config = AutoConfig.from_pretrained(
+                self.cfg.model.vision_model.variant,
+                trust_remote_code=True
+            )
+
+        image_size = self.tmp_config.force_image_size or self.tmp_config.vision_config.image_size
+        patch_size = self.tmp_config.vision_config.patch_size
+        downsample_ratio = self.tmp_config.downsample_ratio
+
+        self.num_image_token = int((image_size // patch_size) ** 2 * (downsample_ratio ** 2))
+
+        print(f"Image tokens per patch: {self.num_image_token} (image_size={image_size}, patch_size={patch_size}, downsample_ratio={downsample_ratio})")
+
+    def build_prompt(
+        self,
+        speed: float,
+        target_points: Optional[np.ndarray] = None,
+        hlc: Optional[int] = None
+    ) -> Tuple[str, Dict[str, np.ndarray]]:
         """
-        Create LanguageLabel from prompt and target points.
+        Build prompt string based on task type and navigational conditioning.
 
         Args:
-            prompt: Prompt string with placeholders
-            target_points: Target points array [[x1, y1], [x2, y2]]
+            speed: Current vehicle speed in m/s
+            target_points: Target points array [[x1, y1], [x2, y2]] (optional)
+            hlc: High-level command (1-6) (optional)
+
+        Returns:
+            Tuple of (prompt_string, placeholder_values_dict)
+        """
+        # Build navigational conditioning (matches agent_simlingo.py lines 472-530)
+        nav_conditioning = ""
+        placeholder_values = {}
+
+        if self.nav_mode == 'target_point' and target_points is not None:
+            # Use target point tokens (matches agent_simlingo.py lines 472-486)
+            nav_conditioning = "Target waypoint: <TARGET_POINT><TARGET_POINT>."
+            placeholder_values['<TARGET_POINT>'] = target_points
+
+        elif self.nav_mode == 'command' and hlc is not None:
+            # Use HLC text only, NO placeholder values (matches agent_simlingo.py lines 488-529)
+            command_map = {
+                1: 'go left at the next intersection',
+                2: 'go right at the next intersection',
+                3: 'go straight at the next intersection',
+                4: 'follow the road',
+                5: 'do a lane change to the left',
+                6: 'do a lane change to the right',
+            }
+            command = command_map.get(hlc, 'follow the road')
+
+            # Calculate distance to command
+            dist = int(np.linalg.norm(target_points[0])) if target_points is not None else 10
+
+            # Format command string
+            if hlc == 4:  # "follow the road" doesn't need distance
+                nav_conditioning = f"Command: {command}."
+            else:
+                nav_conditioning = f"Command: {command} in {dist} meter."
+
+        # Build task-specific prompt
+        if self.task_type == 'commentary':
+            # Commentary + Driving mode
+            prompt = f"Current speed: {speed:.1f} m/s. {nav_conditioning} What should the ego do next?"
+
+        elif self.task_type == 'qa':
+            # Q&A mode
+            question = self.user_question if self.user_question else "What is ahead?"
+            prompt = f"Current speed: {speed:.1f} m/s. {nav_conditioning} Q: {question}"
+
+        elif self.task_type == 'dreamer':
+            # Dreamer mode (instruction following)
+            instruction = self.user_instruction if self.user_instruction else "Follow the road"
+            base_prompt = f"Current speed: {speed:.1f} m/s. {nav_conditioning} {instruction}"
+
+            # Add safety flag as TEXT (not special token!)
+            if self.safety_enabled:
+                prompt = f"<SAFETY> {base_prompt}"
+            else:
+                prompt = f"<INSTRUCTION_FOLLOWING> {base_prompt}"
+        else:
+            raise ValueError(f"Unknown task type: {self.task_type}")
+
+        return prompt, placeholder_values
+
+    def create_language_label(
+        self,
+        speed: float,
+        target_points: Optional[np.ndarray] = None,
+        hlc: Optional[int] = None,
+        num_patches: int = 2
+    ) -> LanguageLabel:
+        """
+        Create LanguageLabel using conversation template (matches agent_simlingo.py).
+
+        Args:
+            speed: Current vehicle speed in m/s
+            target_points: Target points array [[x1, y1], [x2, y2]] (optional)
+            hlc: High-level command (1-6) (optional)
             num_patches: Number of image patches (default: 2 for use_thumbnail=True)
 
         Returns:
             LanguageLabel instance
         """
-        # Calculate number of image tokens
-        # For InternVL2-1B: image_size=448, patch_size=14, downsample_ratio=0.5
-        image_size = 448
-        patch_size = 14
-        downsample_ratio = 0.5
-        num_image_token = int((image_size // patch_size) ** 2 * (downsample_ratio ** 2))
+        # Ensure conversation template is loaded
+        self.load_conversation_template()
 
-        # Create image token string
+        # Ensure num_image_token is calculated
+        self.calculate_num_image_tokens()
+
+        # Build prompt and placeholder values
+        prompt, placeholder_values = self.build_prompt(speed, target_points, hlc)
+
+        # Debug: Print prompt (can be disabled for production)
+        if False:  # Set to True to enable debug output
+            print(f"\n[PROMPT] {prompt}")
+
+        # Create conversation structure (matches agent_simlingo.py lines 564-578)
+        conversation_all = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image"},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Waypoints:"},  # For structure only
+                ],
+            },
+        ]
+
+        # Flatten content (matches agent_simlingo.py lines 582-584)
+        for i in range(len(conversation_all)):
+            conversation_all[i]['content'] = conversation_all[i]['content'][0]['text']
+
+        # Get conversation template
+        template = self.conv_module.get_conv_template('internlm2-chat')
+
+        # Add messages to template (matches agent_simlingo.py lines 616-626)
+        question = conversation_all[0]['content']
+        if '<image>' not in question:
+            question = '<image>\n' + question
+
+        for conv_part in conversation_all:
+            if conv_part['role'] == 'assistant':
+                # CRITICAL: Set message to None for inference (line 619)
+                template.append_message(template.roles[1], None)
+            elif conv_part['role'] == 'user':
+                if '<image>' not in conv_part['content']:
+                    conv_part['content'] = '<image>\n' + conv_part['content']
+                template.append_message(template.roles[0], conv_part['content'])
+
+        # Get formatted prompt
+        query = template.get_prompt()
+
+        # Remove system prompt to save tokens (matches agent_simlingo.py lines 629-631)
+        system_prompt = template.system_template.replace('{system_message}', template.system_message) + template.sep
+        query = query.replace(system_prompt, '')
+
+        # Replace <image> with image tokens (matches agent_simlingo.py lines 633-639)
         IMG_START_TOKEN = '<img>'
         IMG_END_TOKEN = '</img>'
         IMG_CONTEXT_TOKEN = '<IMG_CONTEXT>'
-        image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * num_image_token * num_patches + IMG_END_TOKEN
 
-        # Add image tokens to prompt (prepend with newline)
-        prompt_with_image = f"<image>\n{prompt}"
-        # Replace <image> with actual image tokens
-        prompt_with_image = prompt_with_image.replace('<image>', image_tokens, 1)
+        image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
+        query = query.replace('<image>', image_tokens, 1)
 
-        # Create placeholder values dictionary
-        # We need to provide values for ALL special tokens that appear in the prompt,
-        # even if they don't actually need placeholder values (like image tokens).
-        # This is because the Simlingo code will try to look up all special tokens
-        # in the placeholder_values dictionary.
-        #
-        # For image tokens and special mode tokens, we provide empty arrays so the
-        # lookup succeeds but no waypoint embeddings are created (since the array is empty).
-        placeholder_values = {
-            '<TARGET_POINT>': target_points,
-            # Image tokens - provide empty arrays to avoid KeyError
-            # These won't actually be used because they're replaced by vision embeddings
-            '<img>': np.array([]),
-            '</img>': np.array([]),
-            '<IMG_CONTEXT>': np.array([]),
-            # Special mode tokens - provide empty arrays to avoid KeyError
-            # These are just text tokens, not placeholders for embeddings
-            '<INSTRUCTION_FOLLOWING>': np.array([]),
-            '<SAFETY>': np.array([])
-        }
-
-        # Convert to token IDs
+        # Convert placeholder values to token IDs (matches agent_simlingo.py lines 470-484)
         placeholder_batch_list = []
-        tmp = {}
-        for key, value in placeholder_values.items():
-            # First try to get from our special_token_ids (for tokens we added)
-            token_id = self.special_token_ids.get(key)
-            # If not found, try to get from tokenizer (for pre-existing tokens like image tokens)
-            if token_id is None:
+
+        # CRITICAL: Only add placeholder values when using target_point mode
+        # When using command mode, placeholder_values is empty, and we pass an empty list
+        # The model's replace_placeholder_tokens (internvl2_model.py line 60) checks:
+        #   if special_ids.size(0) > 0 and len(placeholder_values) > 0:
+        # So when placeholder_batch_list is empty, it skips placeholder replacement entirely
+
+        if placeholder_values:
+            # Only create tmp dict when we have placeholder values (target_point mode)
+            tmp = {}
+            for key, value in placeholder_values.items():
                 token_id = self.tokenizer.convert_tokens_to_ids(key)
-                # Skip if it's the unknown token (token doesn't exist)
-                if token_id == self.tokenizer.unk_token_id:
-                    continue
-            tmp[token_id] = value
+                tmp[token_id] = value
 
-        placeholder_batch_list.append(tmp)
+            # Add empty arrays for other special tokens that might appear in the prompt
+            # but don't have placeholder values (like <IMG_CONTEXT>, <|im_start|>, etc.)
+            for token in self.tokenizer.additional_special_tokens:
+                token_id = self.tokenizer.convert_tokens_to_ids(token)
+                if token_id not in tmp:
+                    tmp[token_id] = np.array([])
 
-        # Tokenize prompt
-        prompt_batch_list = [prompt_with_image]
+            placeholder_batch_list.append(tmp)
+        # else: placeholder_batch_list remains empty (command mode)
+
+        # Tokenize (matches agent_simlingo.py line 642)
+        prompt_batch_list = [query]
         tokenized = self.tokenizer(
             prompt_batch_list,
             padding=True,
             return_tensors="pt",
-            add_special_tokens=False
+            return_offsets_mapping=True,
+            add_special_tokens=False  # CRITICAL: Template already has special tokens!
         )
-        
-        # Create LanguageLabel
+
+        # Create LanguageLabel (matches agent_simlingo.py lines 648-655)
         language_label = LanguageLabel(
             phrase_ids=tokenized['input_ids'].to(self.device),
-            phrase_valid=tokenized['attention_mask'].bool().to(self.device),
-            phrase_mask=tokenized['attention_mask'].bool().to(self.device),
+            phrase_valid=(tokenized['input_ids'] != self.tokenizer.pad_token_id).to(self.device),
+            phrase_mask=(tokenized['input_ids'] != self.tokenizer.pad_token_id).to(self.device),
             placeholder_values=placeholder_batch_list,
             language_string=prompt_batch_list,
             loss_masking=None
@@ -307,20 +506,22 @@ class SimlingoModelWrapper:
         camera_extrinsics: torch.Tensor,
         vehicle_speed: float,
         target_point: np.ndarray,
-        next_target_point: np.ndarray
+        next_target_point: np.ndarray,
+        hlc: Optional[int] = None
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[str]]:
         """
         Run Simlingo model inference.
-        
+
         Args:
-            camera_images: Processed camera images [1, 1, 1, 3, H, W]
-            image_sizes: Image sizes [1, 2]
+            camera_images: Processed camera images [1, 1, num_patches, 3, H, W]
+            image_sizes: Image sizes [1, 2] (can be None for InternVL2)
             camera_intrinsics: Camera intrinsics [1, 3, 3]
             camera_extrinsics: Camera extrinsics [1, 4, 4]
             vehicle_speed: Current speed in m/s
             target_point: Target point in ego frame [x, y]
             next_target_point: Next target point in ego frame [x, y]
-            
+            hlc: High-level command (1-6) (optional, only used if nav_mode='command')
+
         Returns:
             Tuple of (speed_waypoints, route_waypoints, language)
             - speed_waypoints: [1, F, 2] tensor or None
@@ -329,48 +530,32 @@ class SimlingoModelWrapper:
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
-        
+
         if self.tokenizer is None:
             raise RuntimeError("Tokenizer not loaded. Call load_tokenizer() first.")
-        
-        # Create prompt (with optional custom HLC)
-        if self.custom_hlc:
-            # Use Dreamer dataset format for instruction following
-            # Format: "<INSTRUCTION_FOLLOWING> Current speed: X m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. {instruction}"
-            # This matches the Dreamer training data (50% of Dreamer samples)
-            base_prompt = f"Current speed: {vehicle_speed:.2f} m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. {self.custom_hlc}"
-            prompt = f"<INSTRUCTION_FOLLOWING> {base_prompt}"
-        else:
-            # Use default prompt (matches standard driving data)
-            # Format: "Current speed: X m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. What should the ego do next?"
-            prompt = self.config.get_prompt_template(vehicle_speed)
 
         # Create target points array
-        # EXPERIMENT: Set to zeros to test model without route information
-        USE_REAL_TARGET_POINTS = True  # Set to True to use real target points
-        if USE_REAL_TARGET_POINTS:
-            target_points = np.array([target_point, next_target_point], dtype=np.float32)
-        else:
-            # Pass dummy zeros - model still expects <TARGET_POINT> tokens but gets no route info
-            target_points = np.array([[0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
-            print("DEBUG: Using ZERO target points (no route information)")
+        target_points = np.array([target_point, next_target_point], dtype=np.float32)
 
         # Get number of patches from camera_images shape
         # camera_images shape: [1, 1, num_patches, 3, 448, 448]
         num_patches = camera_images.shape[2]
 
-        # Create language label
-        language_label = self.create_language_label(prompt, target_points, num_patches=num_patches)
-        
+        # Create language label using conversation template
+        language_label = self.create_language_label(
+            speed=vehicle_speed,
+            target_points=target_points,
+            hlc=hlc,
+            num_patches=num_patches
+        )
+
         # Create vehicle speed tensor
         speed_tensor = torch.tensor([[vehicle_speed]], dtype=torch.float32).to(self.device)
-        
+
         # Create target point tensor
         target_point_tensor = torch.from_numpy(target_point).unsqueeze(0).float().to(self.device)
-        
-        # Create DrivingInput
-        # Note: camera_images must be bfloat16 to match model dtype
-        # image_sizes can be None for InternVL2 model
+
+        # Create DrivingInput (matches agent_simlingo.py lines 657-664)
         driving_input = DrivingInput(
             camera_images=camera_images.to(self.device).bfloat16(),
             image_sizes=image_sizes,  # None for InternVL2
@@ -381,7 +566,7 @@ class SimlingoModelWrapper:
             prompt=language_label,
             prompt_inference=language_label
         )
-        
+
         # Run inference
         with torch.no_grad():
             try:
@@ -398,9 +583,9 @@ class SimlingoModelWrapper:
                 language_str = language[0] if language is not None and len(language) > 0 else None
 
                 return speed_wps, route_wps, language_str
-                
+
             except Exception as e:
-                print(f"ERROR: Model inference failed: {e}")
+                print(f"\n[ERROR] Model inference failed: {e}")
                 import traceback
                 traceback.print_exc()
                 return None, None, None

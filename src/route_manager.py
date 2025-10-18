@@ -28,16 +28,24 @@ class RouteManager:
         # Target point lookahead distance
         self.lookahead_distance = config.target_point_lookahead
         
-    def get_target_point(self, current_position: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def get_target_point(self, current_position: np.ndarray) -> Tuple[np.ndarray, np.ndarray, int]:
         """
         Get target point based on current position.
-        
+
         Args:
             current_position: Current vehicle position [x, y, z]
-            
+
         Returns:
-            Tuple of (target_point, next_target_point) in world coordinates
-            Both are [x, y, z] arrays
+            Tuple of (target_point, next_target_point, hlc) where:
+            - target_point: [x, y, z] in world coordinates
+            - next_target_point: [x, y, z] in world coordinates
+            - hlc: High-level command (1-6)
+                1: Turn left at intersection
+                2: Turn right at intersection
+                3: Go straight at intersection
+                4: Follow the road (default)
+                5: Lane change left
+                6: Lane change right
         """
         # Find nearest waypoint AHEAD of current position to update progress
         search_start = self.current_waypoint_index
@@ -83,28 +91,36 @@ class RouteManager:
         # Get next target point (one waypoint ahead)
         next_target_idx = min(target_idx + 1, len(self.route_waypoints) - 1)
         next_target_point = self.route_waypoints[next_target_idx]
-        return target_point, next_target_point
+
+        # Compute HLC (High-Level Command)
+        # For now, default to HLC=4 ("follow the road")
+        # TODO: Implement proper HLC computation based on route geometry
+        hlc = 4
+
+        return target_point, next_target_point, hlc
     
-    def get_target_point_ego(self, current_position: np.ndarray, current_heading: float) -> Tuple[np.ndarray, np.ndarray]:
+    def get_target_point_ego(self, current_position: np.ndarray, current_heading: float) -> Tuple[np.ndarray, np.ndarray, int]:
         """
         Get target point in ego vehicle frame.
-        
+
         Args:
             current_position: Current vehicle position [x, y, z]
             current_heading: Current vehicle heading in radians
-            
+
         Returns:
-            Tuple of (target_point_ego, next_target_point_ego)
-            Both are [x, y] arrays in ego frame
+            Tuple of (target_point_ego, next_target_point_ego, hlc) where:
+            - target_point_ego: [x, y] in ego frame
+            - next_target_point_ego: [x, y] in ego frame
+            - hlc: High-level command (1-6)
         """
         # Get target points in world frame
-        target_world, next_target_world = self.get_target_point(current_position)
+        target_world, next_target_world, hlc = self.get_target_point(current_position)
 
         # Convert to ego frame
         target_ego = self._world_to_ego(target_world[:2], current_position[:2], current_heading)
         next_target_ego = self._world_to_ego(next_target_world[:2], current_position[:2], current_heading)
 
-        return target_ego, next_target_ego
+        return target_ego, next_target_ego, hlc
     
     def _world_to_ego(self, world_point: np.ndarray, vehicle_pos: np.ndarray, vehicle_heading: float) -> np.ndarray:
         """

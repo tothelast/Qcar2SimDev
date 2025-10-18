@@ -227,6 +227,8 @@ class SimlingoQCar2Config:
         self.planned_route_tracer_width = 0.05  # Line width in meters
         
         # Special Tokens for Language Model
+        # IMPORTANT: Only tokens that should be added to tokenizer vocabulary
+        # <SAFETY> and <INSTRUCTION_FOLLOWING> are NOT special tokens - they are regular text!
         self.special_tokens = [
             '<WAYPOINTS>',
             '<WAYPOINTS_DIFF>',
@@ -236,8 +238,6 @@ class SimlingoQCar2Config:
             '<ROUTE>',
             '<ROUTE_DIFF>',
             '<TARGET_POINT>',
-            '<INSTRUCTION_FOLLOWING>',
-            '<SAFETY>',
         ]
         
     def get_camera_intrinsics(self, width=None, height=None, fov=None):
