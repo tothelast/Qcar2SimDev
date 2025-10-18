@@ -582,6 +582,14 @@ class SimlingoModelWrapper:
                 # Extract language string
                 language_str = language[0] if language is not None and len(language) > 0 else None
 
+                # Clean up language output: remove trailing "Waypoints:" separator
+                # The model was trained to output "Waypoints:" before waypoint tokens,
+                # but since we skip special tokens during decoding, we're left with just the separator
+                if language_str:
+                    language_str = language_str.rstrip()
+                    if language_str.endswith("Waypoints:"):
+                        language_str = language_str[:-len("Waypoints:")].rstrip()
+
                 return speed_wps, route_wps, language_str
 
             except Exception as e:
