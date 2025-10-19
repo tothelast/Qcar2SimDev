@@ -23,8 +23,10 @@ import sys
 import os
 import numpy as np
 
-# Add python directory to path for HAL library
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'python'))
+# Add parent directory and python directory to path
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, parent_dir)
+sys.path.insert(0, os.path.join(parent_dir, 'python'))
 
 from hal.products.mats import SDCSRoadMap
 

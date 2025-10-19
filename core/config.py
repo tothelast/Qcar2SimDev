@@ -26,12 +26,14 @@ class SimlingoQCar2Config:
         self.qcar2_camera_height = 410
         
         # Camera field of view
-        self.camera_fov = 160  
-        
-        # Camera position in CARLA coordinates (x, y, z)
+        self.camera_fov = 160
+
+        # Camera position for QCar2 front camera (x, y, z)
         # x: forward, y: right, z: up
-        self.camera_position = np.array([-1.5, 0.0, 2.0], dtype=np.float32)
-        
+        # QCar2 front camera: [+1.83m forward, 0.0, +1.10m up] relative to car center
+        # Reference: docs/DATA_COLLECTION.md
+        self.camera_position = np.array([+1.83, 0.0, +1.10], dtype=np.float32)
+
         # Camera rotation in radians (roll, pitch, yaw)
         self.camera_rotation = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         

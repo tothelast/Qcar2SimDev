@@ -3,11 +3,16 @@ Control Conversion Module.
 Implements Simlingo PID controllers and converts outputs to QCar2 commands.
 """
 
+import sys
+import os
 import numpy as np
 import math
 from collections import deque
 from scipy.interpolate import PchipInterpolator
 from typing import Tuple
+
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 
 class LateralPIDController:

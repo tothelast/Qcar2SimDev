@@ -13,7 +13,8 @@ from matplotlib.patches import Circle, FancyArrowPatch, Wedge, FancyBboxPatch, R
 from matplotlib.lines import Line2D
 import argparse
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Visual design constants
 COLORS = {

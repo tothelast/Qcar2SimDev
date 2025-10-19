@@ -11,8 +11,10 @@ import importlib.util
 from typing import Tuple, Optional, Dict, List
 from pathlib import Path
 
-# Add simlingo directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'simlingo'))
+# Add parent directory and simlingo directory to path
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, parent_dir)
+sys.path.insert(0, os.path.join(parent_dir, 'simlingo'))
 
 from transformers import AutoTokenizer, AutoProcessor, AutoConfig
 from simlingo_training.utils.custom_types import DrivingInput, LanguageLabel

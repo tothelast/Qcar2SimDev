@@ -13,8 +13,8 @@ from matplotlib.patches import Circle, FancyArrowPatch
 from matplotlib.collections import LineCollection
 import argparse
 
-# Add src directory to path
-sys.path.insert(0, os.path.dirname(__file__))
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # ============================================================================
 # Configuration

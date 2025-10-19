@@ -15,7 +15,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pyt
 from qvl.qlabs import QuanserInteractiveLabs
 from qvl.qcar2 import QLabsQCar2
 from qvl.spline_line import QLabsSplineLine
-from commentary_window import CommentaryWindow
+
+# Optional import for inference use case
+try:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'inference'))
+    from commentary_window import CommentaryWindow
+except ImportError:
+    CommentaryWindow = None
 
 
 class QCar2Interface:
@@ -364,6 +370,11 @@ class QCar2Interface:
 
     def _initialize_commentary_widget(self, model_wrapper=None):
         """Initialize commentary display window."""
+        if CommentaryWindow is None:
+            print("Warning: CommentaryWindow not available (inference package not imported)")
+            self.commentary_widget = None
+            return
+
         print("Initializing commentary window...")
         self.commentary_widget = CommentaryWindow(model_wrapper=model_wrapper)
         self.commentary_widget.start()

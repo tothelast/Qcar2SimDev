@@ -1,6 +1,6 @@
 """
 Main entry point for Simlingo-QCar2 integration.
-Run with: python src/main.py
+Run with: python inference/main.py
 """
 
 import sys
@@ -11,12 +11,12 @@ import argparse
 import json
 from datetime import datetime
 
-# Add src directory to path
-sys.path.insert(0, os.path.dirname(__file__))
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from config import SimlingoQCar2Config
-from qcar2_interface import QCar2Interface
-from camera_processor import CameraProcessor
+from core.config import SimlingoQCar2Config
+from core.qcar2_interface import QCar2Interface
+from core.camera_processor import CameraProcessor
 from state_estimator import StateEstimator
 from route_manager import RouteManager
 from simlingo_model import SimlingoModelWrapper

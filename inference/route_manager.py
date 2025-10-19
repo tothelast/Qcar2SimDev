@@ -3,8 +3,13 @@ Route Management Module.
 Manages waypoints and converts global target points to ego frame.
 """
 
+import sys
+import os
 import numpy as np
 from typing import List, Tuple, Optional
+
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 
 class RouteManager:

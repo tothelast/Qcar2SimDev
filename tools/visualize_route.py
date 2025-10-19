@@ -9,10 +9,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Add src directory to path
-sys.path.insert(0, os.path.dirname(__file__))
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from config import SimlingoQCar2Config
+from core.config import SimlingoQCar2Config
 
 
 def visualize_route():

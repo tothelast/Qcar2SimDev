@@ -3,10 +3,15 @@ Vehicle State Estimation Module.
 Tracks vehicle position, velocity, and heading from QCar2 state feedback.
 """
 
+import sys
+import os
 import numpy as np
 import time
 from typing import Tuple, Optional
 from collections import deque
+
+# Add parent directory to path for core imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 
 class StateEstimator:
