@@ -201,25 +201,27 @@ class ControlConverter:
         self.speed_controller = LongitudinalLinearRegressionController(config)
         self.turn_controller = LateralPIDController(config)
 
-        # State for kinematic bicycle model
-        self.current_speed = 0.0
+        # QCar2-specific physical limits
+        # These are hardcoded here since they're hardware-specific constants
+        self.qcar2_max_speed = 3.0  # m/s (QCar2 physical maximum speed)
+        self.qcar2_max_acceleration = 3.0  # m/s² (for smooth velocity transitions)
         
     def control_pid(
         self,
         route_waypoints: np.ndarray,
         velocity: float,
         speed_waypoints: np.ndarray
-    ) -> Tuple[float, float, bool]:
+    ) -> Tuple[float, float, bool, float]:
         """
         Compute control from waypoints using PID (exact Simlingo implementation).
-        
+
         Args:
             route_waypoints: Route waypoints [F, 2]
             velocity: Current velocity in m/s
             speed_waypoints: Speed waypoints [F, 2]
-            
+
         Returns:
-            Tuple of (steer, throttle, brake)
+            Tuple of (steer, throttle, brake, desired_speed)
         """
         # Calculate desired speed from speed waypoints
         # NOTE: The model outputs 10 speed waypoints, but empirically the original
@@ -239,18 +241,36 @@ class ControlConverter:
         one_second = int(self.config.carla_fps // (self.config.wp_dilation * model_data_save_freq))
         half_second = one_second // 2
 
-        # Ensure we have enough waypoints
-        if len(speed_waypoints) < one_second:
-            if len(speed_waypoints) >= 2:
-                desired_speed = np.linalg.norm(
-                    speed_waypoints[-1] - speed_waypoints[0]
-                ) * 2.0 / len(speed_waypoints)
-            else:
-                desired_speed = 0.0
-        else:
+        # IMPORTANT: Speed calculation method (EXACT SimLingo implementation)
+        # =====================================================================
+        # We use EUCLIDEAN DISTANCE to match the original SimLingo training.
+        #
+        # The model was trained with this calculation, so changing it would
+        # invalidate the model's learned speed-waypoint relationships.
+        #
+        # For teleop fine-tuning: Use the SAME calculation during training and deployment.
+        # This ensures consistency and allows transfer learning from pre-trained weights.
+        #
+        # Note: Waypoints are cumsum-decoded positions (see adaptors.py line 175)
+        # representing absolute future positions in ego frame.
+
+        # Calculate desired speed using Euclidean distance (original SimLingo)
+        idx1 = half_second - 2  # Index 0
+        idx2 = one_second - 2   # Index 3
+
+        if len(speed_waypoints) > idx2:
+            # Standard case: use waypoints[0] to waypoints[3]
             desired_speed = np.linalg.norm(
-                speed_waypoints[half_second - 2] - speed_waypoints[one_second - 2]
+                speed_waypoints[idx2] - speed_waypoints[idx1]
             ) * 2.0
+        elif len(speed_waypoints) >= 2:
+            # Fallback: use available waypoints
+            desired_speed = np.linalg.norm(
+                speed_waypoints[-1] - speed_waypoints[0]
+            ) * 2.0 / len(speed_waypoints)
+        else:
+            # Not enough waypoints
+            desired_speed = 0.0
 
         # Get throttle and brake from linear regression controller
         throttle, brake = self.speed_controller.get_throttle_and_brake(
@@ -267,7 +287,7 @@ class ControlConverter:
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
 
-        return steer, throttle, brake
+        return steer, throttle, brake, desired_speed
     
     def interpolate_waypoints(self, waypoints: np.ndarray) -> np.ndarray:
         """
@@ -321,28 +341,61 @@ class ControlConverter:
         steer: float,
         throttle: float,
         brake: bool,
+        desired_speed: float,
         current_speed: float,
         dt: float
     ) -> Tuple[float, float]:
         """
-        Convert Simlingo control to QCar2 control.
-        
+        Convert Simlingo control to QCar2 control using direct velocity control.
+
+        This method uses QCar2's native velocity-based control interface instead of
+        simulating CARLA's acceleration-based dynamics with the bicycle model.
+
         Args:
             steer: Steering value [-1, 1]
-            throttle: Throttle value [0, 1]
+            throttle: Throttle value [0, 1] (kept for signature compatibility, not used)
             brake: Brake flag
+            desired_speed: Target speed from model's speed waypoints (m/s)
             current_speed: Current speed in m/s
             dt: Time step in seconds
-            
+
         Returns:
             Tuple of (forward_velocity, turn_angle)
             - forward_velocity: Target speed in m/s
             - turn_angle: Turn angle in radians
         """
-        # Update current speed using kinematic bicycle model
-        self.current_speed = self.bicycle_model_step(
-            current_speed, dt, steer, throttle, brake
+        # Compute target velocity using direct velocity control
+        # (instead of CARLA's bicycle model with throttle/brake → acceleration → speed)
+        if brake:
+            # Brake: target zero velocity
+            target_speed = 0.0
+        else:
+            # Use desired speed from model's speed waypoints directly
+            # NOTE: We don't scale by throttle because QCar2 uses direct velocity control,
+            # not acceleration-based control like CARLA. The throttle value was computed
+            # for CARLA's acceleration dynamics and is not needed for velocity commands.
+            # The smoothing with qcar2_max_acceleration already handles gradual transitions.
+            target_speed = desired_speed
+
+            # IMPORTANT: Clip to QCar2's physical maximum speed
+            # The model may predict speeds beyond QCar2's capabilities (e.g., 7-10 m/s)
+            # since it was trained on full-scale CARLA vehicles
+            target_speed = min(target_speed, self.qcar2_max_speed)
+
+        # Apply smooth velocity transitions with QCar2-appropriate acceleration limits
+        # This prevents jerky motion and respects QCar2's physical capabilities
+        speed_diff = target_speed - current_speed
+        max_speed_change = self.qcar2_max_acceleration * dt
+
+        # Clip speed change to acceleration limits
+        forward_velocity = current_speed + np.clip(
+            speed_diff,
+            -max_speed_change,  # Max deceleration
+            max_speed_change    # Max acceleration
         )
+
+        # Ensure non-negative velocity and respect maximum speed
+        forward_velocity = np.clip(forward_velocity, 0.0, self.qcar2_max_speed)
 
         # Convert steer to turn angle
         # NOTE: QCar2 convention is opposite to CARLA/Simlingo:
@@ -350,9 +403,6 @@ class ControlConverter:
         # - QCar2: positive turn_angle = right turn
         # So we negate the steering value
         turn_angle = -steer * self.config.steering_gain
-
-        # Forward velocity is the predicted speed
-        forward_velocity = self.current_speed
 
         return forward_velocity, turn_angle
     
@@ -366,14 +416,21 @@ class ControlConverter:
     ) -> float:
         """
         Kinematic bicycle model for speed prediction (exact Simlingo implementation).
-        
+
+        NOTE: This method is NO LONGER USED in the current implementation.
+        We now use direct velocity control (convert_to_qcar2_control) instead of
+        simulating CARLA's acceleration-based dynamics with the bicycle model.
+
+        This method is kept for reference and potential future use (e.g., if deploying
+        to physical QCar hardware that requires PWM-based control).
+
         Args:
             speed: Current speed in m/s
             dt: Time step in seconds
-            steer: Steering value [-1, 1]
+            steer: Steering value [-1, 1] (unused but kept for signature compatibility)
             throttle: Throttle value [0, 1]
             brake: Brake flag
-            
+
         Returns:
             Next speed in m/s
         """
@@ -382,16 +439,15 @@ class ControlConverter:
             accel = self.config.brake_acceleration
         else:
             accel = self.config.throttle_acceleration * throttle
-        
+
         # Update speed
         next_speed = speed + accel * dt
         next_speed = max(next_speed, 0.0)  # ReLU
-        
+
         return next_speed
-    
+
     def reset(self):
         """Reset controller state."""
         self.speed_controller.reset()
         self.turn_controller.reset()
-        self.current_speed = 0.0
 

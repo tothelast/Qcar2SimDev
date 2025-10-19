@@ -157,10 +157,10 @@ class SimlingoQCar2Controller:
         self.qcar_interface.update_waypoints(route_waypoints, speed_waypoints)
 
         # Compute control using PID
-        steer, throttle, brake = self.control_converter.control_pid(
+        steer, throttle, brake, desired_speed = self.control_converter.control_pid(
             route_waypoints, velocity, speed_waypoints
         )
-        
+
         # Stuck detection
         if velocity < 0.1:
             self.stuck_detector += 1
@@ -180,17 +180,16 @@ class SimlingoQCar2Controller:
             throttle = max(self.config.creep_throttle, throttle)
             brake = False
             self.force_move -= 1
-        
-        # Convert to QCar2 control
+
+        # Convert to QCar2 control using direct velocity control
         forward_velocity, turn_angle = self.control_converter.convert_to_qcar2_control(
-            steer, throttle, brake, velocity, self.config.dt
+            steer, throttle, brake, desired_speed, velocity, self.config.dt
         )
         
         # Send control to QCar2
         success, location, rotation = self.qcar_interface.set_control(
             forward_velocity, turn_angle
         )
-
 
         # Log trajectory data
         target_world, _, _ = self.route_manager.get_target_point(current_position)
