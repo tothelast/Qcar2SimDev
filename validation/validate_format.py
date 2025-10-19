@@ -70,7 +70,7 @@ class DataFormatValidator:
         # Expected values
         width = 1024
         height = 512
-        fov = 160.0  # degrees
+        fov = 160.0  # degrees (QCar2 CSI front camera specification)
         
         # Calculate expected focal length
         fov_rad = np.radians(fov)
@@ -430,15 +430,16 @@ class DataFormatValidator:
         )
         
         # Create mock DrivingLabel
-        # Waypoints [B, F, 2] - 11 waypoints
-        waypoints = torch.randn(1, 11, 2, dtype=torch.float32)
-        
+        # Waypoints [B, F, 2] - 10 waypoints (NOT 11!)
+        # Model outputs 10 speed waypoints at 0.25s intervals = 2.5s prediction horizon
+        waypoints = torch.randn(1, 10, 2, dtype=torch.float32)
+
         # Path [B, F, 2] - 20 waypoints
         path = torch.randn(1, 20, 2, dtype=torch.float32)
-        
-        tests_passed.append(waypoints.shape == (1, 11, 2))
+
+        tests_passed.append(waypoints.shape == (1, 10, 2))
         self.print_test(
-            "waypoints shape [1, 11, 2]",
+            "waypoints shape [1, 10, 2]",
             tests_passed[-1],
             f"Got {waypoints.shape}"
         )

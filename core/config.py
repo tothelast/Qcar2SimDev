@@ -26,7 +26,8 @@ class SimlingoQCar2Config:
         self.qcar2_camera_height = 410
         
         # Camera field of view
-        self.camera_fov = 160
+        # QCar2 CSI front camera specification: 160° FOV
+        self.camera_fov = 160  # degrees
 
         # Camera position for QCar2 front camera (x, y, z)
         # x: forward, y: right, z: up
@@ -67,7 +68,9 @@ class SimlingoQCar2Config:
         
         # Waypoint Configuration
         self.wp_dilation = 1
-        self.data_save_freq = 1
+        # CRITICAL: data_save_freq = 5 achieves 4 Hz sampling (20 FPS / 5 = 4 Hz)
+        # This matches SimLingo CARLA training data (0.25s intervals between samples)
+        self.data_save_freq = 5  # Save every 5th frame (was 1)
         self.interpolation_spacing = 0.1  # meters between interpolated waypoints
         
         # Stuck Detection and Recovery

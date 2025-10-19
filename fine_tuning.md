@@ -15,31 +15,41 @@
 - [ ] Verify teleop can navigate predefined routes (`src/config.py` route_waypoints)
 
 ### 1.3 Data Format Validation
-- [ ] Create single sample validator against `docs/simlingo_training_data_format.md`
-- [ ] Verify camera intrinsics calculation (160° FOV, 1024x512) (`src/config.py`)
-- [ ] Verify camera extrinsics (QCar2 front camera: [+1.83m, 0.0, +1.10m])
+- [ ] Create single sample validator against `docs/DATA_COLLECTION.md`
+- [ ] Verify camera intrinsics calculation (160° FOV, 1024x512) (`core/config.py`)
+- [ ] Verify camera extrinsics (QCar2 CSI front camera: [+1.83m, 0.0, +1.10m])
 - [ ] Test ego-frame coordinate transformation (world → ego)
 
 ## Phase 2: Expert Data Collection
 
+**CRITICAL SPECIFICATIONS (validated against SimLingo model):**
+- **Sampling rate:** 4 Hz (save every 5th frame at 20 FPS = 0.25s intervals)
+- **Speed waypoints:** 10 points at 0.25s spacing = 2.5 second prediction horizon
+- **Path waypoints:** 20 points at 1m spacing (resampled from route)
+- **Required fields:** ego_matrix, speed, target_point, target_point_next, route, route_original, command, next_command
+
 ### 2.1 Single Route Collection
 - [ ] Collect 50 expert demonstrations on predefined route (Node 13→19→17→20→22)
-- [ ] Record: camera images, speed, position, heading, timestamp
-- [ ] Compute ground-truth waypoints (11 points, 0.2s spacing, ego-frame)
+- [ ] Record at **4 Hz** (every 0.25s): camera images, speed, position, heading, ego_matrix
+- [ ] Compute ground-truth waypoints (**10 points**, 0.25s spacing, ego-frame)
 - [ ] Compute route path (20 points, 1m spacing, ego-frame)
+- [ ] Include all required fields: target_point, target_point_next, command, next_command
 - [ ] Save in SimLingo format (DrivingInput + DrivingLabel)
 
 ### 2.2 Diverse Route Collection
 - [ ] Design 5 diverse routes covering: straight, curves, roundabout, intersections
 - [ ] Collect 30 demonstrations per route (150 total)
 - [ ] Ensure speed variation (1.5-3.0 m/s)
-- [ ] Include challenging scenarios: tight turns, pedestrian crossings
+- [ ] Include challenging scenarios: tight turns, lane changes
+- [ ] Verify QCar2 coordinate scaling (QLabs = 10× physical scale)
 
 ### 2.3 Data Quality Assurance
 - [ ] Visualize collected trajectories vs. route waypoints
 - [ ] Check for data corruption (missing frames, invalid coordinates)
-- [ ] Verify waypoint spacing consistency (0.2s temporal, 1m spatial)
+- [ ] Verify waypoint spacing consistency (**0.25s temporal**, 1m spatial)
+- [ ] Verify waypoint count: **10 speed waypoints**, 20 path waypoints
 - [ ] Remove low-quality demonstrations (collisions, off-road)
+- [ ] Validate all required fields present in measurements
 
 ## Phase 3: Dataset Preparation
 
