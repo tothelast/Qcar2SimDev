@@ -105,14 +105,34 @@ def get_custom_chat_template(conversations: List[Dict], tokenizer, encoder_varia
     IMG_CONTEXT_TOKEN='<IMG_CONTEXT>'
     IMG_TOKEN = '<image>'
 
-    cache_dir = f"{cache_root_dir}/{(encoder_variant.split('/')[1])}"
-    # get absolute path from workspace dir not wokring dir
-    cache_dir = to_absolute_path(cache_dir)
+    # cache_dir = f"{cache_root_dir}/{(encoder_variant.split('/')[1])}"
+    # # get absolute path from workspace dir not wokring dir
+    # cache_dir = to_absolute_path(cache_dir)
+    # model_path = f"{cache_dir}/conversation.py"
+    # if not os.path.exists(model_path):
+    #     from huggingface_hub import snapshot_download
+    #     snapshot_download(repo_id=encoder_variant, local_dir=cache_dir)
+
+    # Fixed from the original code by Gar
+    #-----
+        # Check if encoder_variant is a local path or HuggingFace repo
+    if os.path.exists(encoder_variant):
+        # Local path - use it directly
+        cache_dir = encoder_variant
+    else:
+        # HuggingFace repo - download to cache
+        cache_dir = f"{cache_root_dir}/{(encoder_variant.split('/')[1])}"
+        # get absolute path from workspace dir not wokring dir
+        cache_dir = to_absolute_path(cache_dir)
+        model_path = f"{cache_dir}/conversation.py"
+        if not os.path.exists(model_path):
+            from huggingface_hub import snapshot_download
+            snapshot_download(repo_id=encoder_variant, local_dir=cache_dir)
+    #-----
+    
+    # Set model_path after cache_dir is determined
     model_path = f"{cache_dir}/conversation.py"
-    if not os.path.exists(model_path):
-        from huggingface_hub import snapshot_download
-        snapshot_download(repo_id=encoder_variant, local_dir=cache_dir)
-        
+    
     #import from file from model_path
     spec = importlib.util.spec_from_file_location('get_conv_template', model_path)
     conv_module = importlib.util.module_from_spec(spec)

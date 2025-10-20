@@ -6,6 +6,43 @@ Fine-tuning adapts the Simlingo model (trained on CARLA) to work with QLabs simu
 
 ---
 
+## Prerequisites
+
+### Required Dependencies
+
+Install these packages before training:
+```bash
+pip install line_profiler  # Required by training profiler
+pip install carla==0.9.16  # Required by utility functions (legacy CARLA code)
+```
+
+**Note:** The `carla` package is needed even though you're training on QLabs data. It's imported by `transfuser_utils.py` for data structure definitions (e.g., `carla.Vector3D`), though these functions may not be actively used during QLabs training.
+
+### Git Repository Requirement
+
+The training code requires being in a git repository for logging purposes. If your workspace is not already a git repo:
+```bash
+cd simlingo
+git init
+git add .
+git commit -m "Initial commit"
+```
+
+### GPU Memory Requirements
+
+| GPU VRAM | Recommended batch_size | Notes |
+|----------|------------------------|-------|
+| 16GB (e.g., RTX 5070 Ti) | 1 | Use gradient accumulation (see config below) |
+| 24GB (e.g., RTX 3090/4090) | 2-4 | Can use larger batches |
+| 40GB+ (e.g., A100) | 4-8 | Full batch sizes |
+
+**For 16GB GPUs:** Add this environment variable:
+```bash
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+```
+
+---
+
 ## Critical: Model Architecture & Loading
 
 **What gets fine-tuned:**
@@ -51,10 +88,11 @@ data_path/
         │               │   ├── 0000.jpg
         │               │   ├── 0001.jpg
         │               │   └── ...
-        │               └── measurements/
-        │                   ├── 0000.json.gz
-        │                   ├── 0001.json.gz
-        │                   └── ...
+        │               ├── measurements/
+        │               │   ├── 0000.json.gz
+        │               │   ├── 0001.json.gz
+        │               │   └── ...
+        │               └── results.json.gz  # REQUIRED for route filtering
         └── routes_validation/        # Validation split
             └── {dataset_name}/
                 └── {route_id}/
@@ -124,7 +162,31 @@ Each `measurements/{seq:04}.json.gz` must contain:
 2. **Normalization:** ImageNet normalization applied (MEAN: [0.485, 0.456, 0.406], STD: [0.229, 0.224, 0.225])
 3. **Interpolation:** Bicubic interpolation for resizing
 
+**CRITICAL: Route Results File**
+
+Each route directory MUST contain a `results.json.gz` file for route filtering. This file is used to filter out crashed or incomplete routes.
+
+**Minimum required format:**
+```json
+{
+  "scores": {
+    "score_composed": 100.0,
+    "score_route": 100.0
+  },
+  "num_infractions": 0,
+  "infractions": {
+    "min_speed_infractions": [],
+    "outside_route_lanes": []
+  }
+}
+```
+
+**Location:** `{route_dir}/results.json.gz` (same level as `rgb/` and `measurements/`)
+
+**Note:** Routes with `score_composed < 100.0` may be filtered out unless they meet specific criteria. For QLabs data, use perfect scores (100.0) to ensure all routes are included.
+
 **Reference files:**
+- `simlingo/simlingo_training/dataloader/dataset_base.py` (lines 233-270) - Route filtering logic
 - `simlingo/simlingo_training/dataloader/dataset_base.py` (lines 444-481) - Image loading
 - `simlingo/simlingo_training/dataloader/dataset_base.py` (lines 359-390) - Measurement loading
 - `simlingo/simlingo_training/dataloader/dataset_base.py` (lines 484-540) - Prompt generation
@@ -216,11 +278,12 @@ model:
     variant: 'OpenGVLab/InternVL2-1B'
 
 data_module:
+  train_partitions: null                          # ← CRITICAL: Disables bucket filtering for QLabs
+  train_partitions_dreamer: null                  # ← CRITICAL: Disables dreamer bucket filtering
   base_dataset:
     data_path: /path/to/database/qcar2_simlingo  # ← CHANGE: Path to your QLabs data root
                                                   #   The loader will look for: {data_path}/data/simlingo/routes_*/
     bucket_path: null                             # ← CHANGE: Not used for QLabs
-    bucket_name: "all"                            # ← CRITICAL: Use "all" to load all data (no filtering)
     route_as: "target_point"                      # ← CRITICAL: Navigation conditioning mode
                                                   #   "target_point" → uses <TARGET_POINT> tokens (recommended for QLabs)
                                                   #   "command" → uses high-level commands (requires command fields)
@@ -234,7 +297,8 @@ data_module:
     skip_first_n_frames: 10                       # Skip first N frames of each route
     img_augmentation: false                       # ← CHANGE: Disable for QLabs (no augmented images)
     img_shift_augmentation: false                 # ← CHANGE: Disable for QLabs (no augmented images)
-  batch_size: 4                                   # ← CHANGE: Adjust based on GPU memory
+  batch_size: 1                                   # ← CHANGE: For 16GB GPU (use 2-4 for 24GB+)
+  accumulate_grad_batches: 4                      # ← CRITICAL: Simulates batch_size=4 (for small GPUs)
   num_workers: 4
   driving_dataset:
     _target_: simlingo_training.dataloader.dataset_driving.Data_Driving_QLabs  # ← CHANGE
@@ -249,10 +313,15 @@ name: qlabs_finetune
 
 **Key Configuration Notes:**
 
-1. **Bucket System:** Set `bucket_name: "all"` to disable bucket filtering (CRITICAL)
-2. **Data Path:** Points to root directory (e.g., `/path/to/database/qcar2_simlingo`)
+1. **Bucket System:** Set `train_partitions: null` to disable bucket filtering (CRITICAL)
+   - When `null`, the system automatically creates an "all" bucket containing all routes
+   - Do NOT use `bucket_name` in `base_dataset` (it's not a valid config parameter)
+2. **Gradient Accumulation:** Use `accumulate_grad_batches: 4` to simulate larger batch sizes
+   - With `batch_size: 1` and `accumulate_grad_batches: 4`, effective batch size = 4
+   - Gradients are accumulated over 4 steps before updating weights
+3. **Data Path:** Points to root directory (e.g., `/path/to/database/qcar2_simlingo`)
    - Loader will look for: `{data_path}/data/simlingo/routes_training/` and `routes_validation/`
-3. **Directory Structure:** MUST match glob pattern `data/simlingo/*/*/*/Town*`
+4. **Directory Structure:** MUST match glob pattern `data/simlingo/*/*/*/Town*`
    - Example: `data/simlingo/routes_training/qlabs/Rep0_0/TownQLabs/`
 4. **route_as:** Controls prompt format:
    - `"target_point"`: Prompt includes "Target waypoint: <TARGET_POINT><TARGET_POINT>." (recommended)
@@ -267,14 +336,34 @@ name: qlabs_finetune
 
 ## Step 4: Run Training
 
-**Command:**
+**For 16GB GPUs (e.g., RTX 5070 Ti):**
 ```bash
-cd simlingo/simlingo_training
+cd simlingo
+PYTHONPATH=/path/to/Qcar2SimDev/simlingo:$PYTHONPATH \
+WANDB_MODE=offline \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+python simlingo_training/train.py experiment=qlabs_finetune
+```
 
-python train.py \
-  --config-name=qlabs_finetune \
+**For 24GB+ GPUs:**
+```bash
+cd simlingo
+PYTHONPATH=/path/to/Qcar2SimDev/simlingo:$PYTHONPATH \
+WANDB_MODE=offline \
+python simlingo_training/train.py experiment=qlabs_finetune
+```
+
+**Environment Variables:**
+- `PYTHONPATH`: Ensures Python can find the simlingo modules
+- `WANDB_MODE=offline`: Disables online logging (optional)
+- `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`: Improves memory management for 16GB GPUs
+
+**Alternative (override config from command line):**
+```bash
+python simlingo_training/train.py \
+  experiment=qlabs_finetune \
   data_module.base_dataset.data_path=/path/to/qlabs/dataset \
-  checkpoint=../../models/simlingo/checkpoints/epoch=013.ckpt
+  checkpoint=/path/to/models/simlingo/checkpoints/epoch=013.ckpt
 ```
 
 **What happens:**
@@ -312,19 +401,31 @@ Inference code (`inference/simlingo_model.py`) automatically loads the new check
 
 ## Checklist
 
+**Prerequisites:**
+- [ ] Dependencies installed: `line_profiler`, `carla==0.9.16`
+- [ ] Git repository initialized in `simlingo/` directory
+- [ ] GPU memory requirements met (16GB minimum for batch_size=1)
+
+**Data Preparation:**
 - [ ] QLabs data in correct directory structure:
   - `{data_path}/data/simlingo/routes_training/{dataset}/{route_id}/Town*/rgb/`
   - `{data_path}/data/simlingo/routes_training/{dataset}/{route_id}/Town*/measurements/`
+  - `{data_path}/data/simlingo/routes_training/{dataset}/{route_id}/Town*/results.json.gz`
   - Directory MUST start with "Town" (e.g., "TownQLabs", "Town01")
 - [ ] NO `boxes/` folder needed (not used by Simlingo)
+- [ ] Each route has `results.json.gz` with scores (use 100.0 for perfect routes)
 - [ ] Measurement files have all required fields:
   - Always: ego_matrix, route_original, route, target_point, target_point_next, speed, augmentation_rotation, augmentation_translation
   - If route_as includes 'command': command, next_command
 - [ ] Images are JPEG, 1024×512, BGR format
+
+**Code Changes:**
 - [ ] `Data_Driving_QLabs` class created with proper conversation format
 - [ ] `qlabs_finetune.yaml` config created:
   - `data_path` points to root (e.g., `/path/to/database/qcar2_simlingo`)
-  - `bucket_name: "all"`
+  - `train_partitions: null` (NOT `bucket_name: "all"`)
+  - `accumulate_grad_batches: 4` (for 16GB GPUs)
+  - `batch_size: 1` (for 16GB GPUs) or `2-4` (for 24GB+ GPUs)
   - `route_as: "target_point"` (or your choice)
   - `use_commentary: false`, `use_qa: false`
   - `img_augmentation: false`, `img_shift_augmentation: false`
@@ -337,11 +438,17 @@ Inference code (`inference/simlingo_model.py`) automatically loads the new check
 
 ## Troubleshooting
 
-| Problem | Solution | File |
-|---------|----------|------|
-| Data loader error | Check data format matches CARLA | `dataset_driving.py` |
+| Problem | Solution | File/Command |
+|---------|----------|--------------|
+| `ModuleNotFoundError: No module named 'line_profiler'` | `pip install line_profiler` | Terminal |
+| `ModuleNotFoundError: No module named 'carla'` | `pip install carla==0.9.16` | Terminal |
+| `InvalidGitRepositoryError` | `cd simlingo && git init && git add . && git commit -m "Initial"` | Terminal |
+| `TypeError: OneCycleLR.__init__() got unexpected keyword 'verbose'` | Remove `verbose=False` from OneCycleLR in `driving.py` line 730 | `models/driving.py` |
+| `HFValidationError: Repo id must be in form 'repo_name'` | Use absolute local path instead of repo name in config | `qlabs_finetune.yaml` |
+| `ConfigKeyError: Key 'bucket_name' not in 'DatasetBaseConfig'` | Use `train_partitions: null` instead of `bucket_name: "all"` | `qlabs_finetune.yaml` |
+| CUDA out of memory | Set `batch_size: 1`, add `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | Config + Terminal |
+| Data loader error | Check data format matches CARLA structure | `dataset_driving.py` |
 | Config not found | Verify YAML path and syntax | `qlabs_finetune.yaml` |
-| Out of memory | Reduce batch_size in config | `qlabs_finetune.yaml` |
-| Loss not decreasing | Check learning rate, data quality | `train.py` |
+| Loss not decreasing | Check learning rate, data quality, increase epochs | `train.py` |
 | Inference fails | Verify checkpoint path in config.py | `core/config.py` |
 
