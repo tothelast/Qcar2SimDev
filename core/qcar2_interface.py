@@ -1,26 +1,16 @@
-"""
-QCar2 QLabs Interface Module.
-Handles connection to QLabs, QCar2 spawning, camera capture, and control commands.
-"""
+"""QCar2 QLabs interface for connection, spawning, camera, and control."""
 
-import sys
-import os
 import numpy as np
 import cv2
-import threading
 from typing import Tuple, Optional
-
-# Add python directory to path for QVL imports
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'python'))
 
 from qvl.qlabs import QuanserInteractiveLabs
 from qvl.qcar2 import QLabsQCar2
 from qvl.spline_line import QLabsSplineLine
 
-# Optional import for inference use case
+# Optional commentary window for inference
 try:
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'inference'))
-    from commentary_window import CommentaryWindow
+    from inference.commentary_window import CommentaryWindow
 except ImportError:
     CommentaryWindow = None
 
@@ -55,22 +45,13 @@ class QCar2Interface:
         self.planned_route_tracer = None  # Planned route (green)
         
     def connect(self) -> bool:
-        """
-        Connect to QLabs.
-
-        Returns:
-            True if connection successful, False otherwise
-        """
-
+        """Connect to QLabs and set timeout for scene actors."""
         self.qlabs = QuanserInteractiveLabs()
         print(f"Connecting to QLabs at {self.config.qlabs_host}...")
         self.qlabs.open(self.config.qlabs_host)
 
-        # Set a longer timeout for API calls (default is 5 seconds)
-        # When scene actors are present, QLabs needs more time to respond
-        # Increase timeout to 10 seconds to prevent camera image retrieval failures
+        # Increase timeout to 10s for scene actors (default 5s)
         self.qlabs.set_wait_for_container_timeout(10.0)
-        print("QLabs API timeout set to 10 seconds (prevents failures with scene actors)")
 
         print("Connected to QLabs successfully")
         self.connected = True
@@ -130,41 +111,22 @@ class QCar2Interface:
         return True
     
     def get_camera_image(self) -> Optional[np.ndarray]:
-        """
-        Capture image from QCar2 camera.
-
-        Returns:
-            RGB image as numpy array (H, W, 3) or None if failed
-        """
-
-        # Get image from CSI front camera
-        # Note: QCar2's get_image() already decodes the JPG and returns a numpy array
+        """Capture image from QCar2 camera, return RGB or None if failed."""
         success, image = self.qcar.get_image(camera=self.config.qcar2_camera)
 
-        # Check if get_image succeeded
-        if not success:
-            print(f"ERROR: get_image() returned success=False")
+        if not success or image is None:
+            print("ERROR: Failed to get camera image")
             return None
 
-        # Check if image is valid
-        if image is None:
-            print(f"ERROR: get_image() returned None image")
+        if not isinstance(image, np.ndarray) or image.size == 0:
+            print(f"ERROR: Invalid image - type: {type(image)}, shape: {getattr(image, 'shape', 'N/A')}")
             return None
 
-        if not isinstance(image, np.ndarray):
-            print(f"ERROR: get_image() returned non-array type: {type(image)}")
-            return None
-
-        if image.size == 0:
-            print(f"ERROR: get_image() returned empty array with shape {image.shape}")
-            return None
-
-        # QCar2 returns BGR image, convert to RGB
+        # Convert BGR to RGB
         try:
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         except cv2.error as e:
-            print(f"ERROR: Failed to convert image color space: {e}")
-            print(f"  Image shape: {image.shape}, dtype: {image.dtype}")
+            print(f"ERROR: Color conversion failed: {e}")
             return None
 
         return image

@@ -1,25 +1,9 @@
-#!/usr/bin/env python3
-"""
-Scene Spawner Module
+"""Scene spawner on separate QLabs connection (prevents ego vehicle interference)."""
 
-Spawns scene actors on a SEPARATE QLabs connection from the ego vehicle.
-This prevents buffer corruption and maintains the 20 Hz control loop.
-
-Key Design:
-- Ego vehicle uses Connection 1 (main QLabs instance)
-- Scene actors use Connection 2 (separate QLabs instance)
-- No lock needed - separate communication buffers
-"""
-
-import sys
 import time
 import threading
 import math
-from pathlib import Path
 from typing import List, Optional
-
-# Add python directory to path for QLabs SDK
-sys.path.insert(0, str(Path(__file__).parent.parent / 'python'))
 
 from qvl.qlabs import QuanserInteractiveLabs
 from qvl.qcar2 import QLabsQCar2
@@ -31,133 +15,88 @@ from core.scene_loader import SceneDefinition, ActorDefinition
 
 
 class SceneSpawner:
-    """
-    Spawns and manages scene actors on a separate QLabs connection.
-    
-    This class creates a NEW QLabs connection specifically for scene actors,
-    preventing interference with the ego vehicle's control loop.
-    """
-    
+    """Spawns scene actors on separate QLabs connection."""
+
     def __init__(self, scene_definition: SceneDefinition):
-        """
-        Initialize scene spawner.
-        
-        Args:
-            scene_definition: SceneDefinition object with actor configurations
-        """
+        """Initialize spawner with scene definition."""
         self.scene = scene_definition
-        self.qlabs_actors = None  # Shared connection for spawning
+        self.qlabs_actors = None
         self.roadmap = SDCSRoadMap(leftHandTraffic=False, useSmallMap=False)
 
         # Actor instances
-        self.autonomous_vehicles = []  # List of (QLabsQCar2, ActorDefinition) tuples
-        self.pedestrians = []  # List of (QLabsPerson, ActorDefinition) tuples
-        self.parked_vehicles = []  # List of QLabsQCar2 instances
-        self.stop_signs = []  # List of QLabsStopSign instances
+        self.autonomous_vehicles = []
+        self.pedestrians = []
+        self.parked_vehicles = []
+        self.stop_signs = []
 
-        # Control threads
+        # Control
         self.threads = []
         self.running = False
-
-        # Shared lock for QLabs API calls (all actors use same connection)
         self.qlabs_lock = threading.Lock()
         
     def connect(self) -> bool:
-        """
-        Create a separate QLabs connection for scene actors.
-        
-        Returns:
-            True if connection successful, False otherwise
-        """
-        print("\n" + "="*80)
-        print("CONNECTING SCENE ACTORS TO QLABS (Separate Connection)")
-        print("="*80)
-        
+        """Connect to QLabs for scene actors."""
+        print("\nConnecting scene actors to QLabs...")
         self.qlabs_actors = QuanserInteractiveLabs()
-        
+
         try:
-            print("Connecting to QLabs for scene actors...")
-            # Connect to the same QLabs server but as a separate client
-            # QLabs supports multiple simultaneous connections
             self.qlabs_actors.open("localhost")
-            print("✓ Scene actors connected to QLabs successfully")
+            print("✓ Scene actors connected")
             return True
         except Exception as e:
-            print(f"✗ Failed to connect scene actors to QLabs: {e}")
+            print(f"✗ Connection failed: {e}")
             return False
     
     def spawn_all_actors(self) -> bool:
-        """
-        Spawn all actors defined in the scene.
-        
-        Returns:
-            True if all actors spawned successfully, False otherwise
-        """
+        """Spawn all scene actors."""
         if not self.qlabs_actors:
-            print("ERROR: QLabs connection not established. Call connect() first.")
+            print("ERROR: QLabs not connected. Call connect() first.")
             return False
-        
-        print("\n" + "="*80)
-        print(f"SPAWNING SCENE: {self.scene.name}")
-        print(f"Description: {self.scene.description}")
-        print("="*80)
-        
+
+        print(f"\nSpawning scene: {self.scene.name}")
         success = True
-        
-        # Spawn autonomous vehicles
+
+        # Spawn each actor type
         if self.scene.autonomous_vehicles:
-            print(f"\nSpawning {len(self.scene.autonomous_vehicles)} autonomous vehicle(s)...")
-            for vehicle_def in self.scene.autonomous_vehicles:
-                qcar = self._spawn_autonomous_vehicle(vehicle_def)
+            for vdef in self.scene.autonomous_vehicles:
+                qcar = self._spawn_autonomous_vehicle(vdef)
                 if qcar:
-                    self.autonomous_vehicles.append((qcar, vehicle_def))
+                    self.autonomous_vehicles.append((qcar, vdef))
                 else:
                     success = False
 
-        # Spawn pedestrians
         if self.scene.pedestrians:
-            print(f"\nSpawning {len(self.scene.pedestrians)} pedestrian(s)...")
-            for ped_def in self.scene.pedestrians:
-                pedestrian = self._spawn_pedestrian(ped_def)
-                if pedestrian:
-                    self.pedestrians.append((pedestrian, ped_def))
+            for pdef in self.scene.pedestrians:
+                ped = self._spawn_pedestrian(pdef)
+                if ped:
+                    self.pedestrians.append((ped, pdef))
                 else:
                     success = False
-        
-        # Spawn parked vehicles
+
         if self.scene.parked_vehicles:
-            print(f"\nSpawning {len(self.scene.parked_vehicles)} parked vehicle(s)...")
-            for vehicle_def in self.scene.parked_vehicles:
-                vehicle = self._spawn_parked_vehicle(vehicle_def)
-                if vehicle:
-                    self.parked_vehicles.append(vehicle)
+            for vdef in self.scene.parked_vehicles:
+                veh = self._spawn_parked_vehicle(vdef)
+                if veh:
+                    self.parked_vehicles.append(veh)
                 else:
                     success = False
-        
-        # Spawn stop signs
+
         if self.scene.stop_signs:
-            print(f"\nSpawning {len(self.scene.stop_signs)} stop sign(s)...")
-            for sign_def in self.scene.stop_signs:
-                sign = self._spawn_stop_sign(sign_def)
+            for sdef in self.scene.stop_signs:
+                sign = self._spawn_stop_sign(sdef)
                 if sign:
                     self.stop_signs.append(sign)
                 else:
                     success = False
-        
-        print("\n" + "="*80)
-        print(f"SCENE SPAWN COMPLETE: {self.scene.name}")
-        print(f"  Autonomous vehicles: {len(self.autonomous_vehicles)}")
-        print(f"  Pedestrians: {len(self.pedestrians)}")
-        print(f"  Parked vehicles: {len(self.parked_vehicles)}")
-        print(f"  Stop signs: {len(self.stop_signs)}")
-        print("="*80)
-        
+
+        print(f"Spawn complete: {len(self.autonomous_vehicles)} vehicles, "
+              f"{len(self.pedestrians)} pedestrians, {len(self.parked_vehicles)} parked, "
+              f"{len(self.stop_signs)} signs")
         return success
     
     def _spawn_autonomous_vehicle(self, vehicle_def: ActorDefinition) -> Optional[QLabsQCar2]:
-        """Spawn an autonomous vehicle using the shared QLabs connection."""
+        """Spawn autonomous vehicle."""
         qcar = QLabsQCar2(self.qlabs_actors)
-
         status = qcar.spawn_id_degrees(
             actorNumber=vehicle_def.data['actor_number'],
             location=vehicle_def.data['spawn_location'],
@@ -166,13 +105,11 @@ class SceneSpawner:
             configuration=0,
             waitForConfirmation=True
         )
-
         if status == 0:
-            print(f"  ✓ {vehicle_def.name} spawned (actor {vehicle_def.actor_number})")
+            print(f"  ✓ {vehicle_def.name}")
             return qcar
-        else:
-            print(f"  ✗ Failed to spawn {vehicle_def.name} (actor {vehicle_def.actor_number})")
-            return None
+        print(f"  ✗ Failed: {vehicle_def.name}")
+        return None
     
     def _spawn_pedestrian(self, ped_def: ActorDefinition) -> Optional[QLabsPerson]:
         """Spawn a pedestrian using the shared QLabs connection."""

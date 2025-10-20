@@ -1,12 +1,16 @@
-"""
-Core Package
-
-Core utilities and configuration for QCar2 SimLingo fine-tuning.
-"""
+"""Core utilities and configuration for QCar2 SimLingo."""
 
 from .config import SimlingoQCar2Config
-from .camera_processor import CameraProcessor
-from .qcar2_interface import QCar2Interface
+
+try:
+    from .camera_processor import CameraProcessor
+except ImportError:
+    CameraProcessor = None
+
+try:
+    from .qcar2_interface import QCar2Interface
+except ImportError:
+    QCar2Interface = None
 
 __all__ = [
     'SimlingoQCar2Config',

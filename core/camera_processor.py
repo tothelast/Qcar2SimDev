@@ -1,18 +1,10 @@
-"""
-Camera Image Preprocessing Module.
-Handles image resizing, normalization, and camera parameter generation.
-"""
+"""Camera image preprocessing for Simlingo model input."""
 
-import sys
-import os
 import numpy as np
 import cv2
 import torch
 from typing import Tuple
 from PIL import Image
-
-# Add simlingo directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'simlingo'))
 
 from simlingo_training.utils.internvl2_utils import build_transform, dynamic_preprocess
 
@@ -51,20 +43,14 @@ class CameraProcessor:
             - processed_image: Tensor [1, 1, num_patches, 3, 448, 448] float32
             - image_sizes: None (not used by InternVL2 model)
         """
-        # Apply JPEG compression/decompression to match training data
-        # The Simlingo model was trained on JPEG-compressed images from CARLA
-        # Convert RGB to BGR for OpenCV
+        # JPEG compression/decompression to match CARLA training data
         image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        # Encode as JPEG and decode back
         _, compressed_image = cv2.imencode('.jpg', image_bgr)
         image_bgr = cv2.imdecode(compressed_image, cv2.IMREAD_UNCHANGED)
-        # Convert back to RGB
         image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-        # Convert numpy array to PIL Image
+        # Dynamic preprocessing splits image into patches
         pil_image = Image.fromarray(image)
-
-        # Apply dynamic preprocessing (splits image into patches)
         images = dynamic_preprocess(
             pil_image,
             image_size=self.image_size,
@@ -72,66 +58,32 @@ class CameraProcessor:
             max_num=self.max_num_grid
         )
 
-        # Apply transform to each patch (resize to 448x448, normalize)
+        # Transform each patch and stack
         pixel_values = [self.transform(img) for img in images]
-        pixel_values = torch.stack(pixel_values)  # [num_patches, 3, 448, 448]
+        pixel_values = torch.stack(pixel_values)
 
-        # Add batch and temporal dimensions
-        # [num_patches, 3, 448, 448] -> [1, 1, num_patches, 3, 448, 448]
+        # Add batch and temporal dimensions: [N, 3, 448, 448] -> [1, 1, N, 3, 448, 448]
         pixel_values = pixel_values.unsqueeze(0).unsqueeze(0)
 
-        # image_sizes is not used by InternVL2 model (set to None like in original agent)
-        image_sizes = None
-
-        return pixel_values, image_sizes
+        return pixel_values, None
     
     def get_camera_intrinsics_tensor(self) -> torch.Tensor:
-        """
-        Get camera intrinsics as PyTorch tensor.
-        
-        Returns:
-            Tensor [1, 3, 3] float32
-        """
-        intrinsics_tensor = torch.from_numpy(self.intrinsics).float()
-        # Add batch dimension: (3, 3) -> (1, 3, 3)
-        intrinsics_tensor = intrinsics_tensor.unsqueeze(0)
-        return intrinsics_tensor
-    
+        """Get camera intrinsics as PyTorch tensor [1, 3, 3]."""
+        return torch.from_numpy(self.intrinsics).float().unsqueeze(0)
+
     def get_camera_extrinsics_tensor(self) -> torch.Tensor:
-        """
-        Get camera extrinsics as PyTorch tensor.
-        
-        Returns:
-            Tensor [1, 4, 4] float32
-        """
-        extrinsics_tensor = torch.from_numpy(self.extrinsics).float()
-        # Add batch dimension: (4, 4) -> (1, 4, 4)
-        extrinsics_tensor = extrinsics_tensor.unsqueeze(0)
-        return extrinsics_tensor
+        """Get camera extrinsics as PyTorch tensor [1, 4, 4]."""
+        return torch.from_numpy(self.extrinsics).float().unsqueeze(0)
     
     def visualize_processed_image(self, image_tensor: torch.Tensor) -> np.ndarray:
-        """
-        Convert processed image tensor back to displayable format.
-        
-        Args:
-            image_tensor: Processed image tensor [1, 1, 1, 3, H, W]
-            
-        Returns:
-            RGB image as numpy array (H, W, 3) uint8
-        """
-        # Remove batch and temporal dimensions
-        image = image_tensor.squeeze(0).squeeze(0).squeeze(0)  # (3, H, W)
-        
-        # Convert to numpy and transpose
-        image_np = image.cpu().numpy().transpose(1, 2, 0)  # (H, W, 3)
-        
-        # Denormalize
-        denormalized = np.zeros_like(image_np)
-        for c in range(3):
-            denormalized[:, :, c] = image_np[:, :, c] * self.config.imagenet_std[c] + self.config.imagenet_mean[c]
-        
+        """Convert processed image tensor back to displayable RGB format."""
+        # Remove batch/temporal dims and convert to numpy
+        image = image_tensor.squeeze(0).squeeze(0).squeeze(0)
+        image_np = image.cpu().numpy().transpose(1, 2, 0)
+
+        # Denormalize using ImageNet stats
+        denormalized = image_np * self.config.imagenet_std + self.config.imagenet_mean
+
         # Convert to uint8
-        denormalized = np.clip(denormalized * 255.0, 0, 255).astype(np.uint8)
-        
-        return denormalized
+        return np.clip(denormalized * 255.0, 0, 255).astype(np.uint8)
 
