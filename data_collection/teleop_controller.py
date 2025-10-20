@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Teleop Controller Module
-
-Provides keyboard-based teleop control for QCar2 vehicles.
-
-Controls:
-- Arrow Up / W: Accelerate forward
-- Arrow Down / S: Brake / Reverse
-- Arrow Left / A: Steer left
-- Arrow Right / D: Steer right
-- B: Emergency brake (full stop)
-- Q / ESC: Quit
-"""
+"""Keyboard-based teleop controller for QCar2."""
 
 import time
 import numpy as np
@@ -19,40 +7,26 @@ from pynput import keyboard
 
 
 class TeleopController:
-    """
-    Keyboard-based teleop controller for QCar2.
-
-    Controls:
-    - Arrow Up / W: Accelerate forward
-    - Arrow Down / S: Brake / Reverse
-    - Arrow Left / A: Steer left
-    - Arrow Right / D: Steer right
-    - B: Emergency brake (full stop)
-    - Q / ESC: Quit
-    """
+    """Keyboard-based teleop controller."""
 
     def __init__(self):
         """Initialize teleop controller."""
         # Control parameters
-        self.max_forward_velocity = 4.0  # m/s (full-scale) - reduced for better control
-        self.max_reverse_velocity = -2.0  # m/s
-        self.max_steering_angle = np.pi / 9  # 20 degrees - reduced for smoother lane-keeping
+        self.max_forward_velocity = 4.0
+        self.max_reverse_velocity = -2.0
+        self.max_steering_angle = np.pi / 9
 
         # Acceleration/deceleration rates
-        self.acceleration = 1.0  # m/s²
-        self.deceleration = 2.0  # m/s²
-        self.steering_rate = np.pi / 4  # 45°/s - reduced for smoother steering transitions
+        self.acceleration = 1.0
+        self.deceleration = 2.0
+        self.steering_rate = np.pi / 4
 
-        # Current state
+        # State
         self.target_velocity = 0.0
         self.current_velocity = 0.0
         self.target_steering = 0.0
         self.current_steering = 0.0
-
-        # Pressed keys tracking
         self.pressed_keys = set()
-
-        # Control flags
         self.running = True
         self.emergency_stop = False
 

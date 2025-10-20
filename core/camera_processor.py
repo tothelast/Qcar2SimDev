@@ -1,5 +1,13 @@
 """Camera image preprocessing for Simlingo model input."""
 
+import sys
+from pathlib import Path
+
+# Add simlingo directory to path for simlingo_training imports
+simlingo_dir = Path(__file__).parent.parent / 'simlingo'
+if str(simlingo_dir) not in sys.path:
+    sys.path.insert(0, str(simlingo_dir))
+
 import numpy as np
 import cv2
 import torch

@@ -1,205 +1,114 @@
 #!/usr/bin/env python3
-"""
-QLabs Data Collection Script with Teleop Control
-
-This script sets up the QLabs Cityscape Lite environment for expert data collection:
-1. Connects to QLabs (Cityscape Lite workspace)
-2. Spawns a teleop-controlled QCar2 at Node 1 for expert data collection
-3. Spawns autonomous QCar2s on circular and roundabout routes
-4. Spawns pedestrians crossing the roads
-5. Spawns parked vehicles and stop signs
-6. Enables keyboard-based teleop control for collecting driving demonstrations
-
-Teleop Controls:
-- Arrow Up / W: Accelerate forward
-- Arrow Down / S: Brake / Reverse
-- Arrow Left / A: Steer left
-- Arrow Right / D: Steer right
-- B: Emergency brake (full stop)
-- Q / ESC: Quit
-
-Coordinate System (Cityscape Lite):
-- World size: 500m x 500m (±250m from origin)
-- Navigation area: 450m x 450m (±225m from origin)
-- Origin: [0, 0, 0]
-- Ground elevation: z = 0
-- Actor ground offset: z = 0.005 (for vehicles)
-- Pedestrian offset: z = 1.0 (origin at body center)
-"""
+"""QLabs data collection with teleop control for expert demonstrations."""
 
 import sys
-import argparse
 from pathlib import Path
 
-# Add python directory to path for QLabs SDK
-sys.path.insert(0, str(Path(__file__).parent.parent / 'python'))
-# Add parent directory to path for core imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add parent directory to path so we can import core and data_collection modules
+if str(Path(__file__).parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import argparse
 
 from qvl.qlabs import QuanserInteractiveLabs
 from qvl.qcar2 import QLabsQCar2
 from qvl.system import QLabsSystem
 from qvl.spline_line import QLabsSplineLine
 
-from teleop_controller import TeleopController, teleop_control_loop
+from data_collection.teleop_controller import TeleopController, teleop_control_loop
 from core.scene_loader import SceneLoader
 from core.scene_spawner import SceneSpawner
 from core.config import SimlingoQCar2Config
 
 
 def initialize_planned_route_tracer(qlabs, config):
-    """
-    Initialize QLabs planned route tracer (green spline line) to visualize the route.
+    """Initialize route visualization spline line."""
+    print("Initializing route tracer...")
+    tracer = QLabsSplineLine(qlabs)
 
-    Args:
-        qlabs: QuanserInteractiveLabs instance
-        config: SimlingoQCar2Config instance
-
-    Returns:
-        QLabsSplineLine instance
-    """
-    print("\nInitializing planned route tracer...")
-    planned_route_tracer = QLabsSplineLine(qlabs)
-
-    # Spawn the spline line actor at origin
-    # Configuration 1 = CURVE mode for smooth route visualization
-    planned_route_tracer.spawn_id(
-        actorNumber=101,  # Use actor number 101 for planned route
-        location=[0, 0, 0.02],  # Slightly above ground
+    tracer.spawn_id(
+        actorNumber=101,
+        location=[0, 0, 0.02],
         rotation=[0, 0, 0],
-        configuration=1,  # CURVE configuration
+        configuration=1,
         waitForConfirmation=True
     )
 
-    # Convert route waypoints to spline line format
-    # Format: [x, y, z, width]
-    route_points = []
-    for waypoint in config.route_waypoints:
-        route_points.append([
-            waypoint[0],  # x
-            waypoint[1],  # y
-            0.02,  # z (slightly above ground)
-            0.05  # width (use planned_route_tracer_width if available, else default)
-        ])
+    # Convert waypoints to spline format [x, y, z, width]
+    route_points = [[wp[0], wp[1], 0.02, 0.05] for wp in config.route_waypoints]
 
-    # Draw the planned route
     if len(route_points) >= 2:
-        # Use green color for the route [R, G, B]
-        planned_route_tracer.set_points(
-            color=[0.0, 1.0, 0.0],  # Green
+        tracer.set_points(
+            color=[0.0, 1.0, 0.0],
             pointList=route_points,
             alignEndPointTangents=False,
             waitForConfirmation=True
         )
-        print(f"✓ Planned route tracer initialized (green line shows {len(route_points)} waypoints)")
+        print(f"✓ Route tracer initialized ({len(route_points)} waypoints)")
     else:
-        print("WARNING: Not enough route waypoints to display planned route")
+        print("WARNING: Not enough waypoints for route visualization")
 
-    return planned_route_tracer
+    return tracer
 
 
 def main(scene_name=None):
-    """
-    Main function to setup QLabs environment and spawn QCar2 with obstacles.
-
-    Args:
-        scene_name: Name of the scene to load from scenes/ directory (optional)
-    """
-    # Load configuration and route
-    print("="*70)
+    """Setup QLabs environment and spawn QCar2 for data collection."""
     print("QLabs Data Collection - Cityscape Lite")
-    print("="*70)
 
     config = SimlingoQCar2Config()
-
-    # Load scene if specified
     scene_definition = None
-    scene_spawner = None
 
+    # Load scene or use default route
     if scene_name:
-        print(f"\nLoading scene: {scene_name}")
-        scene_loader = SceneLoader()
-        scene_definition = scene_loader.load_scene(scene_name)
-
+        print(f"Loading scene: {scene_name}")
+        scene_definition = SceneLoader().load_scene(scene_name)
         if not scene_definition:
-            print(f"\nERROR: Failed to load scene '{scene_name}'")
+            print(f"ERROR: Failed to load scene '{scene_name}'")
             return False
-
-        print(f"Scene loaded: {scene_definition}")
-
-        # Load route from scene definition
         route_name = scene_definition.ego_route
-        print(f"Loading route from scene: {route_name}")
     else:
-        # Default route if no scene specified
         route_name = 'simple_straight'
-        print(f"\nNo scene specified, using default route: {route_name}")
+        print(f"Using default route: {route_name}")
 
-    # Load route from JSON file
     if not config.load_route(route_name):
-        print(f"\nERROR: Failed to load route '{route_name}'")
-        print("Available routes are in the routes/ directory")
+        print(f"ERROR: Failed to load route '{route_name}'")
         return False
 
-    # Create connection to QLabs
-    print("\nConnecting to QLabs...")
+    # Connect to QLabs
+    print("Connecting to QLabs...")
     qlabs = QuanserInteractiveLabs()
-
-    # Connect to QLabs on localhost
     if not qlabs.open("localhost"):
-        print("ERROR: Unable to connect to QLabs.")
-        print("Make sure QLabs is running with Cityscape Lite workspace.")
+        print("ERROR: Unable to connect to QLabs")
         return False
+    print("✓ Connected to QLabs")
 
-    print("✓ Connected to QLabs successfully!")
+    QLabsSystem(qlabs).set_title_string("QCar2 Data Collection")
 
-    # Create system object to set title
-    system = QLabsSystem(qlabs)
-    system.set_title_string("QCar2 Data Collection - Cityscape Lite")
-
-    # Destroy any existing actors
-    print("\nCleaning up existing actors...")
+    print(f"Cleaning up existing actors...")
     num_destroyed = qlabs.destroy_all_spawned_actors()
-    print(f"✓ Destroyed {num_destroyed} existing actors")
+    print(f"✓ Destroyed {num_destroyed} actors")
 
-    # =========================================================================
-    # SPAWN MAIN TELEOP QCAR2
-    # =========================================================================
-    # Use spawn location and rotation from loaded route
-
-    print("\n" + "-"*70)
-    print("Spawning Main QCar2 (Teleop Control)...")
-    print("-"*70)
+    # Spawn main QCar2 for teleop control
+    print("Spawning QCar2 (teleop control)...")
     qcar = QLabsQCar2(qlabs)
 
-    # Get spawn location and rotation from loaded route
-    spawn_location = config.qcar2_spawn_location
-    spawn_rotation_rad = config.qcar2_spawn_rotation
-
-    # Convert rotation from radians to degrees for spawn_id_degrees
-    spawn_rotation_deg = [
-        spawn_rotation_rad[0] * 180.0 / 3.14159265359,  # roll
-        spawn_rotation_rad[1] * 180.0 / 3.14159265359,  # pitch
-        spawn_rotation_rad[2] * 180.0 / 3.14159265359   # yaw
-    ]
+    spawn_loc = config.qcar2_spawn_location
+    spawn_rot_rad = config.qcar2_spawn_rotation
+    spawn_rot_deg = [r * 180.0 / 3.14159265359 for r in spawn_rot_rad]
 
     status = qcar.spawn_id_degrees(
         actorNumber=0,
-        location=spawn_location,
-        rotation=spawn_rotation_deg,
+        location=spawn_loc,
+        rotation=spawn_rot_deg,
         scale=[1.0, 1.0, 1.0],
         configuration=0,
         waitForConfirmation=True
     )
 
     if status == 0:
-        print(f"✓ Main QCar2 spawned at [{spawn_location[0]:.3f}, {spawn_location[1]:.3f}, {spawn_location[2]:.3f}]")
-        print(f"  Rotation: {spawn_rotation_deg[2]:.1f}° (yaw)")
-        print(f"  Route: {route_name}")
-        print(f"  Mode: TELEOP CONTROL")
+        print(f"✓ QCar2 spawned at [{spawn_loc[0]:.1f}, {spawn_loc[1]:.1f}]")
     else:
-        print(f"✗ ERROR: Failed to spawn main QCar2. Status code: {status}")
-        print("  Status codes: 0=success, 1=class not available, 2=actor in use, 3=unknown")
+        print(f"✗ Failed to spawn QCar2 (status: {status})")
         qlabs.close()
         return False
 
@@ -270,7 +179,7 @@ def main(scene_name=None):
     print("\n" + "="*70)
     print("SCENE SETUP COMPLETE")
     print("="*70)
-    print(f"QCar2 (Main):       Spawned at [{spawn_location[0]:.3f}, {spawn_location[1]:.3f}] - TELEOP CONTROL")
+    print(f"QCar2 (Main):       Spawned at [{spawn_loc[0]:.3f}, {spawn_loc[1]:.3f}] - TELEOP CONTROL")
     print(f"                    Route: {route_name}")
 
     if scene_spawner:

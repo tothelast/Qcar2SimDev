@@ -1,69 +1,42 @@
-"""
-Control Conversion Module.
-Implements Simlingo PID controllers and converts outputs to QCar2 commands.
-"""
+"""Control conversion with PID controllers for QCar2."""
 
-import sys
-import os
 import numpy as np
 import math
 from collections import deque
 from scipy.interpolate import PchipInterpolator
 from typing import Tuple
 
-# Add parent directory to path for core imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 
 class LateralPIDController:
-    """Lateral PID controller for steering (exact Simlingo implementation)."""
+    """Lateral PID controller for steering."""
 
     def __init__(self, config):
-        """
-        Initialize lateral PID controller.
-
-        Args:
-            config: SimlingoQCar2Config instance
-        """
+        """Initialize lateral PID controller."""
         self.k_p = config.turn_kp
         self.k_i = config.turn_ki
         self.k_d = config.turn_kd
         self.n = config.turn_n
         self._window = deque([0 for _ in range(self.n)], maxlen=self.n)
 
-        # Speed-dependent aim distances (meters)
+        # Speed-dependent aim distances
         self.aim_distance_slow = 2.25
         self.aim_distance_fast = 3.0
         self.aim_distance_very_fast = 7.0
-        self.aim_distance_threshold = 5.5  # m/s
-        self.aim_distance_threshold2 = 15.0  # m/s
+        self.aim_distance_threshold = 5.5
+        self.aim_distance_threshold2 = 15.0
     
     def step(self, route_np: np.ndarray, current_speed: float) -> float:
-        """
-        Compute steering control.
-
-        Args:
-            route_np: Route waypoints array (N, 2)
-            current_speed: Current speed in m/s
-
-        Returns:
-            Steering value [-1, 1]
-        """
-        # Convert speed to km/h
-        current_speed_kmh = current_speed * 3.6
-
-        # Calculate aim distance based on speed
-        if current_speed_kmh < self.aim_distance_threshold:
+        """Compute steering control."""
+        # Speed-based aim distance
+        speed_kmh = current_speed * 3.6
+        if speed_kmh < self.aim_distance_threshold:
             aim_distance = self.aim_distance_slow
-        elif current_speed_kmh < self.aim_distance_threshold2:
+        elif speed_kmh < self.aim_distance_threshold2:
             aim_distance = self.aim_distance_fast
         else:
             aim_distance = self.aim_distance_very_fast
 
-        # Convert to waypoint index (assuming 0.1m spacing between waypoints)
         n_lookahead = int(min(aim_distance * 10, len(route_np) - 1))
-
-        # Get desired heading vector
         desired_heading_vec = route_np[n_lookahead]
 
         # Calculate heading error
@@ -71,22 +44,14 @@ class LateralPIDController:
         heading_error = yaw_path % (2 * np.pi)
         heading_error = heading_error if heading_error < np.pi else heading_error - 2 * np.pi
 
-        # Update window
         self._window.append(heading_error)
 
-        # Calculate derivative and integral
-        if len(self._window) >= 2:
-            integral = sum(self._window) / len(self._window)
-            derivative = self._window[-1] - self._window[-2]
-        else:
-            integral = 0.0
-            derivative = 0.0
+        # PID terms
+        integral = sum(self._window) / len(self._window) if len(self._window) >= 2 else 0.0
+        derivative = self._window[-1] - self._window[-2] if len(self._window) >= 2 else 0.0
 
-        # PID control law
         steering = self.k_p * heading_error + self.k_i * integral + self.k_d * derivative
-        steering = np.clip(steering, -1.0, 1.0)
-
-        return steering
+        return np.clip(steering, -1.0, 1.0)
 
     def reset(self):
         """Reset controller state."""
@@ -94,74 +59,32 @@ class LateralPIDController:
 
 
 class LongitudinalLinearRegressionController:
-    """
-    Longitudinal controller using linear regression (exact SimLingo implementation).
-    This is the DEFAULT controller used by SimLingo, not the PID controller.
-    """
+    """Longitudinal controller using linear regression."""
 
     def __init__(self, config):
-        """
-        Initialize longitudinal linear regression controller.
-
-        Args:
-            config: SimlingoQCar2Config instance
-        """
-        # Minimum threshold for target speed (< 1 km/h)
-        self.minimum_target_speed = 0.278  # m/s
-
-        # Coefficients of the linear regression model
-        # Source: team_code/config.py - longitudinal_linear_regression_params
+        """Initialize longitudinal controller."""
+        self.minimum_target_speed = 0.278
         self.params = np.array([
-            1.1990342347353184,   # current_speed coefficient
-            -0.8057602384167799,  # current_speed^2 coefficient
-            1.710818710950062,    # 100*speed_error_cl coefficient
-            0.921890257450335,    # speed_error_cl^2 coefficient
-            1.556497522998393,    # current_speed*speed_error_cl coefficient
-            -0.7013479734904027,  # current_speed^2*speed_error_cl coefficient
-            1.031266635497984     # braking ratio threshold
+            1.1990342347353184, -0.8057602384167799, 1.710818710950062,
+            0.921890257450335, 1.556497522998393, -0.7013479734904027,
+            1.031266635497984
         ])
-
-        # Maximum acceleration rate (approximately 1.9 m/tick)
         self.max_acceleration = 1.89
-
-        # Maximum deceleration rate (approximately -4.82 m/tick)
         self.max_deceleration = -4.82
 
-    def get_throttle_and_brake(
-        self,
-        target_speed: float,
-        current_speed: float
-    ) -> Tuple[float, bool]:
-        """
-        Get throttle and brake values using linear regression.
-
-        Args:
-            target_speed: Desired target speed in m/s
-            current_speed: Current speed of the vehicle in m/s
-
-        Returns:
-            Tuple of (throttle, brake) where:
-                throttle: float in [0, 1]
-                brake: bool (True to brake, False otherwise)
-        """
-        # If target speed is very small, apply braking
+    def get_throttle_and_brake(self, target_speed: float, current_speed: float) -> Tuple[float, bool]:
+        """Get throttle and brake values using linear regression."""
         if target_speed < 1e-5:
             return 0.0, True
 
-        # Avoid very small target speeds
         target_speed = max(self.minimum_target_speed, target_speed)
-
-        # Convert to km/h for calculation
         current_speed_kmh = current_speed * 3.6
         target_speed_kmh = target_speed * 3.6
-
         speed_error = target_speed_kmh - current_speed_kmh
 
-        # Maximum acceleration check (1.9 m/tick)
         if speed_error > self.max_acceleration:
             return 1.0, False
 
-        # Braking check using ratio threshold
         if current_speed_kmh / target_speed_kmh > self.params[-1]:
             return 0.0, True
 

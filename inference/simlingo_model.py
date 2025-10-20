@@ -1,20 +1,18 @@
-"""
-Simlingo Model Wrapper Module.
-Handles model loading, tokenization, and inference.
-"""
+"""Simlingo model wrapper for inference."""
 
 import sys
 import os
-import torch
-import numpy as np
-import importlib.util
-from typing import Tuple, Optional, Dict, List
+import importlib
 from pathlib import Path
 
-# Add parent directory and simlingo directory to path
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, parent_dir)
-sys.path.insert(0, os.path.join(parent_dir, 'simlingo'))
+# Add simlingo directory to path for simlingo_training imports
+simlingo_dir = Path(__file__).parent.parent / 'simlingo'
+if str(simlingo_dir) not in sys.path:
+    sys.path.insert(0, str(simlingo_dir))
+
+import torch
+import numpy as np
+from typing import Tuple, Optional, Dict, List
 
 from transformers import AutoTokenizer, AutoProcessor, AutoConfig
 from simlingo_training.utils.custom_types import DrivingInput, LanguageLabel
@@ -26,67 +24,40 @@ class SimlingoModelWrapper:
     """Wrapper for Simlingo model inference."""
 
     def __init__(self, config, device='cuda', nav_mode='target_point'):
-        """
-        Initialize Simlingo model wrapper.
-
-        Args:
-            config: SimlingoQCar2Config instance
-            device: Device to run model on ('cuda' or 'cpu')
-            nav_mode: Navigational conditioning mode (SET ONCE, matches agent_simlingo.py config.eval_route_as)
-                     - 'target_point': Use target point tokens (<TARGET_POINT>)
-                     - 'command': Use HLC text only (no tokens)
-        """
+        """Initialize model wrapper."""
         self.config = config
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
+        print(f"Device: {self.device}, Nav mode: {nav_mode}")
 
-        print(f"Using device: {self.device}")
-        print(f"Navigational conditioning mode: {nav_mode}")
-
-        # Model and tokenizer
+        # Model components
         self.model = None
         self.tokenizer = None
         self.processor = None
-        self.cfg = None  # Hydra config
-        self.conv_module = None  # Conversation template module
-        self.tmp_config = None  # Model config for image token calculation
-
-        # Special token IDs (only for tokens added to tokenizer vocabulary)
+        self.cfg = None
+        self.conv_module = None
+        self.tmp_config = None
         self.special_token_ids = {}
-
-        # Image token calculation
         self.num_image_token = None
 
-        # Navigational conditioning mode (set once at initialization, matches original SimLingo)
+        # Configuration
         self.nav_mode = nav_mode
-
-        # Task type (can be changed in real-time via commentary window)
-        self.task_type = 'commentary'  # 'commentary', 'qa', 'dreamer'
-        self.safety_enabled = True  # For Dreamer mode only
-        self.user_question = None  # For Q&A mode
-        self.user_instruction = None  # For Dreamer mode
+        self.task_type = 'commentary'
+        self.safety_enabled = True
+        self.user_question = None
+        self.user_instruction = None
 
     def set_task_type(self, task_type: str, question: str = None, instruction: str = None, safety_enabled: bool = True):
-        """
-        Set the task type for inference (can be changed in real-time).
-
-        Args:
-            task_type: 'commentary', 'qa', or 'dreamer'
-            question: Question for Q&A mode (required if task_type='qa')
-            instruction: Instruction for Dreamer mode (required if task_type='dreamer')
-            safety_enabled: Safety flag for Dreamer mode (True = reject unsafe, False = follow all)
-        """
+        """Set task type for inference."""
         self.task_type = task_type
         self.user_question = question
         self.user_instruction = instruction
         self.safety_enabled = safety_enabled
 
-        print(f"\n[TASK TYPE] Set to: {task_type}")
+        print(f"Task: {task_type}")
         if task_type == 'qa' and question:
-            print(f"[Q&A] Question: {question}")
+            print(f"  Q: {question}")
         elif task_type == 'dreamer' and instruction:
-            safety_str = "ON (reject unsafe)" if safety_enabled else "OFF (follow all)"
-            print(f"[DREAMER] Instruction: {instruction}")
-            print(f"[DREAMER] Safety: {safety_str}")
+            print(f"  Instruction: {instruction}, Safety: {'ON' if safety_enabled else 'OFF'}")
 
 
 

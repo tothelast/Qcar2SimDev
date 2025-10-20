@@ -1,68 +1,57 @@
-"""
-Main entry point for Simlingo-QCar2 integration.
-Run with: python inference/main.py
-"""
+"""Main entry point for Simlingo-QCar2 integration."""
 
 import sys
 import os
+from pathlib import Path
+
+# Add parent directory to path so we can import core and inference modules
+# This is needed when running as a script (python inference/main.py)
+if str(Path(__file__).parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import time
 import numpy as np
 import argparse
 import json
 from datetime import datetime
 
-# Add parent directory to path for core imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 from core.config import SimlingoQCar2Config
 from core.qcar2_interface import QCar2Interface
-from core.camera_processor import CameraProcessor
 from core.scene_loader import SceneLoader
 from core.scene_spawner import SceneSpawner
-from state_estimator import StateEstimator
-from route_manager import RouteManager
-from simlingo_model import SimlingoModelWrapper
-from control_converter import ControlConverter
+from inference.state_estimator import StateEstimator
+from inference.route_manager import RouteManager
+from inference.control_converter import ControlConverter
+
+try:
+    from core.camera_processor import CameraProcessor
+    from inference.simlingo_model import SimlingoModelWrapper
+except ImportError as e:
+    print(f"Warning: Could not import simlingo modules: {e}")
+    CameraProcessor = None
+    SimlingoModelWrapper = None
 
 
 class SimlingoQCar2Controller:
     """Main controller for Simlingo-QCar2 integration."""
     
     def __init__(self, config_path=None, nav_mode='target_point', scene_name=None):
-        """
-        Initialize controller.
-
-        Args:
-            config_path: Path to custom config file (optional)
-            nav_mode: Navigational conditioning mode ('target_point' or 'command')
-            scene_name: Name of the scene to load from scenes/ directory (optional)
-        """
-        # Load configuration
+        """Initialize controller."""
         self.config = SimlingoQCar2Config()
-
-        # Load scene if specified
         self.scene_definition = None
         self.scene_spawner = None
 
+        # Load scene or use default route
         if scene_name:
-            print(f"\nLoading scene: {scene_name}")
-            scene_loader = SceneLoader()
-            self.scene_definition = scene_loader.load_scene(scene_name)
-
+            print(f"Loading scene: {scene_name}")
+            self.scene_definition = SceneLoader().load_scene(scene_name)
             if not self.scene_definition:
                 raise RuntimeError(f"Failed to load scene: {scene_name}")
-
-            print(f"Scene loaded: {self.scene_definition}")
-
-            # Load route from scene definition
             route_name = self.scene_definition.ego_route
-            print(f"Loading route from scene: {route_name}")
         else:
-            # Default route if no scene specified
             route_name = 'simple_straight'
-            print(f"\nNo scene specified, using default route: {route_name}")
+            print(f"Using default route: {route_name}")
 
-        # Load route from JSON file
         if not self.config.load_route(route_name):
             raise RuntimeError(f"Failed to load route: {route_name}")
 
@@ -72,19 +61,17 @@ class SimlingoQCar2Controller:
 
         # Initialize components
         self.qcar_interface = QCar2Interface(self.config)
-        self.camera_processor = CameraProcessor(self.config)
+        self.camera_processor = CameraProcessor(self.config) if CameraProcessor else None
         self.state_estimator = StateEstimator(self.config)
         self.route_manager = RouteManager(self.config)
-        self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode)
+        self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode) if SimlingoModelWrapper else None
         self.control_converter = ControlConverter(self.config)
 
-        # Control loop state
+        # State
         self.running = False
         self.step_count = 0
         self.stuck_detector = 0
         self.force_move = 0
-
-        # Trajectory logging
         self.trajectory_log = []
         self.collision_count = 0
         self.start_time = None
