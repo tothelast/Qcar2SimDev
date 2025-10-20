@@ -51,7 +51,7 @@ def draw_map_background(ax, roadmap):
 
 def load_all_routes():
     """Load all routes from the routes/ directory."""
-    routes_dir = "routes"
+    routes_dir = "config/routes"
     if not os.path.exists(routes_dir):
         print(f"Routes directory not found: {routes_dir}")
         return []
