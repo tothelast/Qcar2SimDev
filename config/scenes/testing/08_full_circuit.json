@@ -1,0 +1,7 @@
+{
+  "name": "full_circuit",
+  "description": "Full circuit with multiple vehicles and pedestrian",
+  "ego_route": "full_circuit",
+  "actors": ["circular_car", "roundabout_car", "east_pedestrian"]
+}
+

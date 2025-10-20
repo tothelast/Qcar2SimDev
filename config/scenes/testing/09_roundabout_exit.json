@@ -1,0 +1,7 @@
+{
+  "name": "roundabout_exit",
+  "description": "Roundabout exit with two pedestrians",
+  "ego_route": "roundabout_exit",
+  "actors": ["north_pedestrian", "west_pedestrian"]
+}
+

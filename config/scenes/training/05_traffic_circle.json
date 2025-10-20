@@ -1,0 +1,7 @@
+{
+  "name": "traffic_circle",
+  "description": "Traffic circle with roundabout vehicle and east pedestrian",
+  "ego_route": "traffic_circle",
+  "actors": ["roundabout_car", "east_pedestrian"]
+}
+

@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from core.config import SimlingoQCar2Config
 from core.qcar2_interface import QCar2Interface
 from core.camera_processor import CameraProcessor
+from core.scene_loader import SceneLoader
+from core.scene_spawner import SceneSpawner
 from state_estimator import StateEstimator
 from route_manager import RouteManager
 from simlingo_model import SimlingoModelWrapper
@@ -26,19 +28,47 @@ from control_converter import ControlConverter
 class SimlingoQCar2Controller:
     """Main controller for Simlingo-QCar2 integration."""
     
-    def __init__(self, config_path=None, spawn_obstacles=False, nav_mode='target_point'):
+    def __init__(self, config_path=None, nav_mode='target_point', scene_name=None):
         """
         Initialize controller.
 
         Args:
             config_path: Path to custom config file (optional)
-            spawn_obstacles: Whether to spawn obstacle vehicles (optional)
             nav_mode: Navigational conditioning mode ('target_point' or 'command')
+            scene_name: Name of the scene to load from scenes/ directory (optional)
         """
         # Load configuration
         self.config = SimlingoQCar2Config()
-        self.spawn_obstacles = spawn_obstacles
+
+        # Load scene if specified
+        self.scene_definition = None
+        self.scene_spawner = None
+
+        if scene_name:
+            print(f"\nLoading scene: {scene_name}")
+            scene_loader = SceneLoader()
+            self.scene_definition = scene_loader.load_scene(scene_name)
+
+            if not self.scene_definition:
+                raise RuntimeError(f"Failed to load scene: {scene_name}")
+
+            print(f"Scene loaded: {self.scene_definition}")
+
+            # Load route from scene definition
+            route_name = self.scene_definition.ego_route
+            print(f"Loading route from scene: {route_name}")
+        else:
+            # Default route if no scene specified
+            route_name = 'simple_straight'
+            print(f"\nNo scene specified, using default route: {route_name}")
+
+        # Load route from JSON file
+        if not self.config.load_route(route_name):
+            raise RuntimeError(f"Failed to load route: {route_name}")
+
         self.nav_mode = nav_mode
+        self.route_name = route_name
+        self.scene_name = scene_name
 
         # Initialize components
         self.qcar_interface = QCar2Interface(self.config)
@@ -75,11 +105,14 @@ class SimlingoQCar2Controller:
             return False
 
         # Spawn QCar2 (pass model_wrapper for HLC support)
-        if not self.qcar_interface.spawn_qcar(spawn_obstacles=self.spawn_obstacles, model_wrapper=self.model_wrapper):
+        if not self.qcar_interface.spawn_qcar(model_wrapper=self.model_wrapper):
             return False
-        
+
         # Possess camera for visualization
         self.qcar_interface.possess_camera()
+
+        # Setup scene actors using SceneSpawner
+        self._setup_scene_actors()
         
         # Load Simlingo model
         print("\nLoading Simlingo model...")
@@ -89,18 +122,55 @@ class SimlingoQCar2Controller:
  
         print("\nInitialization complete!")
         print("=" * 80)
-        
+
         return True
-    
+
+    def _setup_scene_actors(self):
+        """Setup scene actors using SceneSpawner on separate QLabs connection."""
+        if not self.scene_definition:
+            print("\nNo scene defined - skipping actor setup")
+            return
+
+        print("\n" + "="*80)
+        print("SETTING UP SCENE ACTORS")
+        print("="*80)
+
+        # Create scene spawner with separate QLabs connection
+        self.scene_spawner = SceneSpawner(self.scene_definition)
+
+        # Connect to QLabs (separate connection for actors)
+        if not self.scene_spawner.connect():
+            print("WARNING: Failed to connect scene actors to QLabs")
+            self.scene_spawner = None
+            return
+
+        # Spawn all actors defined in the scene
+        if not self.scene_spawner.spawn_all_actors():
+            print("WARNING: Some actors failed to spawn")
+
+        # Start control threads for dynamic actors
+        self.scene_spawner.start_actor_control()
+
+        print("="*80)
+        print("Scene setup complete")
+        print("="*80)
+
     def run_step(self) -> bool:
         """
         Execute one control loop iteration.
-        
+
         Returns:
             True if step successful, False otherwise
         """
         # Get camera image
         image = self.qcar_interface.get_camera_image()
+
+        # Check if image is valid
+        if image is None:
+            print("WARNING: Skipping step due to invalid camera image")
+            # Send stop command to be safe
+            self.qcar_interface.set_control(0.0, 0.0)
+            return True  # Continue running, just skip this step
 
         # Process camera image
         camera_images, image_sizes = self.camera_processor.process_image(image)
@@ -260,6 +330,7 @@ class SimlingoQCar2Controller:
         # Prepare metadata
         metadata = {
             'timestamp': timestamp,
+            'route_name': self.route_name,
             'total_steps': self.step_count,
             'total_time': self.trajectory_log[-1]['timestamp'] if self.trajectory_log else 0,
             'collision_count': self.collision_count,
@@ -337,20 +408,73 @@ class SimlingoQCar2Controller:
             print("Stopping vehicle...")
             self.qcar_interface.set_control(0.0, 0.0)
 
+        # Cleanup scene actors
+        if self.scene_spawner:
+            print("Cleaning up scene actors...")
+            self.scene_spawner.cleanup()
+
         # Close QLabs connection
         self.qcar_interface.close()
-        
+
         print("Shutdown complete")
         print("=" * 80)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='Simlingo-QCar2 Integration')
+    parser = argparse.ArgumentParser(
+        description='Simlingo-QCar2 Integration with Scene System',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Scene System:
+  Scenes are predefined configurations that include the ego route and all actors.
+  Scenes are organized in:
+    - scenes/training/  (7 training scenes)
+    - scenes/testing/   (3 testing scenes)
+
+  Use --scene to load a complete scene configuration.
+  If no scene is specified, only the ego vehicle will be spawned.
+
+Available Training Scenes:
+  01_empty_road              Empty road (simple_straight route)
+  02_light_traffic           Light traffic (short_route + 1 circular car)
+  03_roundabout_north        Roundabout with north pedestrian
+  04_kink_navigation         Kink street with south pedestrian
+  05_roundabout_exit_east    Traffic circle with roundabout car + east pedestrian
+  06_urban_parking           One-way street with parked vehicle
+  07_mixed_traffic           Long route with circular car + east pedestrian
+
+Available Testing Scenes:
+  08_full_circuit            Full circuit with 2 cars + east pedestrian
+  09_roundabout_exit_dual    Roundabout exit with 2 pedestrians
+  10_heavy_traffic           Complex route with 2 cars + pedestrian + stop sign
+
+Examples:
+  # Empty scene (just ego vehicle, no actors)
+  python inference/main.py
+
+  # Load a training scene
+  python inference/main.py --scene 01_empty_road
+  python inference/main.py --scene light_traffic
+
+  # Load a testing scene
+  python inference/main.py --scene full_circuit
+  python inference/main.py --scene heavy_traffic
+
+  # Use command-based navigation instead of target points
+  python inference/main.py --scene roundabout_north --nav-mode command
+        """
+    )
+
+    # Configuration
     parser.add_argument('--config', type=str, default=None,
                         help='Path to custom config file')
-    parser.add_argument('--spawn-obstacles', action='store_true',
-                        help='Spawn obstacle vehicles along the route')
+
+    # Scene selection (NEW - replaces individual actor flags)
+    parser.add_argument('--scene', type=str, default=None,
+                        help='Scene name to load from scenes/ directory (e.g., "empty_road", "01_empty_road", "light_traffic")')
+
+    # Navigation mode
     parser.add_argument('--nav-mode', type=str, default='target_point',
                         choices=['target_point', 'command'],
                         help='Navigational conditioning mode: target_point (uses <TARGET_POINT> tokens) or command (uses HLC text)')
@@ -358,7 +482,11 @@ def main():
     args = parser.parse_args()
 
     # Create controller
-    controller = SimlingoQCar2Controller(config_path=args.config, spawn_obstacles=args.spawn_obstacles, nav_mode=args.nav_mode)
+    controller = SimlingoQCar2Controller(
+        config_path=args.config,
+        nav_mode=args.nav_mode,
+        scene_name=args.scene
+    )
 
     # Initialize
     if not controller.initialize():

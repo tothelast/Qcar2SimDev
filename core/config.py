@@ -4,6 +4,8 @@ All parameters are exact replicas from Simlingo to maintain feature parity.
 """
 
 import numpy as np
+import json
+import os
 
 
 class SimlingoQCar2Config:
@@ -87,13 +89,11 @@ class SimlingoQCar2Config:
         self.qlabs_host = "localhost"
         self.qcar2_actor_number = 0
 
-        # QCar2 spawn location (QLabs Cityscape Lite coordinates)
-        # Spawn at Node 13 (roundabout route start)
-        # Coordinates from SDCSRoadMap with proper scaling:
-        #   SDCSRoadMap: [0.26862, 1.84981] → QLabs: [2.686, 18.498] = × 10
-        # Heading: 90° (facing north/east)
-        self.qcar2_spawn_location = [2.686, 18.498, 0.005]  # [x, y, z] - Node 13
-        self.qcar2_spawn_rotation = [0.0, 0.0, 1.5708]  # [roll, pitch, yaw] in radians (90° = 1.5708 rad)
+        # QCar2 spawn location and rotation
+        # These will be set when a route is loaded via load_route()
+        # If not loaded, the system will fail with a clear error message
+        self.qcar2_spawn_location = None
+        self.qcar2_spawn_rotation = None
 
         # QCar2 camera selection
         self.qcar2_camera = 3  # CAMERA_CSI_FRONT
@@ -101,114 +101,18 @@ class SimlingoQCar2Config:
         # -------------------------------------------------------------------------
         # Route Waypoints (QLabs Cityscape Lite Global Coordinates)
         # -------------------------------------------------------------------------
-        # Route: Node 13 → 19 → 17 → 20 → 22 (Roundabout Navigation)
+        # Route Waypoints
+        # -------------------------------------------------------------------------
+        # Routes are now loaded from JSON files in the config/routes/ directory
+        # Use config.load_route(route_name) to load a specific route
+        # Each route contains:
+        # - waypoints: List of [x, y, z] coordinates with ~1.0m spacing
+        # - spawn_location: [x, y, z] starting position
+        # - spawn_rotation: [roll, pitch, yaw] in radians
+        # - metadata: route name, distance, number of waypoints
         #
-        # Route description:
-        # - Generated using SDCSRoadMap.generate_path([13, 19, 17, 20, 22])
-        # - Follows actual road network in QLabs Cityscape
-        # - Coordinates scaled: QLabs_X = SDCSRoadMap_X × 10, QLabs_Y = SDCSRoadMap_Y × 10
-        # - Total length: ~89 meters
-        # - 85 waypoints (downsampled from 893 to ~1.0m spacing)
-        # - Starts at Node 13 [2.686, 18.498] heading 90°
-        # - Ends at Node 22 [-19.841, 29.760] heading -90°
-        #
-        # Spacing: ~1.0m to match SimLingo training
-        # - SimLingo uses CARLA GlobalRoutePlanner with hop_resolution=1.0
-        # - This creates waypoints ~1m apart for target point selection
-        # - Target points fed to model are consecutive waypoints ~1m apart
-        #
-        # This route tests:
-        # - Roundabout navigation (Node 19 → 17)
-        # - Multiple direction changes
-        # - Long-distance route following
-        # - Curved road sections
-        self.route_waypoints = [
-            [  2.686,  18.498, 0.0],  # Start (spawn location)
-            [  2.686,  19.498, 0.0],
-            [  2.686,  20.598, 0.0],
-            [  2.706,  21.614, 0.0],
-            [  2.891,  22.697, 0.0],
-            [  3.263,  23.731, 0.0],  # Waypoint 5
-            [  3.812,  24.682, 0.0],
-            [  4.519,  25.523, 0.0],
-            [  5.263,  26.203, 0.0],
-            [  6.007,  26.872, 0.0],
-            [  6.824,  27.608, 0.0],  # Waypoint 10
-            [  7.567,  28.278, 0.0],
-            [  8.362,  28.993, 0.0],
-            [  9.179,  29.729, 0.0],
-            [  9.944,  30.379, 0.0],
-            [ 10.882,  30.951, 0.0],  # Waypoint 15
-            [ 11.906,  31.350, 0.0],
-            [ 12.983,  31.562, 0.0],
-            [ 14.082,  31.581, 0.0],
-            [ 15.159,  31.448, 0.0],
-            [ 16.258,  31.438, 0.0],  # Waypoint 20
-            [ 17.344,  31.606, 0.0],
-            [ 18.389,  31.947, 0.0],
-            [ 19.364,  32.452, 0.0],
-            [ 20.246,  33.108, 0.0],
-            [ 21.009,  33.898, 0.0],  # Waypoint 25
-            [ 21.635,  34.802, 0.0],
-            [ 22.107,  35.794, 0.0],
-            [ 22.412,  36.850, 0.0],
-            [ 22.542,  37.941, 0.0],
-            [ 22.495,  39.038, 0.0],  # Waypoint 30
-            [ 22.270,  40.114, 0.0],
-            [ 21.875,  41.139, 0.0],
-            [ 21.319,  42.087, 0.0],
-            [ 20.617,  42.933, 0.0],
-            [ 19.788,  43.654, 0.0],  # Waypoint 35
-            [ 18.854,  44.231, 0.0],
-            [ 17.838,  44.650, 0.0],
-            [ 16.768,  44.900, 0.0],
-            [ 15.670,  44.974, 0.0],
-            [ 14.670,  44.974, 0.0],  # Waypoint 40
-            [ 13.670,  44.974, 0.0],
-            [ 12.670,  44.974, 0.0],
-            [ 11.570,  44.974, 0.0],
-            [ 10.470,  44.974, 0.0],
-            [  9.370,  44.974, 0.0],  # Waypoint 45
-            [  8.270,  44.974, 0.0],
-            [  7.170,  44.974, 0.0],
-            [  6.070,  44.974, 0.0],
-            [  4.970,  44.974, 0.0],
-            [  3.870,  44.974, 0.0],  # Waypoint 50
-            [  2.770,  44.974, 0.0],
-            [  1.670,  44.974, 0.0],
-            [  0.570,  44.974, 0.0],
-            [ -0.500,  44.974, 0.0],
-            [ -1.500,  44.974, 0.0],  # Waypoint 55
-            [ -2.500,  44.974, 0.0],
-            [ -3.500,  44.974, 0.0],
-            [ -4.500,  44.974, 0.0],
-            [ -5.600,  44.974, 0.0],
-            [ -6.600,  44.974, 0.0],  # Waypoint 60
-            [ -7.600,  44.974, 0.0],
-            [ -8.600,  44.974, 0.0],
-            [ -9.600,  44.974, 0.0],
-            [-10.600,  44.974, 0.0],
-            [-11.627,  44.946, 0.0],  # Waypoint 65
-            [-12.716,  44.792, 0.0],
-            [-13.777,  44.506, 0.0],
-            [-14.795,  44.091, 0.0],
-            [-15.754,  43.554, 0.0],
-            [-16.640,  42.903, 0.0],  # Waypoint 70
-            [-17.439,  42.148, 0.0],
-            [-18.139,  41.300, 0.0],
-            [-18.729,  40.372, 0.0],
-            [-19.200,  39.379, 0.0],
-            [-19.546,  38.336, 0.0],  # Waypoint 75
-            [-19.760,  37.258, 0.0],
-            [-19.841,  36.161, 0.0],
-            [-19.841,  35.160, 0.0],
-            [-19.841,  34.160, 0.0],
-            [-19.841,  33.160, 0.0],  # Waypoint 80
-            [-19.841,  32.160, 0.0],
-            [-19.841,  31.160, 0.0],
-            [-19.841,  30.160, 0.0],
-            [-19.841,  29.760, 0.0],  # End
-        ]
+        # If not loaded, the system will fail with a clear error message
+        self.route_waypoints = None
 
         # Lookahead distance for target point selection
         # This determines how far ahead the vehicle looks for the target point
@@ -230,7 +134,7 @@ class SimlingoQCar2Config:
         self.enable_planned_route_tracer = True  # Show planned route as green line
         self.planned_route_tracer_color = [0.0, 1.0, 0.0]  # RGB color (green for planned route)
         self.planned_route_tracer_width = 0.05  # Line width in meters
-        
+
         # Special Tokens for Language Model
         # IMPORTANT: Only tokens that should be added to tokenizer vocabulary
         # <SAFETY> and <INSTRUCTION_FOLLOWING> are NOT special tokens - they are regular text!
@@ -317,6 +221,47 @@ class SimlingoQCar2Config:
             prompt = f"Current speed: {speed:.2f} m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. What should the ego do next?"
         else:
             prompt = f"Current speed: {speed:.2f} m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>. Predict the waypoints."
-            
+
         return prompt
+
+    def load_route(self, route_name):
+        """
+        Load a route from the config/routes/ directory.
+
+        Args:
+            route_name: Name of the route file (without .json extension)
+
+        Returns:
+            True if route loaded successfully, False otherwise
+        """
+        # Get the project root directory (parent of core/)
+        config_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(config_dir)
+        route_path = os.path.join(project_root, "config", "routes", f"{route_name}.json")
+
+        if not os.path.exists(route_path):
+            print(f"ERROR: Route file not found: {route_path}")
+            return False
+
+        try:
+            with open(route_path, 'r') as f:
+                route_data = json.load(f)
+
+            # Update route waypoints
+            self.route_waypoints = route_data['waypoints']
+
+            # Update spawn location and rotation
+            self.qcar2_spawn_location = route_data['spawn_location']
+            self.qcar2_spawn_rotation = route_data['spawn_rotation']
+
+            print(f"Loaded route: {route_data['name']}")
+            print(f"  Waypoints: {route_data['num_waypoints']}")
+            print(f"  Distance: {route_data['total_distance']:.1f}m")
+            print(f"  Spawn: {self.qcar2_spawn_location}")
+
+            return True
+
+        except Exception as e:
+            print(f"ERROR loading route {route_name}: {e}")
+            return False
 

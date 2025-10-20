@@ -18,18 +18,25 @@ class RouteManager:
     def __init__(self, config):
         """
         Initialize route manager.
-        
+
         Args:
             config: SimlingoQCar2Config instance
         """
         self.config = config
-        
+
+        # Validate that route has been loaded
+        if config.route_waypoints is None:
+            raise RuntimeError(
+                "No route loaded! Please load a route using config.load_route(route_name) "
+                "before initializing RouteManager. Available routes are in the routes/ directory."
+            )
+
         # Route waypoints in world coordinates
         self.route_waypoints = np.array(config.route_waypoints, dtype=np.float32)
-        
+
         # Current waypoint index
         self.current_waypoint_index = 0
-        
+
         # Target point lookahead distance
         self.lookahead_distance = config.target_point_lookahead
         

@@ -9,7 +9,7 @@ Controls:
 - Arrow Down / S: Brake / Reverse
 - Arrow Left / A: Steer left
 - Arrow Right / D: Steer right
-- Space: Emergency stop
+- B: Emergency brake (full stop)
 - Q / ESC: Quit
 """
 
@@ -27,7 +27,7 @@ class TeleopController:
     - Arrow Down / S: Brake / Reverse
     - Arrow Left / A: Steer left
     - Arrow Right / D: Steer right
-    - Space: Emergency stop
+    - B: Emergency brake (full stop)
     - Q / ESC: Quit
     """
 
@@ -75,10 +75,6 @@ class TeleopController:
                 self.pressed_keys.add('left')
             elif key == keyboard.Key.right:
                 self.pressed_keys.add('right')
-            elif key == keyboard.Key.space:
-                self.emergency_stop = True
-                self.target_velocity = 0.0
-                self.current_velocity = 0.0
             elif key == keyboard.Key.esc:
                 self.running = False
             # Handle character keys
@@ -91,6 +87,10 @@ class TeleopController:
                     self.pressed_keys.add('left')
                 elif key.char in ['d', 'D']:
                     self.pressed_keys.add('right')
+                elif key.char in ['b', 'B']:
+                    self.emergency_stop = True
+                    self.target_velocity = 0.0
+                    self.current_velocity = 0.0
                 elif key.char in ['q', 'Q']:
                     self.running = False
         except Exception as e:
@@ -225,10 +225,10 @@ def teleop_control_loop(qcar, teleop_controller):
                     turn=steering,
                     headlights=True,
                     leftTurnSignal=steering > 0.1,  # Left turn signal when steering left
-                    rightTurnSignal=steering < -0.1,  # Right turn signal when steering right
-                    brakeSignal=velocity < -0.1,  # Brake signal when reversing
-                    reverseSignal=velocity < -0.1  # Reverse signal when reversing
-                )
+                        rightTurnSignal=steering < -0.1,  # Right turn signal when steering right
+                        brakeSignal=velocity < -0.1,  # Brake signal when reversing
+                        reverseSignal=velocity < -0.1  # Reverse signal when reversing
+                    )
             except Exception:
                 consecutive_errors += 1
                 if consecutive_errors > max_consecutive_errors:

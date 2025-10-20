@@ -1,0 +1,7 @@
+{
+  "name": "one_way_street",
+  "description": "One-way street with parked vehicle in middle of route",
+  "ego_route": "one_way_street",
+  "actors": ["parked_car_spot4"]
+}
+

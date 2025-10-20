@@ -1,0 +1,7 @@
+{
+  "name": "kink_street",
+  "description": "Kink street with south pedestrian crossing",
+  "ego_route": "kink_street",
+  "actors": ["south_pedestrian"]
+}
+

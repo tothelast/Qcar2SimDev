@@ -1,0 +1,18 @@
+{
+  "name": "roundabout_car",
+  "description": "Autonomous QCar2 following roundabout route (Node 16→17→16)",
+  "type": "autonomous_vehicle",
+  "actor_number": 2,
+  "spawn_location": [9.076, 37.098, 0.005],
+  "spawn_rotation": [0.0, 0.0, -80.6],
+  "route_type": "roundabout",
+  "route_nodes": [16, 17],
+  "control_params": {
+    "target_speed": 2.5,
+    "stanley_gain": 0.3,
+    "lookahead_distance": 3.0,
+    "max_steering_angle_deg": 30.0,
+    "update_rate_hz": 10
+  }
+}
+

@@ -1,0 +1,7 @@
+{
+  "name": "semi_circle",
+  "description": "Empty road - baseline scenario with no obstacles",
+  "ego_route": "semi_circle",
+  "actors": []
+}
+

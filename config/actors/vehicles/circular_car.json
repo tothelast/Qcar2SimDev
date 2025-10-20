@@ -1,0 +1,18 @@
+{
+  "name": "circular_car",
+  "description": "Autonomous QCar2 following circular route (Node 0→2→4→6→0)",
+  "type": "autonomous_vehicle",
+  "actor_number": 1,
+  "spawn_location": [0.0, 1.302, 0.005],
+  "spawn_rotation": [0.0, 0.0, -90.0],
+  "route_type": "circular",
+  "route_nodes": [0, 2, 4, 6],
+  "control_params": {
+    "target_speed": 2.5,
+    "stanley_gain": 0.3,
+    "lookahead_distance": 3.0,
+    "max_steering_angle_deg": 30.0,
+    "update_rate_hz": 10
+  }
+}
+

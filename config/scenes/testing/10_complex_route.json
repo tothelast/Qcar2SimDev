@@ -1,0 +1,7 @@
+{
+  "name": "complex_route",
+  "description": "Complex route with multiple vehicles, pedestrian, and stop sign",
+  "ego_route": "complex_route",
+  "actors": ["circular_car", "roundabout_car", "east_pedestrian", "stop_sign_roundabout"]
+}
+

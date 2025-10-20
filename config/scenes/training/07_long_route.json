@@ -1,0 +1,7 @@
+{
+  "name": "long_route",
+  "description": "Long route with moving vehicle and pedestrian",
+  "ego_route": "long_route",
+  "actors": ["circular_car", "east_pedestrian"]
+}
+

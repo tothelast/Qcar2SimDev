@@ -1,0 +1,10 @@
+{
+  "name": "parked_car_spot2",
+  "description": "Parked vehicle at spot 2",
+  "type": "parked_vehicle",
+  "actor_number": 101,
+  "location": [-11.5, 17.5, 0.001],
+  "rotation": [0.0, 0.0, -90.0],
+  "configuration": 0
+}
+
