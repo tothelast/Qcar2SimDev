@@ -3,13 +3,10 @@ Route Management Module.
 Manages waypoints and converts global target points to ego frame.
 """
 
-import sys
-import os
 import numpy as np
 from typing import List, Tuple, Optional
 
-# Add parent directory to path for core imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from core.coordinate_utils import CoordinateTransformer
 
 
 class RouteManager:
@@ -128,36 +125,11 @@ class RouteManager:
         # Get target points in world frame
         target_world, next_target_world, hlc = self.get_target_point(current_position)
 
-        # Convert to ego frame
-        target_ego = self._world_to_ego(target_world[:2], current_position[:2], current_heading)
-        next_target_ego = self._world_to_ego(next_target_world[:2], current_position[:2], current_heading)
+        # Convert to ego frame using shared utility
+        target_ego = CoordinateTransformer.world_to_ego(target_world[:2], current_position[:2], current_heading)
+        next_target_ego = CoordinateTransformer.world_to_ego(next_target_world[:2], current_position[:2], current_heading)
 
         return target_ego, next_target_ego, hlc
-    
-    def _world_to_ego(self, world_point: np.ndarray, vehicle_pos: np.ndarray, vehicle_heading: float) -> np.ndarray:
-        """
-        Convert world coordinates to ego vehicle frame.
-        Matches the original Simlingo implementation (inverse_conversion_2d).
-
-        Args:
-            world_point: Point in world coordinates [x, y]
-            vehicle_pos: Vehicle position [x, y]
-            vehicle_heading: Vehicle heading in radians (yaw)
-
-        Returns:
-            Point in ego frame [x, y]
-        """
-        # Create rotation matrix (same as original Simlingo)
-        rotation_matrix = np.array([
-            [np.cos(vehicle_heading), -np.sin(vehicle_heading)],
-            [np.sin(vehicle_heading), np.cos(vehicle_heading)]
-        ])
-
-        # Apply transformation: R^T @ (point - translation)
-        # This matches the original Simlingo inverse_conversion_2d function
-        ego_point = rotation_matrix.T @ (world_point - vehicle_pos)
-
-        return ego_point.astype(np.float32)
     
     def is_route_complete(self, current_position: np.ndarray, threshold: float = 2.0) -> bool:
         """

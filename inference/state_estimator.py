@@ -3,15 +3,12 @@ Vehicle State Estimation Module.
 Tracks vehicle position, velocity, and heading from QCar2 state feedback.
 """
 
-import sys
-import os
 import numpy as np
 import time
 from typing import Tuple, Optional
 from collections import deque
 
-# Add parent directory to path for core imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from core.coordinate_utils import CoordinateTransformer
 
 
 class StateEstimator:
@@ -150,67 +147,42 @@ class StateEstimator:
     def world_to_ego(self, world_point: np.ndarray) -> np.ndarray:
         """
         Convert world coordinates to ego vehicle frame.
-        
+
         Args:
             world_point: Point in world coordinates [x, y] or [x, y, z]
-            
+
         Returns:
             Point in ego frame [x, y] or [x, y, z]
         """
         if self.position is None or self.rotation is None:
             return world_point
-        
-        # Get vehicle position and heading
-        vehicle_pos = self.position[:2]  # [x, y]
-        vehicle_heading = self.heading
-        
-        # Translate to vehicle origin
-        translated = world_point[:2] - vehicle_pos
-        
-        # Rotate to vehicle frame
-        # Ego frame: x-forward, y-left (opposite of world y-right)
-        cos_h = np.cos(-vehicle_heading)
-        sin_h = np.sin(-vehicle_heading)
-        
-        ego_x = cos_h * translated[0] - sin_h * translated[1]
-        ego_y = sin_h * translated[0] + cos_h * translated[1]
-        
-        if len(world_point) == 3:
-            return np.array([ego_x, ego_y, world_point[2] - self.position[2]])
-        else:
-            return np.array([ego_x, ego_y])
-    
+
+        # Use shared coordinate transformation utility
+        return CoordinateTransformer.world_to_ego(
+            world_point,
+            self.position[:2],
+            self.heading
+        )
+
     def ego_to_world(self, ego_point: np.ndarray) -> np.ndarray:
         """
         Convert ego vehicle frame to world coordinates.
-        
+
         Args:
             ego_point: Point in ego frame [x, y] or [x, y, z]
-            
+
         Returns:
             Point in world coordinates [x, y] or [x, y, z]
         """
         if self.position is None or self.rotation is None:
             return ego_point
-        
-        # Get vehicle position and heading
-        vehicle_pos = self.position[:2]  # [x, y]
-        vehicle_heading = self.heading
-        
-        # Rotate from vehicle frame to world frame
-        cos_h = np.cos(vehicle_heading)
-        sin_h = np.sin(vehicle_heading)
-        
-        world_x = cos_h * ego_point[0] - sin_h * ego_point[1]
-        world_y = sin_h * ego_point[0] + cos_h * ego_point[1]
-        
-        # Translate to world origin
-        world_point = np.array([world_x, world_y]) + vehicle_pos
-        
-        if len(ego_point) == 3:
-            return np.array([world_point[0], world_point[1], ego_point[2] + self.position[2]])
-        else:
-            return world_point
+
+        # Use shared coordinate transformation utility
+        return CoordinateTransformer.ego_to_world(
+            ego_point,
+            self.position[:2],
+            self.heading
+        )
     
     def reset(self):
         """Reset state estimator."""
