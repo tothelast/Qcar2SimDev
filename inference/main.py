@@ -75,6 +75,7 @@ class SimlingoQCar2Controller:
         self.trajectory_log = []
         self.collision_count = 0
         self.start_time = None
+        self.first_image_saved = False
         
     def initialize(self) -> bool:
         """
@@ -149,8 +150,10 @@ class SimlingoQCar2Controller:
         Returns:
             True if step successful, False otherwise
         """
-        # Get camera image
-        image = self.qcar_interface.get_camera_image()
+        # Get camera image (save first image for debugging)
+        image = self.qcar_interface.get_camera_image(save_debug_image=not self.first_image_saved)
+        if not self.first_image_saved:
+            self.first_image_saved = True
 
         # Check if image is valid
         if image is None:

@@ -2,6 +2,7 @@
 
 import numpy as np
 import cv2
+import os
 from typing import Tuple, Optional
 
 from qvl.qlabs import QuanserInteractiveLabs
@@ -110,8 +111,13 @@ class QCar2Interface:
         self._initialize_commentary_widget(model_wrapper=model_wrapper)
         return True
     
-    def get_camera_image(self) -> Optional[np.ndarray]:
-        """Capture image from QCar2 camera, return RGB or None if failed."""
+    def get_camera_image(self, save_debug_image: bool = False) -> Optional[np.ndarray]:
+        """
+        Capture image from QCar2 camera, return RGB or None if failed.
+
+        Args:
+            save_debug_image: If True, save raw camera image to debug_output/
+        """
         success, image = self.qcar.get_image(camera=self.config.qcar2_camera)
 
         if not success or image is None:
@@ -122,14 +128,17 @@ class QCar2Interface:
             print(f"ERROR: Invalid image - type: {type(image)}, shape: {getattr(image, 'shape', 'N/A')}")
             return None
 
+        # Save debug image if requested (overwrites previous)
+        if save_debug_image:
+            os.makedirs('debug_output', exist_ok=True)
+            cv2.imwrite('debug_output/raw_camera_spawn.png', image)
+
         # Convert BGR to RGB
         try:
             return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         except cv2.error as e:
             print(f"ERROR: Color conversion failed: {e}")
             return None
-
-        return image
     
     def set_control(self, forward_velocity: float, turn_angle: float) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray]]:
         """

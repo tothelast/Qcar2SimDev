@@ -17,11 +17,11 @@ class SimlingoQCar2Config:
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
-        # Camera parameters (must match training data)
+        # CARLA training camera parameters (legacy - required by DrivingInput interface but not used by model)
         self.camera_width = 1024
         self.camera_height = 512
-        self.camera_fov = 160  # degrees
-        self.camera_position = np.array([+1.83, 0.0, +1.10], dtype=np.float32)
+        self.camera_fov = 110  # degrees (CARLA training FOV)
+        self.camera_position = np.array([-1.5, 0.0, 2.0], dtype=np.float32)  # CARLA camera position
 
         # ImageNet normalization
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -86,23 +86,16 @@ class SimlingoQCar2Config:
         self.special_tokens = ['<TARGET_POINT>']
         
     def get_camera_intrinsics(self, width=None, height=None, fov=None):
-        """Generate 3x3 camera intrinsics matrix from FOV."""
+        """Generate 3x3 camera intrinsics matrix (legacy - required by DrivingInput but not used by model)."""
         width = width or self.camera_width
         height = height or self.camera_height
         fov = fov or self.camera_fov
-
-        # Focal length: f = width / (2 * tan(fov/2))
         f = width / (2.0 * np.tan(np.radians(fov) / 2.0))
         cx, cy = width / 2.0, height / 2.0
+        return np.array([[f, 0.0, cx], [0.0, f, cy], [0.0, 0.0, 1.0]], dtype=np.float32)
 
-        return np.array([
-            [f, 0.0, cx],
-            [0.0, f, cy],
-            [0.0, 0.0, 1.0]
-        ], dtype=np.float32)
-    
     def get_camera_extrinsics(self):
-        """Generate 4x4 camera extrinsics matrix (identity rotation + translation)."""
+        """Generate 4x4 camera extrinsics matrix (legacy - required by DrivingInput but not used by model)."""
         extrinsics = np.zeros((4, 4), dtype=np.float32)
         extrinsics[3, 3] = 1.0
         extrinsics[:3, :3] = np.eye(3)
