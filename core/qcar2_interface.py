@@ -338,7 +338,7 @@ class QCar2Interface:
             return
 
         print("Initializing commentary window...")
-        self.commentary_widget = CommentaryWindow(model_wrapper=model_wrapper)
+        self.commentary_widget = CommentaryWindow(model_wrapper=model_wrapper, config=self.config)
         self.commentary_widget.start()
         print("Commentary window initialized successfully")
 

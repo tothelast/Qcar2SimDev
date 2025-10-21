@@ -49,9 +49,9 @@ class CameraProcessor:
             Tuple of (processed_image, image_sizes)
         """
         # Bottom crop 30% to match CARLA training aspect ratio (2.0:1 -> 2.86:1)
-        # height = image.shape[0]
-        # cropped_height = int(height * 0.7)
-        # image = image[:cropped_height, :, :]
+        height = image.shape[0]
+        cropped_height = int(height * 0.7)
+        image = image[:cropped_height, :, :]
 
         # Save first processed image (after crop, before JPEG) for debugging
         if not self.first_processed_saved:

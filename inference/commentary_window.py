@@ -9,8 +9,8 @@ from datetime import datetime
 
 class CommentaryWindow:
     """Displays model commentary and HLC control in a split-panel GUI."""
-    
-    def __init__(self, model_wrapper=None):
+
+    def __init__(self, model_wrapper=None, config=None):
         self.window = None
         self.text_widget = None
         self.waypoint_display = None
@@ -19,6 +19,7 @@ class CommentaryWindow:
         self.message_queue = queue.Queue()
         self.last_message = None
         self.model_wrapper = model_wrapper
+        self.config = config
 
         # Mode selection variables
         self.mode_var = None
@@ -352,7 +353,15 @@ class CommentaryWindow:
             # Reference: simlingo/team_code/agent_simlingo.py control_pid() method
             # Uses waypoints[0] to waypoints[2] (first 0.5s of predictions)
             if speed_waypoints is not None and len(speed_waypoints) > 2:
-                target_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.0
+                # Calculate model's predicted speed (in CARLA scale)
+                model_target_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.0
+
+                # Scale to QCar2 range for display (same as control_converter.py)
+                if self.config and hasattr(self.config, 'speed_scale'):
+                    target_speed = model_target_speed * self.config.speed_scale
+                else:
+                    # Fallback if config not available
+                    target_speed = model_target_speed
             else:
                 target_speed = 0.0
 

@@ -33,19 +33,28 @@ class SimlingoQCar2Config:
         self.turn_kd = 1.0
         self.turn_n = 20
 
-        # Control parameters
+        # Control parameters (must match teleop_controller.py for consistent fine-tuning)
         self.clip_throttle = 1.0
-        self.steering_gain = 0.36848336
+        self.steering_gain = np.pi / 9  # ~20° turn angle (matches teleop max_steering_angle)
 
-        # Timing: 20 Hz control loop
+        # Timing: 10 Hz control loop (matches teleop dt = 0.1)
         self.carla_fps = 20
-        self.control_frequency = 20
+        self.control_frequency = 10
         self.dt = 1.0 / self.control_frequency
 
         # Waypoint configuration (must match training data)
         self.wp_dilation = 1
         self.data_save_freq = 5  # Waypoint spacing: 0.25s (20 FPS / 5)
         self.interpolation_spacing = 0.1
+
+        # QCar2 physical limits and scaling (must match teleop_controller.py)
+        # speed_scale is used bidirectionally:
+        # - Input: qcar2_speed / speed_scale -> model sees CARLA-range speeds (0-10 m/s)
+        # - Output: model_speed * speed_scale -> QCar2-range speeds (0-4 m/s)
+        self.speed_scale = 0.4  # Maps CARLA speeds (0-10 m/s) to QCar2 range (0-4 m/s)
+        self.qcar2_max_speed = 4.0  # m/s (matches teleop max_forward_velocity)
+        self.qcar2_max_acceleration = 1.0  # m/s² (matches teleop acceleration)
+        self.qcar2_max_deceleration = 2.0  # m/s² (matches teleop deceleration)
 
         # Stuck detection
         self.stuck_threshold = 800

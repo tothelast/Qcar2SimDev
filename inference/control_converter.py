@@ -123,11 +123,6 @@ class ControlConverter:
         # Initialize controllers
         self.speed_controller = LongitudinalLinearRegressionController(config)
         self.turn_controller = LateralPIDController(config)
-
-        # QCar2-specific physical limits
-        # These are hardcoded here since they're hardware-specific constants
-        self.qcar2_max_speed = 3.0  # m/s (QCar2 physical maximum speed)
-        self.qcar2_max_acceleration = 3.0  # m/s² (for smooth velocity transitions)
         
     def control_pid(
         self,
@@ -246,12 +241,9 @@ class ControlConverter:
         """
         Convert Simlingo control to QCar2 control using direct velocity control.
 
-        This method uses QCar2's native velocity-based control interface instead of
-        simulating CARLA's acceleration-based dynamics with the bicycle model.
-
         Args:
             steer: Steering value [-1, 1]
-            throttle: Throttle value [0, 1] (kept for signature compatibility, not used)
+            throttle: Throttle value [0, 1] (unused - kept for compatibility)
             brake: Brake flag
             desired_speed: Target speed from model's speed waypoints (m/s)
             current_speed: Current speed in m/s
@@ -259,53 +251,32 @@ class ControlConverter:
 
         Returns:
             Tuple of (forward_velocity, turn_angle)
-            - forward_velocity: Target speed in m/s
-            - turn_angle: Turn angle in radians
         """
-        # Compute target velocity using direct velocity control
-        # (instead of CARLA's bicycle model with throttle/brake → acceleration → speed)
         if brake:
-            # Brake: target zero velocity
             target_speed = 0.0
         else:
-            # Use desired speed from model's speed waypoints directly
-            # NOTE: We don't scale by throttle because QCar2 uses direct velocity control,
-            # not acceleration-based control like CARLA. The throttle value was computed
-            # for CARLA's acceleration dynamics and is not needed for velocity commands.
-            # The smoothing with qcar2_max_acceleration already handles gradual transitions.
-            target_speed = desired_speed
+            # Scale CARLA speeds to QCar2 range and clip to physical limits
+            target_speed = desired_speed * self.config.speed_scale
+            target_speed = min(target_speed, self.config.qcar2_max_speed)
 
-            # IMPORTANT: Clip to QCar2's physical maximum speed
-            # The model may predict speeds beyond QCar2's capabilities (e.g., 7-10 m/s)
-            # since it was trained on full-scale CARLA vehicles
-            target_speed = min(target_speed, self.qcar2_max_speed)
-
-        # Apply smooth velocity transitions with QCar2-appropriate acceleration limits
-        # This prevents jerky motion and respects QCar2's physical capabilities
+        # Apply smooth velocity transitions with asymmetric acceleration limits
         speed_diff = target_speed - current_speed
-        max_speed_change = self.qcar2_max_acceleration * dt
 
-        # Clip speed change to acceleration limits
-        forward_velocity = current_speed + np.clip(
-            speed_diff,
-            -max_speed_change,  # Max deceleration
-            max_speed_change    # Max acceleration
-        )
+        # Use different limits for acceleration vs. deceleration
+        if speed_diff > 0:
+            max_change = self.config.qcar2_max_acceleration * dt
+        else:
+            max_change = self.config.qcar2_max_deceleration * dt
 
-        # Ensure non-negative velocity and respect maximum speed
-        forward_velocity = np.clip(forward_velocity, 0.0, self.qcar2_max_speed)
+        forward_velocity = current_speed + np.clip(speed_diff, -max_change, max_change)
+        forward_velocity = np.clip(forward_velocity, 0.0, self.config.qcar2_max_speed)
 
-        # Convert steer to turn angle
-        # NOTE: QCar2 convention is opposite to CARLA/Simlingo:
-        # - CARLA/Simlingo: positive steering = left turn
-        # - QCar2: positive turn_angle = right turn
-        # So we negate the steering value
+        # Convert steering to turn angle (negate for QCar2 convention)
         turn_angle = -steer * self.config.steering_gain
 
         return forward_velocity, turn_angle
 
     def reset(self):
         """Reset controller state."""
-        self.speed_controller.reset()
         self.turn_controller.reset()
 

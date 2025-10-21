@@ -13,7 +13,7 @@ class TeleopController:
         """Initialize teleop controller."""
         # Control parameters
         self.max_forward_velocity = 4.0
-        self.max_reverse_velocity = -2.0
+        self.max_reverse_velocity = 0.0
         self.max_steering_angle = np.pi / 9
 
         # Acceleration/deceleration rates
