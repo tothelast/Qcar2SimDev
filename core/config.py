@@ -96,12 +96,8 @@ class SimlingoQCar2Config:
         self.planned_route_tracer_color = [0.0, 1.0, 0.0]
         self.planned_route_tracer_width = 0.05
 
-        # Special tokens for language model
-        self.special_tokens = [
-            '<WAYPOINTS>', '<WAYPOINTS_DIFF>', '<ORG_WAYPOINTS_DIFF>',
-            '<ORG_WAYPOINTS>', '<WAYPOINT_LAST>', '<ROUTE>',
-            '<ROUTE_DIFF>', '<TARGET_POINT>',
-        ]
+        # Special token for language model
+        self.special_tokens = ['<TARGET_POINT>']
         
     def get_camera_intrinsics(self, width=None, height=None, fov=None):
         """Generate 3x3 camera intrinsics matrix from FOV."""
