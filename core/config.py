@@ -17,54 +17,40 @@ class SimlingoQCar2Config:
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
-        # Camera resolution and FOV
+        # Camera parameters (must match training data)
         self.camera_width = 1024
         self.camera_height = 512
-        self.qcar2_camera_width = 820
-        self.qcar2_camera_height = 410
         self.camera_fov = 160  # degrees
-
-        # Camera position (x: forward, y: right, z: up) and rotation (roll, pitch, yaw)
         self.camera_position = np.array([+1.83, 0.0, +1.10], dtype=np.float32)
-        self.camera_rotation = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 
         # ImageNet normalization
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-        # PID controller (Simlingo values)
+        # PID controller parameters (from PDM-Lite expert)
         self.turn_kp = 3.25
         self.turn_ki = 1.0
         self.turn_kd = 1.0
         self.turn_n = 20
 
-        # Control parameters (Simlingo values)
+        # Control parameters
         self.clip_throttle = 1.0
-        self.max_throttle = 1.0
-
-        # Kinematic bicycle model (Simlingo values)
-        self.front_wheel_base = -0.090769015
-        self.rear_wheel_base = 1.4178275
         self.steering_gain = 0.36848336
-        self.brake_acceleration = -4.952399
-        self.throttle_acceleration = 0.5633837
 
         # Timing: 20 Hz control loop
-        self.carla_frame_rate = 1.0 / 20.0
         self.carla_fps = 20
         self.control_frequency = 20
         self.dt = 1.0 / self.control_frequency
 
-        # Waypoint configuration
+        # Waypoint configuration (must match training data)
         self.wp_dilation = 1
-        self.data_save_freq = 5  # 4 Hz sampling (20 FPS / 5)
+        self.data_save_freq = 5  # Waypoint spacing: 0.25s (20 FPS / 5)
         self.interpolation_spacing = 0.1
 
         # Stuck detection
         self.stuck_threshold = 800
         self.creep_duration = 15
         self.creep_throttle = 0.4
-        self.initial_frames_delay = 5
 
         # Navigation
         self.eval_route_as = 'target_point'

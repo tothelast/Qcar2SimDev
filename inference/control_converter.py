@@ -147,42 +147,17 @@ class ControlConverter:
             Tuple of (steer, throttle, brake, desired_speed)
         """
         # Calculate desired speed from speed waypoints
-        # NOTE: The model outputs 10 speed waypoints, but empirically the original
-        # calculation using indices [0, 3] works better than the "correct" [2, 4].
-        # This may be compensating for a systematic bias in the model's speed predictions.
-        #
-        # Original calculation (empirically better):
-        # - Uses data_save_freq=4 (waypoints at 0.25s intervals)
-        # - one_second = carla_fps // (wp_dilation * data_save_freq) = 20 // 4 = 5
-        # - half_second = 5 // 2 = 2
-        # - Indices: [half_second-2, one_second-2] = [0, 3]
-        # - Time between waypoints[0] and [3]: 0.75s
-        # - Formula: distance * 2.0 (assumes 0.5s, so underestimates by 33%)
-        # - This underestimation appears to compensate for model over-prediction
+        # Reference: simlingo/team_code/agent_simlingo.py control_pid() method
+        # Uses waypoints[0] to waypoints[2] (first 0.5s of predictions)
 
-        model_data_save_freq = 4
-        one_second = int(self.config.carla_fps // (self.config.wp_dilation * model_data_save_freq))
+        one_second = int(self.config.carla_fps // (self.config.wp_dilation * self.config.data_save_freq))
         half_second = one_second // 2
 
-        # IMPORTANT: Speed calculation method (EXACT SimLingo implementation)
-        # =====================================================================
-        # We use EUCLIDEAN DISTANCE to match the original SimLingo training.
-        #
-        # The model was trained with this calculation, so changing it would
-        # invalidate the model's learned speed-waypoint relationships.
-        #
-        # For teleop fine-tuning: Use the SAME calculation during training and deployment.
-        # This ensures consistency and allows transfer learning from pre-trained weights.
-        #
-        # Note: Waypoints are cumsum-decoded positions (see adaptors.py line 175)
-        # representing absolute future positions in ego frame.
-
-        # Calculate desired speed using Euclidean distance (original SimLingo)
+        # Indices: [half_second - 2, one_second - 2] = [0, 2]
         idx1 = half_second - 2  # Index 0
-        idx2 = one_second - 2   # Index 3
+        idx2 = one_second - 2   # Index 2
 
         if len(speed_waypoints) > idx2:
-            # Standard case: use waypoints[0] to waypoints[3]
             desired_speed = np.linalg.norm(
                 speed_waypoints[idx2] - speed_waypoints[idx1]
             ) * 2.0
@@ -328,46 +303,6 @@ class ControlConverter:
         turn_angle = -steer * self.config.steering_gain
 
         return forward_velocity, turn_angle
-    
-    def bicycle_model_step(
-        self,
-        speed: float,
-        dt: float,
-        steer: float,
-        throttle: float,
-        brake: bool
-    ) -> float:
-        """
-        Kinematic bicycle model for speed prediction (exact Simlingo implementation).
-
-        NOTE: This method is NO LONGER USED in the current implementation.
-        We now use direct velocity control (convert_to_qcar2_control) instead of
-        simulating CARLA's acceleration-based dynamics with the bicycle model.
-
-        This method is kept for reference and potential future use (e.g., if deploying
-        to physical QCar hardware that requires PWM-based control).
-
-        Args:
-            speed: Current speed in m/s
-            dt: Time step in seconds
-            steer: Steering value [-1, 1] (unused but kept for signature compatibility)
-            throttle: Throttle value [0, 1]
-            brake: Brake flag
-
-        Returns:
-            Next speed in m/s
-        """
-        # Calculate acceleration
-        if brake:
-            accel = self.config.brake_acceleration
-        else:
-            accel = self.config.throttle_acceleration * throttle
-
-        # Update speed
-        next_speed = speed + accel * dt
-        next_speed = max(next_speed, 0.0)  # ReLU
-
-        return next_speed
 
     def reset(self):
         """Reset controller state."""

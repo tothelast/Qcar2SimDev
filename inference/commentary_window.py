@@ -348,13 +348,11 @@ class CommentaryWindow:
         try:
             import numpy as np
 
-            # Calculate target speed from last two speed waypoints
-            # Waypoints are 0.25s apart, so multiply by 4 to get m/s
-            if speed_waypoints is not None and len(speed_waypoints) >= 2:
-                last_wp = speed_waypoints[-1]
-                second_last_wp = speed_waypoints[-2]
-                delta = last_wp - second_last_wp
-                target_speed = np.linalg.norm(delta) * 4.0
+            # Calculate target speed using same method as controller
+            # Reference: simlingo/team_code/agent_simlingo.py control_pid() method
+            # Uses waypoints[0] to waypoints[2] (first 0.5s of predictions)
+            if speed_waypoints is not None and len(speed_waypoints) > 2:
+                target_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.0
             else:
                 target_speed = 0.0
 

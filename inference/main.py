@@ -224,13 +224,8 @@ class SimlingoQCar2Controller:
         else:
             self.stuck_detector = 0
 
-        # Initial startup boost (first 50 steps or until moving)
-        if self.step_count < 50 and velocity < 0.5:
-            throttle = max(0.3, throttle)
-            brake = False
-
-        # Stuck recovery (after initial startup period)
-        elif self.stuck_detector > self.config.stuck_threshold:
+        # Stuck recovery
+        if self.stuck_detector > self.config.stuck_threshold:
             self.force_move = self.config.creep_duration
 
         if self.force_move > 0:
