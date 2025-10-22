@@ -67,25 +67,20 @@ class CommModularContainer:
 
 class QuanserInteractiveLabs:
     """This class establishes a server connection with QLabs and manages the communications."""
-    _stream = None
-    
+
     _BUFFER_SIZE = 100000
-
-    _readBuffer = bytearray(_BUFFER_SIZE)
-    _sendBuffer = bytearray()
-
-    _receivePacketBuffer = bytearray()
-    _receivePacketSize = 0
-    _receivePacketContainerIndex = 0
-    _wait_for_container_timeout = 5
-
-    _send_queue = bytearray()
-
 
     # Initialize QLabs
     def __init__(self):
         """ Constructor Method """
-        pass
+        self._stream = None
+        self._readBuffer = bytearray(self._BUFFER_SIZE)
+        self._sendBuffer = bytearray()
+        self._receivePacketBuffer = bytearray()
+        self._receivePacketSize = 0
+        self._receivePacketContainerIndex = 0
+        self._wait_for_container_timeout = 5
+        self._send_queue = bytearray()
 
     def open(self, address, timeout=10):
         """Open a connection to QLabs.
