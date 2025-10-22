@@ -17,53 +17,44 @@ class SimlingoQCar2Config:
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
-        # CARLA training camera parameters (legacy - required by DrivingInput interface but not used by model)
+        # CARLA training camera parameters (exact match to training data)
         self.camera_width = 1024
         self.camera_height = 512
-        self.camera_fov = 110  # degrees (CARLA training FOV)
+        self.camera_fov = 110  # degrees - Match CARLA training FOV
         self.camera_position = np.array([-1.5, 0.0, 2.0], dtype=np.float32)  # CARLA camera position
 
         # ImageNet normalization
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-        # PID controller parameters (from PDM-Lite expert)
+        # PID controller parameters (exact Simlingo values from config_simlingo.py)
         self.turn_kp = 3.25
         self.turn_ki = 1.0
         self.turn_kd = 1.0
         self.turn_n = 20
 
-        # Control parameters (must match teleop_controller.py for consistent fine-tuning)
+        # Control parameters (exact Simlingo values from config_simlingo.py)
         self.clip_throttle = 1.0
-        self.steering_gain = np.pi / 9  # ~20° turn angle (matches teleop max_steering_angle)
 
-        # Timing: 10 Hz control loop (matches teleop dt = 0.1)
-        self.carla_fps = 20
-        self.control_frequency = 10
-        self.dt = 1.0 / self.control_frequency
+        # Timing: Match CARLA exactly - 20 Hz control, 4 Hz model inference
+        self.carla_fps = 20  # Control loop frequency (matches CARLA simulator FPS)
+        self.dt = 1.0 / self.carla_fps  # 0.05s timestep
+        self.data_save_freq = 5  # Model inference every 5 iterations = 4 Hz (matches CARLA training data)
 
-        # Waypoint configuration (must match training data)
+        # Waypoint configuration
         self.wp_dilation = 1
-        self.data_save_freq = 5  # Waypoint spacing: 0.25s (20 FPS / 5)
         self.interpolation_spacing = 0.1
-
-        # QCar2 physical limits and scaling (must match teleop_controller.py)
-        # speed_scale is used bidirectionally:
-        # - Input: qcar2_speed / speed_scale -> model sees CARLA-range speeds (0-10 m/s)
-        # - Output: model_speed * speed_scale -> QCar2-range speeds (0-4 m/s)
-        self.speed_scale = 0.4  # Maps CARLA speeds (0-10 m/s) to QCar2 range (0-4 m/s)
-        self.qcar2_max_speed = 4.0  # m/s (matches teleop max_forward_velocity)
-        self.qcar2_max_acceleration = 1.0  # m/s² (matches teleop acceleration)
-        self.qcar2_max_deceleration = 2.0  # m/s² (matches teleop deceleration)
 
         # Stuck detection
         self.stuck_threshold = 800
         self.creep_duration = 15
         self.creep_throttle = 0.4
 
-        # Navigation
-        self.eval_route_as = 'target_point'
-        self.use_cot = True
+        # QCar2 physical constraints
+        self.qcar2_max_speed = 4.0  # m/s
+        self.qcar2_max_acceleration = 1.0  # m/s^2
+        self.qcar2_max_deceleration = 2.0  # m/s^2
+        self.qcar2_max_steering = np.pi / 9  # radians (~20 degrees)
 
         # QCar2 QLabs
         self.qlabs_host = "localhost"
@@ -78,8 +69,6 @@ class SimlingoQCar2Config:
 
         # Visualization
         self.enable_visualization = True
-        self.save_images = False
-        self.save_path = "output"
 
         # Trajectory visualization (red = actual, green = planned)
         self.enable_trajectory_tracer = True
@@ -111,12 +100,6 @@ class SimlingoQCar2Config:
         extrinsics[:3, 3] = self.camera_position
         return extrinsics
     
-    def get_prompt_template(self, speed, use_cot=None):
-        """Generate prompt template for Simlingo model."""
-        use_cot = use_cot if use_cot is not None else self.use_cot
-        base = f"Current speed: {speed:.2f} m/s. Target waypoint: <TARGET_POINT><TARGET_POINT>."
-        return f"{base} What should the ego do next?" if use_cot else f"{base} Predict the waypoints."
-
     def load_route(self, route_name):
         """Load route from config/routes/*.json."""
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

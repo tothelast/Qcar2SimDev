@@ -43,27 +43,18 @@ class CameraProcessor:
         Process raw camera image for Simlingo model.
 
         Args:
-            image: Raw RGB image from QCar2 (H, W, 3) uint8
+            image: RGB image from QCar2 (H, W, 3) uint8 (already JPEG-compressed by QLabs)
 
         Returns:
             Tuple of (processed_image, image_sizes)
         """
-        # Bottom crop 30% to match CARLA training aspect ratio (2.0:1 -> 2.86:1)
-        height = image.shape[0]
-        cropped_height = int(height * 0.7)
+        # Bottom crop to match CARLA aspect ratio (2:1)
+        # CARLA training images: 1024x512 (aspect ratio 2:1)
+        # QCar2 CSI camera: 820x410 (aspect ratio 2:1 already)
+        # Apply 30% bottom crop to remove hood/ground (matches CARLA preprocessing)
+        height, width = image.shape[:2]
+        cropped_height = int(height * 0.7)  # Keep top 70%, remove bottom 30%
         image = image[:cropped_height, :, :]
-
-        # Save first processed image (after crop, before JPEG) for debugging
-        if not self.first_processed_saved:
-            os.makedirs('debug_output', exist_ok=True)
-            cv2.imwrite('debug_output/processed_after_crop.png', cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-            self.first_processed_saved = True
-
-        # JPEG compression to match CARLA training artifacts
-        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        _, compressed_image = cv2.imencode('.jpg', image_bgr)
-        image_bgr = cv2.imdecode(compressed_image, cv2.IMREAD_UNCHANGED)
-        image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
         # Dynamic preprocessing: split into 448x448 patches
         pil_image = Image.fromarray(image)

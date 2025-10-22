@@ -514,21 +514,16 @@ class SimlingoModelWrapper:
         # camera_images shape: [1, 1, num_patches, 3, 448, 448]
         num_patches = camera_images.shape[2]
 
-        # Scale speed to match model's training distribution (CARLA speeds)
-        # Model was trained on 0-10 m/s, but QCar2 operates at 0-3 m/s
-        # We scale UP the input so model sees familiar speeds
-        model_speed = vehicle_speed / self.config.speed_scale
-
         # Create language label using conversation template
         language_label = self.create_language_label(
-            speed=model_speed,
+            speed=vehicle_speed,
             target_points=target_points,
             hlc=hlc,
             num_patches=num_patches
         )
 
-        # Create vehicle speed tensor with scaled speed
-        speed_tensor = torch.tensor([[model_speed]], dtype=torch.float32).to(self.device)
+        # Create vehicle speed tensor
+        speed_tensor = torch.tensor([[vehicle_speed]], dtype=torch.float32).to(self.device)
 
         # Create target point tensor
         target_point_tensor = torch.from_numpy(target_point).unsqueeze(0).float().to(self.device)

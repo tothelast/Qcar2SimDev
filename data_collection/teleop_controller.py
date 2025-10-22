@@ -9,16 +9,15 @@ from pynput import keyboard
 class TeleopController:
     """Keyboard-based teleop controller."""
 
-    def __init__(self):
-        """Initialize teleop controller."""
-        # Control parameters
-        self.max_forward_velocity = 4.0
-        self.max_reverse_velocity = 0.0
-        self.max_steering_angle = np.pi / 9
+    def __init__(self, config):
+        """Initialize teleop controller.
 
-        # Acceleration/deceleration rates
-        self.acceleration = 1.0
-        self.deceleration = 2.0
+        Args:
+            config: SimlingoQCar2Config instance
+        """
+        self.config = config
+
+        # Steering rate (not a physical constraint, just teleop responsiveness)
         self.steering_rate = np.pi / 4
 
         # State
@@ -108,17 +107,17 @@ class TeleopController:
 
         # Update target velocity based on pressed keys
         if 'up' in self.pressed_keys:
-            self.target_velocity = self.max_forward_velocity
+            self.target_velocity = self.config.qcar2_max_speed
         elif 'down' in self.pressed_keys:
-            self.target_velocity = self.max_reverse_velocity
+            self.target_velocity = 0.0  # No reverse
         else:
             self.target_velocity = 0.0
 
         # Update target steering based on pressed keys
         if 'left' in self.pressed_keys and 'right' not in self.pressed_keys:
-            self.target_steering = -self.max_steering_angle  # Negative = left
+            self.target_steering = -self.config.qcar2_max_steering  # Negative = left
         elif 'right' in self.pressed_keys and 'left' not in self.pressed_keys:
-            self.target_steering = self.max_steering_angle  # Positive = right
+            self.target_steering = self.config.qcar2_max_steering  # Positive = right
         else:
             self.target_steering = 0.0
 
@@ -127,10 +126,10 @@ class TeleopController:
         if abs(velocity_diff) > 0.01:
             if velocity_diff > 0:
                 # Accelerating
-                self.current_velocity += min(self.acceleration * dt, velocity_diff)
+                self.current_velocity += min(self.config.qcar2_max_acceleration * dt, velocity_diff)
             else:
                 # Decelerating
-                self.current_velocity += max(-self.deceleration * dt, velocity_diff)
+                self.current_velocity += max(-self.config.qcar2_max_deceleration * dt, velocity_diff)
         else:
             self.current_velocity = self.target_velocity
 
@@ -168,12 +167,11 @@ def teleop_control_loop(qcar, teleop_controller):
         teleop_controller: TeleopController instance
     """
     print(f"  Starting teleop control loop...")
-    print(f"  Max forward velocity: {teleop_controller.max_forward_velocity} m/s")
-    print(f"  Max reverse velocity: {teleop_controller.max_reverse_velocity} m/s")
-    print(f"  Max steering: {np.degrees(teleop_controller.max_steering_angle):.1f}°")
+    print(f"  Max forward velocity: {teleop_controller.config.qcar2_max_speed} m/s")
+    print(f"  Max steering: {np.degrees(teleop_controller.config.qcar2_max_steering):.1f}°")
 
-    # Control loop timing
-    dt = 0.1  # 10 Hz control loop
+    # Control loop timing - 20 Hz to match CARLA (allows clean 4 Hz data collection)
+    dt = 0.05  # 20 Hz control loop
     iteration = 0
 
     # Error tracking
@@ -222,12 +220,12 @@ def teleop_control_loop(qcar, teleop_controller):
             # Reset error counter on success
             consecutive_errors = 0
 
-            # Print status every 2 seconds
-            if iteration % 20 == 0:
+            # Print status every 2 seconds (40 iterations at 20 Hz)
+            if iteration % 40 == 0:
                 print(f"  Teleop: v={velocity:.2f} m/s, steer={np.degrees(steering):.1f}°, "
                       f"pos=[{location[0]:.1f}, {location[1]:.1f}]")
 
-            # Control loop rate - 10 Hz
+            # Control loop rate - 20 Hz
             time.sleep(dt)
 
         except Exception as e:

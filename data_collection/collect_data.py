@@ -162,7 +162,7 @@ def main(scene_name=None):
     print("Setting up Teleop Control...")
     print("-"*70)
 
-    teleop_controller = TeleopController()
+    teleop_controller = TeleopController(config)
     print("✓ Teleop controller initialized")
     print("\nKeyboard Controls:")
     print("  Arrow Up / W:    Accelerate forward")

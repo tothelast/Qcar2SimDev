@@ -76,6 +76,13 @@ class SimlingoQCar2Controller:
         self.collision_count = 0
         self.start_time = None
         self.first_image_saved = False
+
+        # Model inference caching (4 Hz inference, 20 Hz control)
+        # Match CARLA exactly: data_save_freq=5 means inference every 5 iterations
+        self.cached_speed_wps = None
+        self.cached_route_wps = None
+        self.cached_language = None
+        self.inference_counter = 0  # Track iterations for inference frequency
         
     def initialize(self) -> bool:
         """
@@ -166,11 +173,11 @@ class SimlingoQCar2Controller:
         camera_images, image_sizes = self.camera_processor.process_image(image)
         camera_intrinsics = self.camera_processor.get_camera_intrinsics_tensor()
         camera_extrinsics = self.camera_processor.get_camera_extrinsics_tensor()
-        
+
         # Get current state
         location, rotation = self.qcar_interface.get_state()
         self.state_estimator.update(location, rotation)
-        
+
         # Get velocity
         velocity = self.state_estimator.get_velocity()
         
@@ -181,19 +188,34 @@ class SimlingoQCar2Controller:
             current_position, current_heading
         )
 
-        # Run model inference
-        speed_wps, route_wps, language = self.model_wrapper.inference(
-            camera_images=camera_images,
-            image_sizes=image_sizes,
-            camera_intrinsics=camera_intrinsics,
-            camera_extrinsics=camera_extrinsics,
-            vehicle_speed=velocity,
-            target_point=target_point,
-            next_target_point=next_target_point,
-            hlc=hlc  # Pass HLC for command mode
-        )
+        # Model inference at 4 Hz (every 5 iterations) - matches CARLA training data
+        # CARLA collected data at 20 FPS but saved every 5 frames (data_save_freq=5)
+        # This means training data has images spaced 0.25s apart (4 Hz)
+        if self.inference_counter % self.config.data_save_freq == 0:
+            # Run model inference
+            speed_wps, route_wps, language = self.model_wrapper.inference(
+                camera_images=camera_images,
+                image_sizes=image_sizes,
+                camera_intrinsics=camera_intrinsics,
+                camera_extrinsics=camera_extrinsics,
+                vehicle_speed=velocity,
+                target_point=target_point,
+                next_target_point=next_target_point,
+                hlc=hlc
+            )
 
-        
+            # Cache predictions for next iterations
+            self.cached_speed_wps = speed_wps
+            self.cached_route_wps = route_wps
+            self.cached_language = language
+        else:
+            # Use cached predictions from last inference
+            speed_wps = self.cached_speed_wps
+            route_wps = self.cached_route_wps
+            language = self.cached_language
+
+        self.inference_counter += 1
+
         # Convert to numpy
         route_waypoints = route_wps[0].cpu().numpy()
         speed_waypoints = speed_wps[0].cpu().numpy()
@@ -236,13 +258,13 @@ class SimlingoQCar2Controller:
             brake = False
             self.force_move -= 1
 
-        # Convert to QCar2 control using direct velocity control
+        # Convert to QCar2 control using desired speed directly
         forward_velocity, turn_angle = self.control_converter.convert_to_qcar2_control(
-            steer, throttle, brake, desired_speed, velocity, self.config.dt
+            desired_speed, steer, velocity, self.config.dt
         )
-        
+
         # Send control to QCar2
-        success, location, rotation = self.qcar_interface.set_control(
+        _, location, rotation = self.qcar_interface.set_control(
             forward_velocity, turn_angle
         )
 
@@ -274,7 +296,7 @@ class SimlingoQCar2Controller:
             'predicted_speed_waypoints': speed_waypoints.tolist() if speed_waypoints is not None else None
         }
         self.trajectory_log.append(trajectory_entry)
-        
+
         # Print status
         if self.step_count % 10 == 0:
             progress = self.route_manager.get_progress(current_position)
@@ -347,7 +369,7 @@ class SimlingoQCar2Controller:
         self.running = True
         self.start_time = time.time()
 
-        print("\nStarting control loop at {} Hz...".format(self.config.control_frequency))
+        print(f"\nStarting control loop at {self.config.carla_fps} Hz (model inference at {self.config.carla_fps / self.config.data_save_freq:.0f} Hz)...")
         print("Press Ctrl+C to stop")
         print("-" * 80)
 

@@ -1,7 +1,6 @@
 """Control conversion with PID controllers for QCar2."""
 
 import numpy as np
-import math
 from collections import deque
 from scipy.interpolate import PchipInterpolator
 from typing import Tuple
@@ -110,7 +109,7 @@ class LongitudinalLinearRegressionController:
 
 class ControlConverter:
     """Converts Simlingo model outputs to QCar2 control commands."""
-    
+
     def __init__(self, config):
         """
         Initialize control converter.
@@ -231,48 +230,40 @@ class ControlConverter:
     
     def convert_to_qcar2_control(
         self,
-        steer: float,
-        throttle: float,
-        brake: bool,
         desired_speed: float,
+        steer: float,
         current_speed: float,
         dt: float
     ) -> Tuple[float, float]:
         """
-        Convert Simlingo control to QCar2 control using direct velocity control.
+        Convert Simlingo control to QCar2 control.
 
         Args:
+            desired_speed: Target speed from waypoints in m/s
             steer: Steering value [-1, 1]
-            throttle: Throttle value [0, 1] (unused - kept for compatibility)
-            brake: Brake flag
-            desired_speed: Target speed from model's speed waypoints (m/s)
             current_speed: Current speed in m/s
             dt: Time step in seconds
 
         Returns:
             Tuple of (forward_velocity, turn_angle)
         """
-        if brake:
-            target_speed = 0.0
-        else:
-            # Scale CARLA speeds to QCar2 range and clip to physical limits
-            target_speed = desired_speed * self.config.speed_scale
-            target_speed = min(target_speed, self.config.qcar2_max_speed)
+        # Apply smooth acceleration limits for QCar2 physical constraints
+        speed_diff = desired_speed - current_speed
+        max_speed_change = self.config.qcar2_max_acceleration * dt if speed_diff > 0 else self.config.qcar2_max_deceleration * dt
 
-        # Apply smooth velocity transitions with asymmetric acceleration limits
-        speed_diff = target_speed - current_speed
+        # Limit speed change to physical constraints
+        speed_diff = np.clip(speed_diff, -max_speed_change, max_speed_change)
+        forward_velocity = current_speed + speed_diff
 
-        # Use different limits for acceleration vs. deceleration
-        if speed_diff > 0:
-            max_change = self.config.qcar2_max_acceleration * dt
-        else:
-            max_change = self.config.qcar2_max_deceleration * dt
-
-        forward_velocity = current_speed + np.clip(speed_diff, -max_change, max_change)
+        # Clip to QCar2 max speed
         forward_velocity = np.clip(forward_velocity, 0.0, self.config.qcar2_max_speed)
 
-        # Convert steering to turn angle (negate for QCar2 convention)
-        turn_angle = -steer * self.config.steering_gain
+        # Convert steering to turn angle
+        # NOTE: QCar2 convention is opposite to CARLA/Simlingo:
+        # - CARLA/Simlingo: positive steering = left turn
+        # - QCar2: positive turn_angle = right turn
+        # Map normalized steering [-1, 1] to QCar2's physical steering range
+        turn_angle = -steer * self.config.qcar2_max_steering
 
         return forward_velocity, turn_angle
 
