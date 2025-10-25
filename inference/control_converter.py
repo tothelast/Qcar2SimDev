@@ -18,11 +18,11 @@ class LateralPIDController:
         self._window = deque([0 for _ in range(self.n)], maxlen=self.n)
 
         # Speed-dependent aim distances
-        self.aim_distance_slow = 2.25
-        self.aim_distance_fast = 3.0
-        self.aim_distance_very_fast = 7.0
-        self.aim_distance_threshold = 5.5
-        self.aim_distance_threshold2 = 15.0
+        self.aim_distance_slow = 1.5
+        self.aim_distance_fast = 2.5
+        self.aim_distance_very_fast = 4.0
+        self.aim_distance_threshold = 3.0
+        self.aim_distance_threshold2 = 5.0
     
     def step(self, route_np: np.ndarray, current_speed: float) -> float:
         """Compute steering control."""
@@ -119,7 +119,7 @@ class ControlConverter:
         """
         self.config = config
 
-        # Initialize controllers
+        # Legacy longitudinal controller retained for reference (unused in direct-speed mode)
         self.speed_controller = LongitudinalLinearRegressionController(config)
         self.turn_controller = LateralPIDController(config)
         
@@ -138,40 +138,29 @@ class ControlConverter:
             speed_waypoints: Speed waypoints [F, 2]
 
         Returns:
-            Tuple of (steer, throttle, brake, desired_speed)
+            Tuple of (steer, target_speed_command, brake, desired_speed)
         """
         # Calculate desired speed from speed waypoints
         # Reference: simlingo/team_code/agent_simlingo.py control_pid() method
         # Uses waypoints[0] to waypoints[2] (first 0.5s of predictions)
 
-        one_second = int(self.config.carla_fps // (self.config.wp_dilation * self.config.data_save_freq))
-        half_second = one_second // 2
+        # one_second = int(self.config.carla_fps // (self.config.wp_dilation * self.config.data_save_freq))
+        # half_second = one_second // 2
 
-        # Indices: [half_second - 2, one_second - 2] = [0, 2]
-        idx1 = half_second - 2  # Index 0
-        idx2 = one_second - 2   # Index 2
-
-        if len(speed_waypoints) > idx2:
-            desired_speed = np.linalg.norm(
-                speed_waypoints[idx2] - speed_waypoints[idx1]
-            ) * 2.0
+        # # Indices: [half_second - 2, one_second - 2] = [0, 2]
+        # idx1 = half_second - 2  # Index 0
+        # idx2 = one_second - 2   # Index 2
+        
+        # Make sure there are enough waypoints
+        if len(speed_waypoints) > 2:
+            # Correctly calculate desired speed based on the distance between the first and third waypoint,
+            # which corresponds to a 0.5-second lookahead in the original CARLA training.
+            desired_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.0
         elif len(speed_waypoints) >= 2:
-            # Fallback: use available waypoints
-            desired_speed = np.linalg.norm(
-                speed_waypoints[-1] - speed_waypoints[0]
-            ) * 2.0 / len(speed_waypoints)
+            # Fallback for fewer waypoints
+            desired_speed = np.linalg.norm(speed_waypoints[1] - speed_waypoints[0]) * 2.0
         else:
-            # Not enough waypoints
             desired_speed = 0.0
-
-        # Get throttle and brake from linear regression controller
-        throttle, brake = self.speed_controller.get_throttle_and_brake(
-            target_speed=desired_speed,
-            current_speed=velocity
-        )
-
-        # Clip throttle to configured maximum
-        throttle = np.clip(throttle, 0.0, self.config.clip_throttle)
 
         # Steering calculation
         route_interp = self.interpolate_waypoints(route_waypoints)
@@ -179,7 +168,8 @@ class ControlConverter:
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
 
-        return steer, throttle, brake, desired_speed
+        # QCar2 direct-speed control mode: treat desired speed as the command directly
+        return steer, desired_speed, False, desired_speed
     
     def interpolate_waypoints(self, waypoints: np.ndarray) -> np.ndarray:
         """
@@ -233,30 +223,37 @@ class ControlConverter:
         desired_speed: float,
         steer: float,
         current_speed: float,
-        dt: float
+        dt: float,
+        target_speed_cmd: float,
+        brake: bool
     ) -> Tuple[float, float]:
         """
         Convert Simlingo control to QCar2 control.
 
         Args:
-            desired_speed: Target speed from waypoints in m/s
+            desired_speed: Raw model target speed in m/s (for diagnostics/display)
             steer: Steering value [-1, 1]
             current_speed: Current speed in m/s
             dt: Time step in seconds
+            target_speed_cmd: Desired forward velocity in m/s (after any adjustments)
+            brake: Brake flag
 
         Returns:
             Tuple of (forward_velocity, turn_angle)
         """
-        # Apply smooth acceleration limits for QCar2 physical constraints
-        speed_diff = desired_speed - current_speed
-        max_speed_change = self.config.qcar2_max_acceleration * dt if speed_diff > 0 else self.config.qcar2_max_deceleration * dt
+        # Directly track commanded speed with simple rate limiting for physical plausibility
+        target_velocity = max(target_speed_cmd, 0.0)
+        speed_diff = target_velocity - current_speed
 
-        # Limit speed change to physical constraints
-        speed_diff = np.clip(speed_diff, -max_speed_change, max_speed_change)
+        max_accel = self.config.qcar2_max_acceleration * dt
+        max_decel = self.config.qcar2_max_deceleration * dt
+
+        if speed_diff > 0:
+            speed_diff = min(speed_diff, max_accel)
+        else:
+            speed_diff = max(speed_diff, -max_decel)
+
         forward_velocity = current_speed + speed_diff
-
-        # Clip to QCar2 max speed
-        forward_velocity = np.clip(forward_velocity, 0.0, self.config.qcar2_max_speed)
 
         # Convert steering to turn angle
         # NOTE: QCar2 convention is opposite to CARLA/Simlingo:
@@ -270,4 +267,3 @@ class ControlConverter:
     def reset(self):
         """Reset controller state."""
         self.turn_controller.reset()
-

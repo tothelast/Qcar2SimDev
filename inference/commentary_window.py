@@ -335,13 +335,14 @@ class CommentaryWindow:
             except:
                 pass
 
-    def update_waypoints(self, route_waypoints, speed_waypoints):
+    def update_waypoints(self, route_waypoints, speed_waypoints, commanded_speed=None):
         """
         Update the waypoint display with model predictions (thread-safe).
 
         Args:
             route_waypoints: Route waypoints array [F, 2] in ego frame
             speed_waypoints: Speed waypoints array [F, 2] in ego frame
+            commanded_speed: Desired QCar2 forward velocity (m/s) derived from controller
         """
         if not hasattr(self, 'waypoint_display') or self.waypoint_display is None:
             return
@@ -352,6 +353,7 @@ class CommentaryWindow:
             # Calculate target speed using same method as controller
             # Reference: simlingo/team_code/agent_simlingo.py control_pid() method
             # Uses waypoints[0] to waypoints[2] (first 0.5s of predictions)
+            model_target_speed = None
             if speed_waypoints is not None and len(speed_waypoints) > 2:
                 # Calculate model's predicted speed (in CARLA scale)
                 model_target_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.0
@@ -364,6 +366,10 @@ class CommentaryWindow:
                     target_speed = model_target_speed
             else:
                 target_speed = 0.0
+
+            # Overwrite with commanded speed when provided so UI reflects actual control input
+            if commanded_speed is not None:
+                target_speed = commanded_speed
 
             # Update target speed display
             self.target_speed = target_speed
@@ -379,7 +385,10 @@ class CommentaryWindow:
 
             # Target speed section
             waypoint_text += "Target Speed:\n"
-            waypoint_text += f"  {target_speed:.2f} m/s\n\n"
+            waypoint_text += f"  Commanded: {target_speed:.2f} m/s\n"
+            if model_target_speed is not None:
+                waypoint_text += f"  Model (CARLA): {model_target_speed:.2f} m/s\n"
+            waypoint_text += "\n"
 
             # Prepare route and speed waypoint data
             # Show first 5 waypoints for each to keep display compact

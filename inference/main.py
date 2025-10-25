@@ -232,14 +232,8 @@ class SimlingoQCar2Controller:
         if commentary_text and commentary_text.strip():
             self.qcar_interface.update_commentary(commentary_text.strip())
 
-        # Update speed display in commentary window
-        self.qcar_interface.update_speed(velocity)
-
-        # Update waypoint display in commentary window
-        self.qcar_interface.update_waypoints(route_waypoints, speed_waypoints)
-
         # Compute control using PID
-        steer, throttle, brake, desired_speed = self.control_converter.control_pid(
+        steer, target_speed_cmd, brake, desired_speed = self.control_converter.control_pid(
             route_waypoints, velocity, speed_waypoints
         )
 
@@ -254,13 +248,23 @@ class SimlingoQCar2Controller:
             self.force_move = self.config.creep_duration
 
         if self.force_move > 0:
-            throttle = max(self.config.creep_throttle, throttle)
+            target_speed_cmd = max(self.config.creep_throttle, target_speed_cmd)
             brake = False
             self.force_move -= 1
 
         # Convert to QCar2 control using desired speed directly
         forward_velocity, turn_angle = self.control_converter.convert_to_qcar2_control(
-            desired_speed, steer, velocity, self.config.dt
+            desired_speed, steer, velocity, self.config.dt, target_speed_cmd, brake
+        )
+
+        # Update speed display in commentary window
+        self.qcar_interface.update_speed(velocity)
+
+        # Update waypoint display in commentary window (include commanded speed for clarity)
+        self.qcar_interface.update_waypoints(
+            route_waypoints,
+            speed_waypoints,
+            commanded_speed=forward_velocity
         )
 
         # Send control to QCar2
@@ -285,7 +289,7 @@ class SimlingoQCar2Controller:
             'heading_rad': float(rotation[2]),  # Store heading in radians for coordinate transformation
             'speed': float(velocity),
             'steering': float(steer),
-            'throttle': float(throttle),
+            'throttle': float(target_speed_cmd),
             'brake': bool(brake),
             'current_waypoint_index': int(self.route_manager.current_waypoint_index),
             'target_waypoint': target_world.tolist(),
@@ -306,7 +310,7 @@ class SimlingoQCar2Controller:
             print(f"Step {self.step_count:4d} | "
                   f"Speed: {velocity:5.2f} m/s | "
                   f"Steer: {steer:6.3f} | "
-                  f"Throttle: {throttle:5.3f} | "
+                  f"Target Speed Cmd: {target_speed_cmd:5.3f} m/s | "
                   f"Brake: {brake} | "
                   f"Progress: {progress*100:5.1f}%")
             print(f"  Pos: [{current_position[0]:6.2f}, {current_position[1]:6.2f}] | "
@@ -508,4 +512,3 @@ Examples:
 
 if __name__ == '__main__':
     sys.exit(main())
-

@@ -28,9 +28,9 @@ class SimlingoQCar2Config:
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
         # PID controller parameters (exact Simlingo values from config_simlingo.py)
-        self.turn_kp = 3.25
-        self.turn_ki = 1.0
-        self.turn_kd = 1.0
+        self.turn_kp = 1.25
+        self.turn_ki = 0.75
+        self.turn_kd = 0.3
         self.turn_n = 20
 
         # Control parameters (exact Simlingo values from config_simlingo.py)
@@ -52,8 +52,8 @@ class SimlingoQCar2Config:
 
         # QCar2 physical constraints
         self.qcar2_max_speed = 4.0  # m/s
-        self.qcar2_max_acceleration = 1.0  # m/s^2
-        self.qcar2_max_deceleration = 2.0  # m/s^2
+        self.qcar2_max_acceleration = 2.0  # m/s^2
+        self.qcar2_max_deceleration = 4.0  # m/s^2
         self.qcar2_max_steering = np.pi / 9  # radians (~20 degrees)
 
         # QCar2 QLabs
@@ -122,4 +122,3 @@ class SimlingoQCar2Config:
         except Exception as e:
             print(f"ERROR loading route {route_name}: {e}")
             return False
-

@@ -30,6 +30,7 @@ class SceneDefinition:
         self.name = scene_data.get('name', 'unnamed_scene')
         self.description = scene_data.get('description', '')
         self.ego_route = scene_data.get('ego_route', '')
+        self.traffic_speed_limit = scene_data.get('traffic_speed_limit', None)
         self.actors = actors
 
         # Categorize actors by type

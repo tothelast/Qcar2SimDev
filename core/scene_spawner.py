@@ -193,9 +193,12 @@ class SceneSpawner:
         self.running = True
 
         # Start autonomous vehicle threads
+        speed_limit = self.scene.traffic_speed_limit if getattr(self.scene, 'traffic_speed_limit', None) is not None else 1.5
+
         for qcar, vehicle_def in self.autonomous_vehicles:
             route_nodes = vehicle_def.data.get('route_nodes', [])
             target_speed = vehicle_def.data.get('control_params', {}).get('target_speed', 2.5)
+            target_speed = min(target_speed, speed_limit)
             update_rate_hz = vehicle_def.data.get('control_params', {}).get('update_rate_hz', 10)
 
             if vehicle_def.data.get('route_type') == 'circular':
@@ -599,4 +602,3 @@ class SceneSpawner:
     def __del__(self):
         """Destructor to ensure cleanup."""
         self.cleanup()
-

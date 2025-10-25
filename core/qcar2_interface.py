@@ -362,14 +362,14 @@ class QCar2Interface:
         if self.commentary_widget is not None:
             self.commentary_widget.update_speed(speed)
 
-    def update_waypoints(self, route_waypoints, speed_waypoints):
+    def update_waypoints(self, route_waypoints, speed_waypoints, commanded_speed=None):
         """
         Update the waypoint display in the commentary window.
 
         Args:
             route_waypoints: Route waypoints array [F, 2] in ego frame
             speed_waypoints: Speed waypoints array [F, 2] in ego frame
+            commanded_speed: Desired vehicle speed in QCar2 units (m/s)
         """
         if self.commentary_widget is not None:
-            self.commentary_widget.update_waypoints(route_waypoints, speed_waypoints)
-
+            self.commentary_widget.update_waypoints(route_waypoints, speed_waypoints, commanded_speed=commanded_speed)

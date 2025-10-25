@@ -13,6 +13,7 @@ if str(simlingo_dir) not in sys.path:
 import torch
 import numpy as np
 from typing import Tuple, Optional, Dict, List
+from collections import defaultdict
 
 from transformers import AutoTokenizer, AutoProcessor, AutoConfig
 from simlingo_training.utils.custom_types import DrivingInput, LanguageLabel
@@ -433,19 +434,11 @@ class SimlingoModelWrapper:
         # So when placeholder_batch_list is empty, it skips placeholder replacement entirely
 
         if placeholder_values:
-            # Only create tmp dict when we have placeholder values (target_point mode)
-            tmp = {}
+            # Only provide mappings for tokens with actual placeholder data (e.g., <TARGET_POINT>)
+            tmp = defaultdict(lambda: np.array([]))
             for key, value in placeholder_values.items():
                 token_id = self.tokenizer.convert_tokens_to_ids(key)
                 tmp[token_id] = value
-
-            # Add empty arrays for other special tokens that might appear in the prompt
-            # but don't have placeholder values (like <IMG_CONTEXT>, <|im_start|>, etc.)
-            for token in self.tokenizer.additional_special_tokens:
-                token_id = self.tokenizer.convert_tokens_to_ids(token)
-                if token_id not in tmp:
-                    tmp[token_id] = np.array([])
-
             placeholder_batch_list.append(tmp)
         # else: placeholder_batch_list remains empty (command mode)
 
@@ -576,4 +569,3 @@ class SimlingoModelWrapper:
         self.device = torch.device(device)
         if self.model is not None:
             self.model = self.model.to(self.device)
-
