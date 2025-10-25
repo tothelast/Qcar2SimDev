@@ -9,6 +9,8 @@ from qvl.qlabs import QuanserInteractiveLabs
 from qvl.qcar2 import QLabsQCar2
 from qvl.person import QLabsPerson
 from qvl.stop_sign import QLabsStopSign
+from qvl.crosswalk import QLabsCrosswalk
+from qvl.traffic_light import QLabsTrafficLight
 from hal.products.mats import SDCSRoadMap
 
 from core.scene_loader import SceneDefinition, ActorDefinition
@@ -28,6 +30,8 @@ class SceneSpawner:
         self.pedestrians = []
         self.parked_vehicles = []
         self.stop_signs = []
+        self.crosswalks = []
+        self.traffic_lights = []
 
         # Control
         self.threads = []
@@ -89,9 +93,26 @@ class SceneSpawner:
                 else:
                     success = False
 
+        if getattr(self.scene, 'crosswalks', None):
+            for cdef in self.scene.crosswalks:
+                crosswalk = self._spawn_crosswalk(cdef)
+                if crosswalk:
+                    self.crosswalks.append((crosswalk, cdef))
+                else:
+                    success = False
+
+        if getattr(self.scene, 'traffic_lights', None):
+            for tdef in self.scene.traffic_lights:
+                traffic_light = self._spawn_traffic_light(tdef)
+                if traffic_light:
+                    self.traffic_lights.append((traffic_light, tdef))
+                else:
+                    success = False
+
         print(f"Spawn complete: {len(self.autonomous_vehicles)} vehicles, "
               f"{len(self.pedestrians)} pedestrians, {len(self.parked_vehicles)} parked, "
-              f"{len(self.stop_signs)} signs")
+              f"{len(self.stop_signs)} signs, {len(self.crosswalks)} crosswalks, "
+              f"{len(self.traffic_lights)} traffic lights")
         return success
     
     def _spawn_autonomous_vehicle(self, vehicle_def: ActorDefinition) -> Optional[QLabsQCar2]:
@@ -179,6 +200,60 @@ class SceneSpawner:
         else:
             print(f"  ✗ Failed to spawn {sign_def.name} (actor {sign_def.actor_number})")
             return None
+
+    def _spawn_crosswalk(self, crosswalk_def: ActorDefinition) -> Optional[QLabsCrosswalk]:
+        """Spawn a crosswalk marker."""
+        crosswalk = QLabsCrosswalk(self.qlabs_actors)
+
+        location = crosswalk_def.data.get('location', [0.0, 0.0, 0.0])
+        rotation = crosswalk_def.data.get('rotation', [0.0, 0.0, 0.0])
+        scale = crosswalk_def.data.get('scale', [1.0, 1.0, 1.0])
+        configuration = crosswalk_def.data.get('configuration', 0)
+
+        status = crosswalk.spawn_id_degrees(
+            actorNumber=crosswalk_def.actor_number,
+            location=location,
+            rotation=rotation,
+            scale=scale,
+            configuration=configuration,
+            waitForConfirmation=True
+        )
+
+        if status == 0:
+            print(f"  ✓ {crosswalk_def.name} spawned (actor {crosswalk_def.actor_number})")
+            return crosswalk
+
+        print(f"  ✗ Failed to spawn {crosswalk_def.name} (actor {crosswalk_def.actor_number})")
+        return None
+
+    def _spawn_traffic_light(self, light_def: ActorDefinition) -> Optional[QLabsTrafficLight]:
+        """Spawn a traffic light and set its initial color."""
+        traffic_light = QLabsTrafficLight(self.qlabs_actors)
+
+        location = light_def.data.get('location', [0.0, 0.0, 0.0])
+        rotation = light_def.data.get('rotation', [0.0, 0.0, 0.0])
+        scale = light_def.data.get('scale', [1.0, 1.0, 1.0])
+        configuration = light_def.data.get('configuration', 0)
+
+        status = traffic_light.spawn_id_degrees(
+            actorNumber=light_def.actor_number,
+            location=location,
+            rotation=rotation,
+            scale=scale,
+            configuration=configuration,
+            waitForConfirmation=True
+        )
+
+        if status != 0:
+            print(f"  ✗ Failed to spawn {light_def.name} (actor {light_def.actor_number})")
+            return None
+
+        color_index = light_def.data.get('color_index')
+        if color_index is not None:
+            traffic_light.set_color(color_index, waitForConfirmation=True)
+
+        print(f"  ✓ {light_def.name} spawned (actor {light_def.actor_number})")
+        return traffic_light
 
     def start_actor_control(self):
         """Start control threads for autonomous vehicles and pedestrians."""

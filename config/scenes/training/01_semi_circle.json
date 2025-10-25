@@ -1,7 +1,9 @@
 {
   "name": "semi_circle",
-  "description": "Empty road - baseline scenario with no obstacles",
+  "description": "Route with mid-way pedestrian crosswalk and pedestrian",
   "ego_route": "semi_circle",
-  "actors": []
+  "actors": [
+    "semi_circle_crosswalk",
+    "semi_circle_pedestrian"
+  ]
 }
-

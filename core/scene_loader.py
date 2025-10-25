@@ -38,6 +38,9 @@ class SceneDefinition:
         self.pedestrians = [a for a in actors if a.type == 'pedestrian']
         self.parked_vehicles = [a for a in actors if a.type == 'parked_vehicle']
         self.stop_signs = [a for a in actors if a.type == 'stop_sign']
+        self.crosswalks = [a for a in actors if a.type == 'crosswalk']
+        self.traffic_lights = [a for a in actors if a.type == 'traffic_light']
+        self.obstacles = [a for a in actors if a.type == 'obstacle']
 
     def validate(self) -> tuple[bool, str]:
         """Validate scene has required fields."""
@@ -56,6 +59,12 @@ class SceneDefinition:
             actors_summary.append(f"{len(self.parked_vehicles)} parked vehicle(s)")
         if self.stop_signs:
             actors_summary.append(f"{len(self.stop_signs)} stop sign(s)")
+        if self.crosswalks:
+            actors_summary.append(f"{len(self.crosswalks)} crosswalk(s)")
+        if self.traffic_lights:
+            actors_summary.append(f"{len(self.traffic_lights)} traffic light(s)")
+        if self.obstacles:
+            actors_summary.append(f"{len(self.obstacles)} obstacle(s)")
 
         actors_str = ", ".join(actors_summary) if actors_summary else "no actors"
         return f"Scene '{self.name}': route={self.ego_route}, {actors_str}"

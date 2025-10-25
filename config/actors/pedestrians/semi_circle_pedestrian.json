@@ -1,0 +1,16 @@
+{
+  "name": "semi_circle_pedestrian",
+  "description": "Pedestrian crossing the semi-circle crosswalk",
+  "type": "pedestrian",
+  "actor_number": 304,
+  "curb_1": [11.5, -13.5, 1.0],
+  "curb_2": [11.5, -5.5, 1.0],
+  "crossing_direction": "vertical",
+  "movement_params": {
+    "walk_speed": 1.2,
+    "pace_distance": 1.0,
+    "pace_time": 2.5,
+    "wait_time": 2.0,
+    "crossing_time": 7.0
+  }
+}
