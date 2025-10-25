@@ -2,6 +2,10 @@
   "name": "short_route",
   "description": "Single autonomous vehicle on opposite lane",
   "ego_route": "short_route",
-  "actors": ["circular_car"]
+  "actors": [
+    "circular_car",
+    "short_route_cone_1",
+    "short_route_cone_2",
+    "short_route_cone_3"
+  ]
 }
-

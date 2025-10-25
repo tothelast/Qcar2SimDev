@@ -11,6 +11,7 @@ from qvl.person import QLabsPerson
 from qvl.stop_sign import QLabsStopSign
 from qvl.crosswalk import QLabsCrosswalk
 from qvl.traffic_light import QLabsTrafficLight
+from qvl.basic_shape import QLabsBasicShape
 from hal.products.mats import SDCSRoadMap
 
 from core.scene_loader import SceneDefinition, ActorDefinition
@@ -32,6 +33,7 @@ class SceneSpawner:
         self.stop_signs = []
         self.crosswalks = []
         self.traffic_lights = []
+        self.obstacles = []
 
         # Control
         self.threads = []
@@ -109,10 +111,18 @@ class SceneSpawner:
                 else:
                     success = False
 
+        if getattr(self.scene, 'obstacles', None):
+            for odef in self.scene.obstacles:
+                obstacle = self._spawn_obstacle(odef)
+                if obstacle:
+                    self.obstacles.append((obstacle, odef))
+                else:
+                    success = False
+
         print(f"Spawn complete: {len(self.autonomous_vehicles)} vehicles, "
               f"{len(self.pedestrians)} pedestrians, {len(self.parked_vehicles)} parked, "
               f"{len(self.stop_signs)} signs, {len(self.crosswalks)} crosswalks, "
-              f"{len(self.traffic_lights)} traffic lights")
+              f"{len(self.traffic_lights)} traffic lights, {len(self.obstacles)} obstacles")
         return success
     
     def _spawn_autonomous_vehicle(self, vehicle_def: ActorDefinition) -> Optional[QLabsQCar2]:
@@ -254,6 +264,43 @@ class SceneSpawner:
 
         print(f"  ✓ {light_def.name} spawned (actor {light_def.actor_number})")
         return traffic_light
+
+    def _spawn_obstacle(self, obstacle_def: ActorDefinition) -> Optional[QLabsBasicShape]:
+        """Spawn a static obstacle (e.g., cone) using the basic shape actor."""
+        obstacle = QLabsBasicShape(self.qlabs_actors)
+
+        location = obstacle_def.data.get('location', [0.0, 0.0, 0.0])
+        rotation = obstacle_def.data.get('rotation', [0.0, 0.0, 0.0])
+        scale = obstacle_def.data.get('scale', [1.0, 1.0, 1.0])
+        configuration = obstacle_def.data.get('configuration', QLabsBasicShape.SHAPE_CONE)
+
+        status = obstacle.spawn_id_degrees(
+            actorNumber=obstacle_def.actor_number,
+            location=location,
+            rotation=rotation,
+            scale=scale,
+            configuration=configuration,
+            waitForConfirmation=True
+        )
+
+        if status != 0:
+            print(f"  ✗ Failed to spawn {obstacle_def.name} (actor {obstacle_def.actor_number})")
+            return None
+
+        color = obstacle_def.data.get('color')
+        if color:
+            roughness = obstacle_def.data.get('roughness', 0.5)
+            metallic = obstacle_def.data.get('metallic', False)
+            obstacle.set_material_properties(color=color, roughness=roughness, metallic=metallic, waitForConfirmation=True)
+
+        enable_dynamics = obstacle_def.data.get('enable_dynamics', False)
+        obstacle.set_enable_dynamics(enable_dynamics, waitForConfirmation=True)
+
+        enable_collisions = obstacle_def.data.get('enable_collisions', True)
+        obstacle.set_enable_collisions(enable_collisions, waitForConfirmation=True)
+
+        print(f"  ✓ {obstacle_def.name} spawned (actor {obstacle_def.actor_number})")
+        return obstacle
 
     def start_actor_control(self):
         """Start control threads for autonomous vehicles and pedestrians."""

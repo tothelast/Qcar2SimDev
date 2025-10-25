@@ -1,0 +1,15 @@
+{
+  "name": "short_route_cone_1",
+  "description": "Traffic cone on short route centerline",
+  "type": "obstacle",
+  "actor_number": 410,
+  "location": [15.8891, 8.6169, 0.05],
+  "rotation": [0.0, 0.0, 0.0],
+  "scale": [0.5, 0.5, 1.0],
+  "configuration": 3,
+  "color": [1.0, 0.4, 0.0],
+  "roughness": 0.6,
+  "metallic": false,
+  "enable_dynamics": false,
+  "enable_collisions": true
+}
