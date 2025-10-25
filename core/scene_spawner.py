@@ -39,6 +39,7 @@ class SceneSpawner:
         self.threads = []
         self.running = False
         self.qlabs_lock = threading.Lock()
+        self.traffic_light_threads: List[threading.Thread] = []
         
     def connect(self) -> bool:
         """Connect to QLabs for scene actors."""
@@ -265,6 +266,47 @@ class SceneSpawner:
         print(f"  ✓ {light_def.name} spawned (actor {light_def.actor_number})")
         return traffic_light
 
+    def _traffic_light_cycle_loop(self, traffic_light: QLabsTrafficLight, cfg: dict, name: str):
+        """Cycle a traffic light through configured red/green/yellow durations."""
+        # Extract durations (seconds)
+        red_dur = max(0.0, float(cfg.get('red', 30.0)))
+        yellow_dur = max(0.0, float(cfg.get('yellow', 3.0)))
+        green_dur = max(0.0, float(cfg.get('green', 30.0)))
+        start_color = int(cfg.get('start', 1))
+
+        base_sequence = [1, 3, 2]  # Red -> Green -> Yellow
+        durations = {1: red_dur, 3: green_dur, 2: yellow_dur}
+
+        sequence = [color for color in base_sequence if durations[color] > 0.0]
+        if not sequence:
+            sequence = [1]
+
+        if start_color in sequence:
+            while sequence[0] != start_color:
+                sequence.append(sequence.pop(0))
+
+        # Minor delay to stagger API calls
+        time.sleep(0.25)
+
+        idx = 0
+        while self.running:
+            color = sequence[idx % len(sequence)]
+            try:
+                with self.qlabs_lock:
+                    traffic_light.set_color(color, waitForConfirmation=True)
+            except Exception as exc:
+                print(f"  ✗ Traffic light cycle error for {name}: {exc}")
+                break
+
+            duration = max(0.05, durations.get(color, 0.05))
+            elapsed = 0.0
+            while self.running and elapsed < duration:
+                sleep_step = min(0.5, duration - elapsed)
+                time.sleep(sleep_step)
+                elapsed += sleep_step
+
+            idx += 1
+
     def _spawn_obstacle(self, obstacle_def: ActorDefinition) -> Optional[QLabsBasicShape]:
         """Spawn a static obstacle (e.g., cone) using the basic shape actor."""
         obstacle = QLabsBasicShape(self.qlabs_actors)
@@ -356,6 +398,21 @@ class SceneSpawner:
             thread.start()
             self.threads.append(thread)
             print(f"  ✓ Started {ped_def.name} control thread")
+
+        # Start traffic light cycle threads (if configured)
+        for traffic_light, tdef in self.traffic_lights:
+            cycle_cfg = tdef.data.get('cycle')
+            if isinstance(cycle_cfg, dict):
+                thread = threading.Thread(
+                    target=self._traffic_light_cycle_loop,
+                    args=(traffic_light, cycle_cfg, tdef.name),
+                    daemon=True,
+                    name=f"traffic_light_{tdef.name}"
+                )
+                thread.start()
+                self.traffic_light_threads.append(thread)
+                self.threads.append(thread)
+                print(f"  ✓ Started {tdef.name} traffic light cycle thread")
 
         print(f"\nTotal control threads started: {len(self.threads)}")
         print("="*80)

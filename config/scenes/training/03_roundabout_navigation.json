@@ -2,7 +2,12 @@
   "name": "roundabout_navigation",
   "description": "Roundabout navigation with traffic and north pedestrian",
   "ego_route": "roundabout_navigation",
-  "actors": [],
-  "actors_backup": ["roundabout_car", "north_pedestrian", "stop_sign_roundabout"]
+  "actors": [
+    "roundabout_car",
+    "north_pedestrian",
+    "stop_sign_roundabout",
+    "north_crosswalk",
+    "north_crosswalk_light"
+  ],
+  "actors_backup": []
 }
-

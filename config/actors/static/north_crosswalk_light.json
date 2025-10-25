@@ -1,0 +1,17 @@
+{
+  "name": "north_crosswalk_light",
+  "description": "Traffic light guarding the north crosswalk",
+  "type": "traffic_light",
+  "actor_number": 421,
+  "location": [-2.0, 47.0, 0.0],
+  "rotation": [0.0, 0.0, 90.0],
+  "scale": [1.0, 1.0, 1.0],
+  "configuration": 0,
+  "color_index": 1,
+  "cycle": {
+    "red": 10.0,
+    "green": 5,
+    "yellow": 0.0,
+    "start": 1
+  }
+}
