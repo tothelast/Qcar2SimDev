@@ -1,0 +1,17 @@
+{
+  "name": "kink_runner",
+  "description": "Autonomous QCar2 patrolling kink street",
+  "type": "autonomous_vehicle",
+  "actor_number": 4,
+  "spawn_location": [-19.8412, 24.6703, 0.005],
+  "spawn_rotation": [0.0, 0.0, -90.0],
+  "route_type": "circular",
+  "route_nodes": [22, 9],
+  "control_params": {
+    "target_speed": 2.0,
+    "stanley_gain": 0.3,
+    "lookahead_distance": 3.0,
+    "max_steering_angle_deg": 30.0,
+    "update_rate_hz": 10
+  }
+}
