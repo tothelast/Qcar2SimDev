@@ -48,13 +48,14 @@ class CameraProcessor:
         Returns:
             Tuple of (processed_image, image_sizes)
         """
-        # Bottom crop to match CARLA aspect ratio (2:1)
-        # CARLA training images: 1024x512 (aspect ratio 2:1)
-        # QCar2 CSI camera: 820x410 (aspect ratio 2:1 already)
-        # Apply 30% bottom crop to remove hood/ground (matches CARLA preprocessing)
         height, width = image.shape[:2]
-        cropped_height = int(height * 0.7)  # Keep top 70%, remove bottom 30%
-        image = image[:cropped_height, :, :]
+        crop_ratio = getattr(self.config, "camera_bottom_crop_ratio", 0.0)
+        crop_ratio = max(0.0, min(0.95, float(crop_ratio)))
+        if crop_ratio > 0.0:
+            cropped_height = int(height * (1.0 - crop_ratio))
+            cropped_height = max(1, cropped_height)
+            image = image[:cropped_height, :, :]
+        cropped_shape = image.shape
 
         # Dynamic preprocessing: split into 448x448 patches
         pil_image = Image.fromarray(image)
@@ -81,4 +82,3 @@ class CameraProcessor:
         image_np = image.cpu().numpy().transpose(1, 2, 0)
         denormalized = image_np * self.config.imagenet_std + self.config.imagenet_mean
         return np.clip(denormalized * 255.0, 0, 255).astype(np.uint8)
-

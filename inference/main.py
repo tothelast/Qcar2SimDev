@@ -35,7 +35,7 @@ except ImportError as e:
 class SimlingoQCar2Controller:
     """Main controller for Simlingo-QCar2 integration."""
     
-    def __init__(self, config_path=None, nav_mode='target_point', scene_name=None):
+    def __init__(self, nav_mode='target_point', scene_name=None):
         """Initialize controller."""
         self.config = SimlingoQCar2Config()
         self.scene_definition = None
@@ -57,8 +57,6 @@ class SimlingoQCar2Controller:
 
         self.nav_mode = nav_mode
         self.route_name = route_name
-        self.scene_name = scene_name
-
         # Initialize components
         self.qcar_interface = QCar2Interface(self.config)
         self.camera_processor = CameraProcessor(self.config) if CameraProcessor else None
@@ -478,9 +476,6 @@ Examples:
     )
 
     # Configuration
-    parser.add_argument('--config', type=str, default=None,
-                        help='Path to custom config file')
-
     # Scene selection (NEW - replaces individual actor flags)
     parser.add_argument('--scene', type=str, default=None,
                         help='Scene name to load from scenes/ directory (e.g., "empty_road", "01_empty_road", "light_traffic")')
@@ -494,7 +489,6 @@ Examples:
 
     # Create controller
     controller = SimlingoQCar2Controller(
-        config_path=args.config,
         nav_mode=args.nav_mode,
         scene_name=args.scene
     )

@@ -37,7 +37,6 @@ class SimlingoModelWrapper:
         self.cfg = None
         self.conv_module = None
         self.tmp_config = None
-        self.special_token_ids = {}
         self.num_image_token = None
 
         # Configuration
@@ -165,6 +164,7 @@ class SimlingoModelWrapper:
 
         # Move model to device and set to eval mode
         self.model = self.model.to(self.device)
+        print(f"Simlingo model moved to device: {self.device}")
         self.model.eval()
 
         print("Model loaded successfully")
@@ -221,10 +221,9 @@ class SimlingoModelWrapper:
         # Set padding side
         self.tokenizer.padding_side = "left"
 
-        # Store special token IDs (only for tokens we added)
+        # Store token ids for logging
         for token in special_tokens_to_add:
             token_id = self.tokenizer.convert_tokens_to_ids(token)
-            self.special_token_ids[token] = token_id
             print(f"  {token}: {token_id}")
 
         print("Tokenizer loaded successfully")
@@ -564,8 +563,3 @@ class SimlingoModelWrapper:
                 traceback.print_exc()
                 return None, None, None
     
-    def to(self, device):
-        """Move model to device."""
-        self.device = torch.device(device)
-        if self.model is not None:
-            self.model = self.model.to(self.device)
