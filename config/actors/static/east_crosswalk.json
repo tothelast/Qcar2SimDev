@@ -1,0 +1,10 @@
+{
+  "name": "east_crosswalk",
+  "description": "Crosswalk across the east pedestrian crossing",
+  "type": "crosswalk",
+  "actor_number": 422,
+  "location": [20.849, 15.008, 0.01],
+  "rotation": [0.0, 0.0, 0.0],
+  "scale": [0.04, 2.5, 1.0],
+  "configuration": 1
+}

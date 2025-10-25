@@ -1,0 +1,9 @@
+{
+  "name": "traffic_circle_stop_sign",
+  "description": "Stop sign at traffic circle roundabout entrance (right curbside before node 16)",
+  "type": "stop_sign",
+  "actor_number": 201,
+  "location": [24.0, 35.0, 0.001],
+  "rotation": [0.0, 0.0, -90.0],
+  "configuration": 0
+}
