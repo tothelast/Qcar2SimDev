@@ -1,4 +1,5 @@
 import textwrap
+from pathlib import Path
 from functools import wraps
 from typing import Any, Callable, Dict
 
@@ -203,6 +204,11 @@ def visualise_waypoints(batch: DrivingExample, waypoints, route=False, language_
 
     white_pil = Image.new("RGB", (1024, 1024), "white")
     white_draw = ImageDraw.Draw(white_pil)
+    font_path = Path(repo_root) / "simlingo_training" / "arial.ttf"
+    try:
+        font = ImageFont.truetype(str(font_path), 20)
+    except OSError:
+        font = ImageFont.load_default()
 
     # add space for text
     fig.subplots_adjust(hspace=0.8)
@@ -217,9 +223,9 @@ def visualise_waypoints(batch: DrivingExample, waypoints, route=False, language_
             lines_wrap = len(textwrap.wrap(wrapped_text, width=80))
             lines_wrap_pred = len(textwrap.wrap(wrapped_pred_text, width=80))
         
-            white_draw.text((10, y_curr), f'{i} GT: {wrapped_text}', fill="black", font=ImageFont.truetype(f"{repo_root}/simlingo_training/arial.ttf", 20))
+            white_draw.text((10, y_curr), f'{i} GT: {wrapped_text}', fill="black", font=font)
             y_curr += 20*lines_wrap
-            white_draw.text((10, y_curr), f'{i} Pred: {wrapped_pred_text}', fill="black", font=ImageFont.truetype(f"{repo_root}/simlingo_training/arial.ttf", 20))
+            white_draw.text((10, y_curr), f'{i} Pred: {wrapped_pred_text}', fill="black", font=font)
             y_curr += 20*lines_wrap_pred + 20
         ax = fig.add_subplot(rows, cols, i + 1)
         # Predicted waypoints

@@ -235,6 +235,11 @@ class SimlingoQCar2Controller:
             route_waypoints, velocity, speed_waypoints
         )
 
+        # Warmup to avoid initial stall
+        if self.step_count < getattr(self.config, "initial_warmup_steps", 0):
+            target_speed_cmd = max(target_speed_cmd, getattr(self.config, "initial_warmup_speed", 0.5))
+            brake = False
+
         # Stuck detection
         if velocity < 0.1:
             self.stuck_detector += 1

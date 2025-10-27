@@ -28,14 +28,14 @@ class RouteManager:
                 "before initializing RouteManager. Available routes are in the routes/ directory."
             )
 
-        # Route waypoints in world coordinates
+        # Route waypoints in world coordinates (Nx3)
         self.route_waypoints = np.array(config.route_waypoints, dtype=np.float32)
 
-        # Current waypoint index
+        # Current waypoint index for progress tracking
         self.current_waypoint_index = 0
 
-        # Target point lookahead distance
-        self.lookahead_distance = config.target_point_lookahead
+        # Target point lookahead distance (meters)
+        self.lookahead_distance = float(config.target_point_lookahead)
         
     def get_target_point(self, current_position: np.ndarray) -> Tuple[np.ndarray, np.ndarray, int]:
         """
@@ -56,54 +56,41 @@ class RouteManager:
                 5: Lane change left
                 6: Lane change right
         """
-        # Find nearest waypoint AHEAD of current position to update progress
-        search_start = self.current_waypoint_index
-        search_end = min(self.current_waypoint_index + 10, len(self.route_waypoints))  # Look ahead max 10 waypoints
+        # Find nearest waypoint to current position
+        distances = np.linalg.norm(self.route_waypoints[:, :2] - current_position[:2], axis=1)
+        nearest_idx = int(np.argmin(distances))
 
-        if search_end > search_start:
-            distances_ahead = np.linalg.norm(
-                self.route_waypoints[search_start:search_end, :2] - current_position[:2],
-                axis=1
-            )
-            nearest_idx_relative = np.argmin(distances_ahead)
-            nearest_idx = search_start + nearest_idx_relative
+        # Update progress index (only move forward)
+        if nearest_idx > self.current_waypoint_index:
+            self.current_waypoint_index = nearest_idx
 
-            # Update current waypoint index (only move forward)
-            if nearest_idx > self.current_waypoint_index:
-                self.current_waypoint_index = nearest_idx
-        
-        # Find target waypoint based on lookahead distance
+        # Walk along the route until we reach the desired lookahead distance
         target_idx = self.current_waypoint_index
-        accumulated_distance = 0.0
+        accumulated = 0.0
 
-        # Start accumulating from current position to first waypoint
         if self.current_waypoint_index < len(self.route_waypoints):
-            accumulated_distance = np.linalg.norm(
+            accumulated = np.linalg.norm(
                 self.route_waypoints[self.current_waypoint_index, :2] - current_position[:2]
             )
 
         for i in range(self.current_waypoint_index, len(self.route_waypoints) - 1):
-            if accumulated_distance >= self.lookahead_distance:
+            if accumulated >= self.lookahead_distance:
                 target_idx = i
                 break
 
             segment_distance = np.linalg.norm(
                 self.route_waypoints[i + 1, :2] - self.route_waypoints[i, :2]
             )
-            accumulated_distance += segment_distance
+            accumulated += segment_distance
             target_idx = i + 1
 
-        # Ensure we don't go past the end
+        # Clamp indices and select points
         target_idx = min(target_idx, len(self.route_waypoints) - 1)
-        # Get target point
-        target_point = self.route_waypoints[target_idx]
-        # Get next target point (one waypoint ahead)
         next_target_idx = min(target_idx + 1, len(self.route_waypoints) - 1)
+        target_point = self.route_waypoints[target_idx]
         next_target_point = self.route_waypoints[next_target_idx]
 
-        # Compute HLC (High-Level Command)
-        # For now, default to HLC=4 ("follow the road")
-        # TODO: Implement proper HLC computation based on route geometry
+        # High-level command placeholder (follow road)
         hlc = 4
 
         return target_point, next_target_point, hlc
@@ -130,6 +117,8 @@ class RouteManager:
         next_target_ego = CoordinateTransformer.world_to_ego(next_target_world[:2], current_position[:2], current_heading)
 
         return target_ego, next_target_ego, hlc
+
+    # No continuous double-lookahead helper needed in reverted logic
     
     def is_route_complete(self, current_position: np.ndarray, threshold: float = 2.0) -> bool:
         """
@@ -191,4 +180,3 @@ class RouteManager:
     def reset(self):
         """Reset route manager to start of route."""
         self.current_waypoint_index = 0
-

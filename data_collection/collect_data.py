@@ -15,6 +15,7 @@ from qvl.qcar2 import QLabsQCar2
 from qvl.system import QLabsSystem
 from qvl.spline_line import QLabsSplineLine
 
+from data_collection.data_recorder import DataRecorder
 from data_collection.teleop_controller import TeleopController, teleop_control_loop
 from core.scene_loader import SceneLoader
 from core.scene_spawner import SceneSpawner
@@ -51,7 +52,7 @@ def initialize_planned_route_tracer(qlabs, config):
     return tracer
 
 
-def main(scene_name=None):
+def main(scene_name=None, split='train', database_root=None):
     """Setup QLabs environment and spawn QCar2 for data collection."""
     print("QLabs Data Collection - Cityscape Lite")
 
@@ -211,10 +212,24 @@ def main(scene_name=None):
     # =========================================================================
     # START TELEOP CONTROL LOOP
     # =========================================================================
+    data_recorder = None
     try:
-        teleop_control_loop(qcar, teleop_controller)
+        data_recorder = DataRecorder(config, database_root=database_root)
+        data_recorder.start_run(qcar, route_name, scene_name, split=split)
+    except Exception as recorder_error:
+        print(f"WARNING: Failed to initialise data recorder: {recorder_error}")
+        data_recorder = None
+
+    try:
+        teleop_control_loop(qcar, teleop_controller, data_recorder=data_recorder)
     except KeyboardInterrupt:
         print("\n\nKeyboard interrupt received...")
+    finally:
+        if data_recorder:
+            try:
+                data_recorder.finalize(success=data_recorder.frame_idx > 0)
+            except Exception as finalize_error:
+                print(f"WARNING: Failed to finalise data recorder: {finalize_error}")
 
     # Clean up
     print("\nShutting down...")
@@ -275,10 +290,13 @@ Examples:
     # Scene selection (NEW - replaces individual actor flags)
     parser.add_argument('--scene', type=str, default=None,
                         help='Scene name to load from scenes/ directory (e.g., "empty_road", "01_empty_road", "light_traffic")')
+    parser.add_argument('--split', type=str, default='train', choices=['train', 'val'],
+                        help='Dataset split to save into (train -> routes_training, val -> routes_validation)')
+    parser.add_argument('--database', type=str, default=None,
+                        help='Root directory for Simlingo-style database (default: <repo>/database)')
 
     args = parser.parse_args()
 
     # Run main with selected scene
-    success = main(scene_name=args.scene)
+    success = main(scene_name=args.scene, split=args.split, database_root=args.database)
     sys.exit(0 if success else 1)
-

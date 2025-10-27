@@ -48,14 +48,18 @@ class CameraProcessor:
         Returns:
             Tuple of (processed_image, image_sizes)
         """
-        height, width = image.shape[:2]
-        crop_ratio = getattr(self.config, "camera_bottom_crop_ratio", 0.0)
-        crop_ratio = max(0.0, min(0.95, float(crop_ratio)))
+        height = image.shape[0]
+        crop_ratio = max(0.0, min(0.95, float(getattr(self.config, "camera_bottom_crop_ratio", 0.0))))
         if crop_ratio > 0.0:
-            cropped_height = int(height * (1.0 - crop_ratio))
-            cropped_height = max(1, cropped_height)
+            cropped_height = max(1, int(height * (1.0 - crop_ratio)))
             image = image[:cropped_height, :, :]
-        cropped_shape = image.shape
+
+
+        if getattr(self.config, "resize_input_to_training_resolution", False):
+            target_w = int(getattr(self.config, "camera_width", image.shape[1]))
+            target_h = int(getattr(self.config, "camera_height", image.shape[0]))
+            if (image.shape[1], image.shape[0]) != (target_w, target_h):
+                image = cv2.resize(image, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
 
         # Dynamic preprocessing: split into 448x448 patches
         pil_image = Image.fromarray(image)

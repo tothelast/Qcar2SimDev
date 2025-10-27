@@ -1,0 +1,64 @@
+# @package _global_
+defaults:
+  - /data_module: carla_no_buckets
+  - /model/vision_model: vlm
+  - /data_module/base_dataset: dataset
+
+model:
+  lr: 3e-5
+  predict_route_as_wps: True
+  speed_wps_mode: 2d
+  language_model:
+    variant: 'OpenGVLab/InternVL2-1B'
+    lora: True
+    lora_alpha: 64
+    lora_r: 32
+    lora_dropout: 0.1
+  vision_model:
+    variant: 'OpenGVLab/InternVL2-1B'
+
+data_module:
+  batch_size: 1
+  num_workers: 4
+  train_partitions: null
+  train_partitions_dreamer: null
+  driving_dataset:
+    _target_: simlingo_training.dataloader.dataset_driving.Data_Driving_QLabs
+  dreamer_dataset: null
+  qa_dataset: null
+  insteval_dataset: null
+  base_dataset:
+    data_path: ../database
+    bucket_path: ''
+    pred_len: 11
+    hist_len: 1
+    skip_first_n_frames: 10
+    route_as: target_point
+    use_commentary: false
+    use_qa: false
+    qa_augmentation: false
+    commentary_augmentation: false
+    img_augmentation: false
+    img_augmentation_prob: 0.0
+    img_shift_augmentation: false
+    img_shift_augmentation_prob: 0.0
+    use_lmdrive_commands: False
+    use_old_towns: False
+    use_only_old_towns: False
+    use_town13: False
+    cut_bottom_quarter: False
+    num_route_points: 20
+
+max_epochs: 15
+precision: 16-mixed
+strategy: deepspeed_stage_2
+gpus: 1
+seed: 42
+name: qlabs_finetune
+resume: False
+checkpoint: /home/garegin/Documents/Qcar2SimDev/models/simlingo/checkpoints/epoch=013.ckpt
+wandb_project: simlingo_qlabs
+
+hydra:
+  run:
+    dir: outputs/${wandb_name}_${name}

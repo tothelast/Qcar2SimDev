@@ -13,7 +13,7 @@ class SimlingoQCar2Config:
     
     def __init__(self):
         # Model paths
-        self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
+        self.model_checkpoint_path = "simlingo/outputs/2025_10_27_00_26_12_qlabs_finetune/checkpoints/epoch=014.ckpt"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
@@ -23,6 +23,7 @@ class SimlingoQCar2Config:
         self.camera_fov = 110  # degrees - Match CARLA training FOV
         self.camera_position = np.array([-1.5, 0.0, 2.0], dtype=np.float32)  # CARLA camera position
         self.camera_bottom_crop_ratio = 0.0  # Fraction of image height to remove from bottom during preprocessing
+        self.resize_input_to_training_resolution = True  # Resize inference frames to match training resolution
 
         # ImageNet normalization
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -43,9 +44,13 @@ class SimlingoQCar2Config:
         self.interpolation_spacing = 0.1
 
         # Stuck detection
-        self.stuck_threshold = 800
+        self.stuck_threshold = 80
         self.creep_duration = 15
         self.creep_throttle = 0.4
+
+        # Warmup to avoid initial stall
+        self.initial_warmup_steps = 40  # number of control iterations (~2s)
+        self.initial_warmup_speed = 0.5  # m/s minimum target during warmup
 
         # QCar2 physical constraints
         self.qcar2_max_speed = 4.0  # m/s

@@ -209,6 +209,11 @@ class BaseDataset(Dataset):  # pylint: disable=locally-disabled, invalid-name
                 print("Using Town13 for validation")
                 route_dirs = [route_dir for route_dir in route_dirs if 'routes_validation' in route_dir]
                 route_dirs = route_dirs[:int(0.02 * len(route_dirs))]
+                # if len(route_dirs) > 0:
+                #     num_keep = max(1, int(0.02 * len(route_dirs)))
+                #     route_dirs = route_dirs[:num_keep]
+                # else:
+                #     route_dirs = []
         else:
             # use all towns
             if self.split == "train":

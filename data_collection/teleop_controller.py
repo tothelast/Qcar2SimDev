@@ -158,13 +158,14 @@ class TeleopController:
         self.listener.stop()
 
 
-def teleop_control_loop(qcar, teleop_controller):
+def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
     """
     Control loop for teleop-controlled QCar2.
 
     Args:
         qcar: QLabsQCar2 instance
         teleop_controller: TeleopController instance
+        data_recorder: Optional DataRecorder for saving expert data
     """
     print(f"  Starting teleop control loop...")
     print(f"  Max forward velocity: {teleop_controller.config.qcar2_max_speed} m/s")
@@ -220,6 +221,14 @@ def teleop_control_loop(qcar, teleop_controller):
             # Reset error counter on success
             consecutive_errors = 0
 
+            if data_recorder:
+                data_recorder.record_step(
+                    iteration=iteration,
+                    timestamp=time.time(),
+                    location=location,
+                    rotation=rotation,
+                )
+
             # Print status every 2 seconds (40 iterations at 20 Hz)
             if iteration % 40 == 0:
                 print(f"  Teleop: v={velocity:.2f} m/s, steer={np.degrees(steering):.1f}°, "
@@ -233,4 +242,3 @@ def teleop_control_loop(qcar, teleop_controller):
             time.sleep(1.0)
 
     print(f"  Teleop control loop stopped")
-
