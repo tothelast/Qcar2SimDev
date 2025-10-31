@@ -46,6 +46,7 @@ class DataRecorder:
         self.qcar = None
         self.route_xy: Optional[np.ndarray] = None
         self.route_original: Optional[list[list[float]]] = None
+        self.num_route_points = int(getattr(config, "num_route_points", 20))
         self.frame_idx = 0
         self.prev_sample: Optional[Tuple[np.ndarray, float]] = None
         self.is_recording = False
@@ -137,12 +138,13 @@ class DataRecorder:
 
         ego_matrix = self._build_ego_matrix(location_np, rotation_np)
         target_point, next_target = self._compute_target_points_next_wp(location_np, ego_matrix)
+        route_local, route_local_original = self._compute_route_segment(location_np, ego_matrix)
         speed = self._estimate_speed(location_np, timestamp)
 
         measurement = {
             "ego_matrix": ego_matrix.tolist(),
-            "route_original": self.route_original,
-            "route": self.route_original,
+            "route_original": route_local_original,
+            "route": route_local,
             "target_point": target_point.tolist(),
             "target_point_next": next_target.tolist(),
             "speed": float(speed),
@@ -154,6 +156,43 @@ class DataRecorder:
 
         self._write_frame(image_bgr, measurement)
         self.prev_sample = (location_np, timestamp)
+
+    def _compute_route_segment(
+        self,
+        location: np.ndarray,
+        ego_matrix: np.ndarray,
+    ) -> Tuple[list[list[float]], list[list[float]]]:
+        """Compute remaining route in ego frame for current timestep."""
+
+        if self.route_xy is None:
+            raise RuntimeError("Route waypoints not initialised. Call start_run() first.")
+
+        # Determine the closest waypoint to current position
+        distances = np.linalg.norm(self.route_xy - location[:2], axis=1)
+        nearest_idx = int(np.argmin(distances))
+
+        # Select remaining route waypoints ahead of the vehicle
+        remaining_world = self.route_xy[nearest_idx:]
+        if remaining_world.shape[0] == 0:
+            return [], []
+
+        # Limit to configured number of waypoints for storage/padding
+        max_points = max(self.num_route_points, 1)
+        if remaining_world.shape[0] < max_points:
+            pad = np.repeat(remaining_world[-1][np.newaxis, :], max_points - remaining_world.shape[0], axis=0)
+            remaining_world = np.vstack([remaining_world, pad])
+        else:
+            remaining_world = remaining_world[:max_points]
+
+        ego_inv = np.linalg.inv(ego_matrix)
+
+        def to_ego(point_xy: np.ndarray) -> list[float]:
+            return self._world_to_ego(point_xy, ego_inv).tolist()
+
+        route_local = [to_ego(pt) for pt in remaining_world]
+
+        # For QLabs recordings we do not distinguish between adjusted/original routes
+        return route_local, route_local
 
     def finalize(self, success: bool = True) -> None:
         """Finalize the current run and write results metadata."""
