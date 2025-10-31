@@ -41,13 +41,21 @@ class SimlingoModelWrapper:
 
         # Configuration
         self.nav_mode = nav_mode
-        self.task_type = 'commentary'
+        self.task_type = 'driving'  # Default to 'driving' mode (matches fine-tuning data)
         self.safety_enabled = True
         self.user_question = None
         self.user_instruction = None
 
     def set_task_type(self, task_type: str, question: str = None, instruction: str = None, safety_enabled: bool = True):
-        """Set task type for inference."""
+        """
+        Set task type for inference.
+
+        Args:
+            task_type: One of 'driving', 'commentary', 'qa', 'dreamer'
+            question: Question text for 'qa' mode
+            instruction: Instruction text for 'dreamer' mode
+            safety_enabled: Enable safety flag for 'dreamer' mode
+        """
         self.task_type = task_type
         self.user_question = question
         self.user_instruction = instruction
@@ -314,7 +322,11 @@ class SimlingoModelWrapper:
                 nav_conditioning = f"Command: {command} in {dist} meter."
 
         # Build task-specific prompt
-        if self.task_type == 'commentary':
+        if self.task_type == 'driving':
+            # Pure driving mode (matches training data format)
+            prompt = f"Current speed: {speed:.1f} m/s. {nav_conditioning} Predict the waypoints."
+
+        elif self.task_type == 'commentary':
             # Commentary + Driving mode
             prompt = f"Current speed: {speed:.1f} m/s. {nav_conditioning} What should the ego do next?"
 

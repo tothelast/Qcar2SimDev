@@ -18,11 +18,12 @@ class LateralPIDController:
         self._window = deque([0 for _ in range(self.n)], maxlen=self.n)
 
         # Speed-dependent aim distances
-        self.aim_distance_slow = 1.5
-        self.aim_distance_fast = 2.5
-        self.aim_distance_very_fast = 4.0
-        self.aim_distance_threshold = 3.0
-        self.aim_distance_threshold2 = 5.0
+        # Speed-dependent aim distances - MATCH PRETRAINED SIMLINGO
+        self.aim_distance_slow = 2.25        
+        self.aim_distance_fast = 3.0         
+        self.aim_distance_very_fast = 7.0    
+        self.aim_distance_threshold = 5.5    
+        self.aim_distance_threshold2 = 15.0  
     
     def step(self, route_np: np.ndarray, current_speed: float) -> float:
         """Compute steering control."""

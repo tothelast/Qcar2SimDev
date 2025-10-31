@@ -76,8 +76,13 @@ class CommentaryWindow:
 
         tk.Label(mode_container, text="Task:", font=("Segoe UI", 10, "bold"), bg='#1a1f3a', fg='#ff9500').pack(side=tk.LEFT, padx=(0, 10))
 
-        # Radio buttons for mode selection
-        self.mode_var = tk.StringVar(value='commentary')
+        # Radio buttons for mode selection (default to 'driving' to match fine-tuning data)
+        self.mode_var = tk.StringVar(value='driving')
+
+        # Driving mode (pure waypoint prediction)
+        tk.Radiobutton(mode_container, text="Driving", variable=self.mode_var, value='driving',
+                      command=self._on_mode_change, bg='#1a1f3a', fg='#00d4ff', selectcolor='#0a0e27',
+                      font=("Segoe UI", 10), activebackground='#1a1f3a', activeforeground='#00ff00').pack(side=tk.LEFT, padx=(0, 15))
 
         # Commentary mode
         tk.Radiobutton(mode_container, text="Commentary", variable=self.mode_var, value='commentary',
@@ -265,7 +270,11 @@ class CommentaryWindow:
 
         mode = self.mode_var.get()
 
-        if mode == 'commentary':
+        if mode == 'driving':
+            self.model_wrapper.set_task_type('driving')
+            self.message_queue.put("[MODE] Driving (Pure Waypoint Prediction)")
+
+        elif mode == 'commentary':
             self.model_wrapper.set_task_type('commentary')
             self.message_queue.put("[MODE] Commentary (Chain-of-Thought)")
 
