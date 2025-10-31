@@ -16,6 +16,7 @@ model:
     lora_dropout: 0.1
   vision_model:
     variant: 'OpenGVLab/InternVL2-1B'
+    freeze: true
 
 data_module:
   batch_size: 1
@@ -23,7 +24,7 @@ data_module:
   train_partitions: null
   train_partitions_dreamer: null
   driving_dataset:
-    _target_: simlingo_training.dataloader.dataset_driving.Data_Driving_QLabs
+    _target_: simlingo_training.dataloader.dataset_driving.Data_Driving
   dreamer_dataset: null
   qa_dataset: null
   insteval_dataset: null

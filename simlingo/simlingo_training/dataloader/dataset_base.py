@@ -208,7 +208,8 @@ class BaseDataset(Dataset):  # pylint: disable=locally-disabled, invalid-name
             elif self.split == "val":
                 print("Using Town13 for validation")
                 route_dirs = [route_dir for route_dir in route_dirs if 'routes_validation' in route_dir]
-                route_dirs = route_dirs[:int(0.02 * len(route_dirs))]
+                # For QLabs we keep all validation routes (datasets are small)
+                # Remove the original 2% subsampling so every collected validation route is used
                 # if len(route_dirs) > 0:
                 #     num_keep = max(1, int(0.02 * len(route_dirs)))
                 #     route_dirs = route_dirs[:num_keep]
@@ -221,7 +222,7 @@ class BaseDataset(Dataset):  # pylint: disable=locally-disabled, invalid-name
             elif self.split == "val":
                 route_dirs = route_dirs[int(split_percentage * len(route_dirs)):]
         
-        total_routes += len(route_dirs)
+        total_routes = len(route_dirs)
         
         # route_dirs = route_dirs[:100]
         print(f'Use {len(route_dirs)} routes.')
@@ -236,7 +237,6 @@ class BaseDataset(Dataset):  # pylint: disable=locally-disabled, invalid-name
 
             if filter_infractions_per_route:
                 if not os.path.isfile(route_dir + '/results.json.gz'):
-                    total_routes += 1
                     crashed_routes += 1
                     if "no_results.json" not in fail_reasons:
                         fail_reasons["no_results.json"] = 1
@@ -245,7 +245,6 @@ class BaseDataset(Dataset):  # pylint: disable=locally-disabled, invalid-name
                     continue
 
                 with gzip.open(route_dir + '/results.json.gz', 'rt') as f:
-                    total_routes += 1
                     try:
                         results_route = ujson.load(f)
                     except Exception as e:
