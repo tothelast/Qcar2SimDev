@@ -1,0 +1,9 @@
+{
+  "name": "roundabout_exit_parked_car",
+  "description": "Parked vehicle near the west crosswalk before the roundabout exit",
+  "type": "parked_vehicle",
+  "actor_number": 426,
+  "location": [-21.5, 25.0, 0.001],
+  "rotation": [0.0, 0.0, -90.0],
+  "configuration": 0
+}

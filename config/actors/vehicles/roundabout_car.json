@@ -8,11 +8,11 @@
   "route_type": "roundabout",
   "route_nodes": [16, 17],
   "control_params": {
-    "target_speed": 2.5,
+    "target_speed": 1.5,
     "stanley_gain": 0.3,
     "lookahead_distance": 3.0,
     "max_steering_angle_deg": 30.0,
-    "update_rate_hz": 10
+    "update_rate_hz": 3
   }
 }
 

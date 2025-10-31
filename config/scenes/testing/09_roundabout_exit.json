@@ -2,6 +2,13 @@
   "name": "roundabout_exit",
   "description": "Roundabout exit with two pedestrians",
   "ego_route": "roundabout_exit",
-  "actors": ["north_pedestrian", "west_pedestrian"]
+  "actors": [
+    "north_pedestrian",
+    "west_pedestrian",
+    "north_crosswalk",
+    "north_crosswalk_light",
+    "west_crosswalk",
+    "west_crosswalk_light",
+    "roundabout_exit_parked_car"
+  ]
 }
-

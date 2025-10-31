@@ -8,10 +8,10 @@
   "route_type": "circular",
   "route_nodes": [22, 9],
   "control_params": {
-    "target_speed": 2.0,
+    "target_speed": 1.5,
     "stanley_gain": 0.3,
     "lookahead_distance": 3.0,
     "max_steering_angle_deg": 30.0,
-    "update_rate_hz": 10
+    "update_rate_hz": 3
   }
 }

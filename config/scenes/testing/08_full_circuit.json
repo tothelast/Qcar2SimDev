@@ -2,6 +2,13 @@
   "name": "full_circuit",
   "description": "Full circuit with multiple vehicles and pedestrian",
   "ego_route": "full_circuit",
-  "actors": ["circular_car", "roundabout_car", "east_pedestrian"]
+    "actors": [
+    "roundabout_car",
+    "east_pedestrian",
+    "traffic_circle_stop_sign",
+    "east_crosswalk",
+    "long_route_parked_car",
+    "east_crosswalk_light"
+  ]
 }
 
