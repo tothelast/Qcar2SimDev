@@ -15,7 +15,7 @@ import torch
 from typing import Tuple
 from PIL import Image
 
-from simlingo_training.utils.internvl2_utils import build_transform, dynamic_preprocess
+from simlingo_training.utils.internvl2_utils import build_transform, dynamic_preprocess # type: ignore
 
 
 class CameraProcessor:

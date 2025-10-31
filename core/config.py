@@ -13,16 +13,16 @@ class SimlingoQCar2Config:
     
     def __init__(self):
         # Model paths
-        self.model_checkpoint_path = "simlingo/outputs/2025_10_27_00_26_12_qlabs_finetune/checkpoints/epoch=014.ckpt"
+        self.model_checkpoint_path = "simlingo/outputs/2025_10_28_00_46_56_qlabs_finetune/checkpoints/epoch=011.pt"
+        #self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
         # CARLA training camera parameters (exact match to training data)
-        self.camera_width = 1024
-        self.camera_height = 512
-        self.camera_fov = 110  # degrees - Match CARLA training FOV
-        self.camera_position = np.array([-1.5, 0.0, 2.0], dtype=np.float32)  # CARLA camera position
-        self.camera_bottom_crop_ratio = 0.0  # Fraction of image height to remove from bottom during preprocessing
+        self.camera_width = 820
+        self.camera_height = 410  # QLabs CSI native resolution
+        self.camera_fov = 160     # degrees - Match QLabs QCar2 CSI front camera FOV
+        self.camera_position = np.array([0.183, 0.0, 0.110], dtype=np.float32)  # QLabs QCar2 CSI front camera        self.camera_bottom_crop_ratio = 0.0  # Fraction of image height to remove from bottom during preprocessing
         self.resize_input_to_training_resolution = True  # Resize inference frames to match training resolution
 
         # ImageNet normalization
@@ -30,15 +30,16 @@ class SimlingoQCar2Config:
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
         # PID controller parameters (exact Simlingo values from config_simlingo.py)
-        self.turn_kp = 1.25
-        self.turn_ki = 0.75
-        self.turn_kd = 0.3
-        self.turn_n = 20
+        # PID controller parameters - MATCH PRETRAINED SIMLINGO
+        self.turn_kp = 3.25  # Was 1.25 - INCREASE by 2.6x
+        self.turn_ki = 1.0   # Was 0.75 - INCREASE by 1.33x
+        self.turn_kd = 1.0   # Was 0.3 - INCREASE by 3.33x
+        self.turn_n = 20     # Keep at 20
 
         # Timing: Match CARLA exactly - 20 Hz control, 4 Hz model inference
-        self.carla_fps = 20  # Control loop frequency (matches CARLA simulator FPS)
+        self.carla_fps = 10  # Control loop frequency (matches CARLA simulator FPS)
         self.dt = 1.0 / self.carla_fps  # 0.05s timestep
-        self.data_save_freq = 5  # Model inference every 5 iterations = 4 Hz (matches CARLA training data)
+        self.data_save_freq = 2  # Model inference every 5 iterations = 4 Hz (matches CARLA training data)
 
         # Waypoint configuration
         self.interpolation_spacing = 0.1
