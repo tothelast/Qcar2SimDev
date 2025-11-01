@@ -30,16 +30,15 @@ class SimlingoQCar2Config:
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
         # PID controller parameters (exact Simlingo values from config_simlingo.py)
-        # PID controller parameters - MATCH PRETRAINED SIMLINGO
-        self.turn_kp = 3.25  # Was 1.25 - INCREASE by 2.6x
-        self.turn_ki = 1.0   # Was 0.75 - INCREASE by 1.33x
-        self.turn_kd = 1.0   # Was 0.3 - INCREASE by 3.33x
-        self.turn_n = 20     # Keep at 20
+        self.turn_kp = 3.25  
+        self.turn_ki = 1.0   
+        self.turn_kd = 1.0  
+        self.turn_n = 20     
 
-        # Timing: Match CARLA exactly - 20 Hz control, 4 Hz model inference
-        self.carla_fps = 10  # Control loop frequency (matches CARLA simulator FPS)
-        self.dt = 1.0 / self.carla_fps  # 0.05s timestep
-        self.data_save_freq = 2  # Model inference every 5 iterations = 4 Hz (matches CARLA training data)
+        # Timing
+        self.carla_fps = 10  # Control loop frequency 
+        self.dt = 1.0 / self.carla_fps  # 0.01s timestep
+        self.data_save_freq = 2  # Model inference every 2 iterations = 5 Hz 
 
         # Waypoint configuration
         self.interpolation_spacing = 0.1
