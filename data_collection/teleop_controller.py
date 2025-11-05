@@ -171,8 +171,8 @@ def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
     print(f"  Max forward velocity: {teleop_controller.config.qcar2_max_speed} m/s")
     print(f"  Max steering: {np.degrees(teleop_controller.config.qcar2_max_steering):.1f}°")
 
-    # Control loop timing - 20 Hz to match CARLA (allows clean 4 Hz data collection)
-    dt = 0.05  # 20 Hz control loop
+    # Control loop timing - use config to match inference
+    dt = teleop_controller.config.dt
     iteration = 0
 
     # Error tracking
@@ -229,12 +229,13 @@ def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
                     rotation=rotation,
                 )
 
-            # Print status every 2 seconds (40 iterations at 20 Hz)
-            if iteration % 40 == 0:
+            # Print status every 2 seconds
+            status_interval = int(2.0 / dt)
+            if iteration % status_interval == 0:
                 print(f"  Teleop: v={velocity:.2f} m/s, steer={np.degrees(steering):.1f}°, "
                       f"pos=[{location[0]:.1f}, {location[1]:.1f}]")
 
-            # Control loop rate - 20 Hz
+            # Control loop rate
             time.sleep(dt)
 
         except Exception as e:

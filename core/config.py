@@ -13,8 +13,9 @@ class SimlingoQCar2Config:
     
     def __init__(self):
         # Model paths
-        self.model_checkpoint_path = "simlingo/outputs/2025_10_28_00_46_56_qlabs_finetune/checkpoints/epoch=011.pt"
-        #self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
+        # self.model_checkpoint_path = "simlingo/outputs/2025_10_28_00_46_56_qlabs_finetune/checkpoints/epoch=011.pt"
+        # self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
+        self.model_checkpoint_path = "simlingo/outputs/2025_11_03_22_55_08_qlabs_finetune/checkpoints/epoch=014.ckpt"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 

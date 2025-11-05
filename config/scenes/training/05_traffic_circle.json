@@ -3,7 +3,6 @@
   "description": "Extended traffic circle with roundabout vehicle, east pedestrian, stop sign, crosswalk and traffic light",
   "ego_route": "traffic_circle",
   "actors": [
-    "roundabout_car",
     "east_pedestrian",
     "traffic_circle_stop_sign",
     "east_crosswalk",
