@@ -75,8 +75,7 @@ class SimlingoQCar2Controller:
         self.start_time = None
         self.first_image_saved = False
 
-        # Model inference caching (4 Hz inference, 20 Hz control)
-        # Match CARLA exactly: data_save_freq=5 means inference every 5 iterations
+        # Model inference caching; cadence controlled by config.inference_stride (default 1)
         self.cached_speed_wps = None
         self.cached_route_wps = None
         self.cached_language = None
@@ -186,10 +185,8 @@ class SimlingoQCar2Controller:
             current_position, current_heading
         )
 
-        # Model inference at 4 Hz (every 5 iterations) - matches CARLA training data
-        # CARLA collected data at 20 FPS but saved every 5 frames (data_save_freq=5)
-        # This means training data has images spaced 0.25s apart (4 Hz)
-        if self.inference_counter % self.config.data_save_freq == 0:
+        # Run model inference every `inference_stride` control ticks
+        if self.inference_counter % getattr(self.config, "inference_stride", 1) == 0:
             # Run model inference
             speed_wps, route_wps, language = self.model_wrapper.inference(
                 camera_images=camera_images,
@@ -376,7 +373,8 @@ class SimlingoQCar2Controller:
         self.running = True
         self.start_time = time.time()
 
-        print(f"\nStarting control loop at {self.config.carla_fps} Hz (model inference at {self.config.carla_fps / self.config.data_save_freq:.0f} Hz)...")
+        inf_hz = self.config.carla_fps / max(getattr(self.config, "inference_stride", 1), 1)
+        print(f"\nStarting control loop at {self.config.carla_fps} Hz (model inference at {inf_hz:.0f} Hz)...")
         print("Press Ctrl+C to stop")
         print("-" * 80)
 

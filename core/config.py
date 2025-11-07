@@ -19,11 +19,11 @@ class SimlingoQCar2Config:
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
-        # CARLA training camera parameters (exact match to training data)
+        # CARLA training camera parameters 
         self.camera_width = 820
         self.camera_height = 410  # QLabs CSI native resolution
         self.camera_fov = 160     # degrees - Match QLabs QCar2 CSI front camera FOV
-        self.camera_position = np.array([0.183, 0.0, 0.110], dtype=np.float32)  # QLabs QCar2 CSI front camera        self.camera_bottom_crop_ratio = 0.0  # Fraction of image height to remove from bottom during preprocessing
+        self.camera_position = np.array([0.183, 0.0, 0.110], dtype=np.float32)  # QLabs QCar2 CSI front camera       
         self.resize_input_to_training_resolution = True  # Resize inference frames to match training resolution
 
         # ImageNet normalization
@@ -38,8 +38,9 @@ class SimlingoQCar2Config:
 
         # Timing
         self.carla_fps = 10  # Control loop frequency 
-        self.dt = 1.0 / self.carla_fps  # 0.01s timestep
-        self.data_save_freq = 2  # Model inference every 2 iterations = 5 Hz 
+        self.dt = 1.0 / self.carla_fps  # 0.1s timestep
+        self.data_save_freq = 2  # Data saving cadence during recording (every N control ticks)
+        self.inference_stride = 2  # Inference cadence during control (every N control ticks)
 
         # Waypoint configuration
         self.interpolation_spacing = 0.1
