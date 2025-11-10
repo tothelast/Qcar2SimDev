@@ -10,7 +10,7 @@
     "walk_speed": 1.2,
     "pace_distance": 1.0,
     "pace_time": 2.5,
-    "wait_time": 2.0,
+    "wait_time": 4.0,
     "crossing_time": 9.0
   }
 }
