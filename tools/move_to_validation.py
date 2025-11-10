@@ -15,7 +15,7 @@ def main():
     
     # Find all Rep_kink_street and Rep_traffic_circle directories
     dirs = sorted([d for d in training_dir.iterdir() 
-                               if d.is_dir() and d.name.startswith("Rep_roundabout_exit_")])
+                               if d.is_dir() and d.name.startswith("Rep_roundabout_navigation")])
     
     
     if len(dirs) < 3:
