@@ -5,7 +5,7 @@ defaults:
   - /data_module/base_dataset: dataset
 
 model:
-  lr: 3e-5
+  lr: 2e-5
   predict_route_as_wps: True
   speed_wps_mode: 2d
   language_model:
@@ -35,13 +35,13 @@ data_module:
     hist_len: 1
     skip_first_n_frames: 10
     route_as: target_point
-    use_commentary: false
-    use_qa: false
-    qa_augmentation: false
-    commentary_augmentation: false
-    img_augmentation: false
+    use_commentary: False
+    use_qa: False
+    qa_augmentation: False
+    commentary_augmentation: False
+    img_augmentation: False
     img_augmentation_prob: 0.0
-    img_shift_augmentation: false
+    img_shift_augmentation: False
     img_shift_augmentation_prob: 0.0
     use_lmdrive_commands: False
     use_old_towns: False
