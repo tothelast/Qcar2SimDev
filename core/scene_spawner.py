@@ -363,7 +363,8 @@ class SceneSpawner:
             route_nodes = vehicle_def.data.get('route_nodes', [])
             target_speed = vehicle_def.data.get('control_params', {}).get('target_speed', 2.5)
             target_speed = min(target_speed, speed_limit)
-            update_rate_hz = vehicle_def.data.get('control_params', {}).get('update_rate_hz', 10)
+            # Reduce default update rate to 2Hz to prevent QLabs lock contention with main thread
+            update_rate_hz = vehicle_def.data.get('control_params', {}).get('update_rate_hz', 2)
 
             if vehicle_def.data.get('route_type') == 'circular':
                 thread = threading.Thread(
@@ -760,12 +761,16 @@ class SceneSpawner:
 
     def stop_actor_control(self):
         """Stop all actor control threads."""
+        if not self.running:
+            return
+
         print("\nStopping actor control threads...")
         self.running = False
 
         # Wait for threads to finish
         for thread in self.threads:
-            thread.join(timeout=1.0)
+            if thread is not threading.current_thread():
+                thread.join(timeout=1.0)
 
         print("✓ All actor control threads stopped")
 
@@ -776,8 +781,12 @@ class SceneSpawner:
         if self.qlabs_actors:
             print("Closing scene actors QLabs connection...")
             self.qlabs_actors.close()
+            self.qlabs_actors = None
             print("✓ Scene actors QLabs connection closed")
 
     def __del__(self):
         """Destructor to ensure cleanup."""
-        self.cleanup()
+        try:
+            self.cleanup()
+        except Exception:
+            pass

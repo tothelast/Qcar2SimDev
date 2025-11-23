@@ -16,7 +16,8 @@ class SimlingoQCar2Config:
         # self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
         # self.model_checkpoint_path = "simlingo/outputs/2025_10_28_00_46_56_qlabs_finetune/checkpoints/epoch=011.pt"
         # self.model_checkpoint_path = "simlingo/outputs/2025_11_03_22_55_08_qlabs_finetune/checkpoints/epoch=014.ckpt"
-        self.model_checkpoint_path = "simlingo/outputs/2025_11_10_13_13_03_qlabs_finetune/checkpoints/last.ckpt"
+        # self.model_checkpoint_path = "simlingo/outputs/2025_11_10_13_13_03_qlabs_finetune/checkpoints/last.ckpt"
+        self.model_checkpoint_path = "simlingo/outputs/2025_11_22_11_10_30_qlabs_roundabout_finetune/checkpoints/last.ckpt"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
@@ -32,34 +33,28 @@ class SimlingoQCar2Config:
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
         # PID controller parameters (revert to Carla agent tuning)
-        self.turn_kp = 3.118357247806046
-        self.turn_ki = 0.6406067986034124
-        self.turn_kd = 1.3782508892109167
-        self.turn_n = 6
+        self.turn_kp = 3.0
+        self.turn_ki = 1.0
+        self.turn_kd = 1.0  # Reduced from 2.5 to prevent jitter at 4Hz
+        self.turn_n = 3     # Reduced from 6 to match 3Hz (approx 1s window)
+
+        # Braking Logic
+        self.brake_speed = 0.3  # desired speed below which brake is triggered (Reduced from 0.4 to fix start delay)
+        self.brake_ratio = 1.2  # ratio of speed/desired_speed at which brake is triggered
 
         # Timing
-        self.carla_fps = 10  # Control loop frequency 
-        self.dt = 1.0 / self.carla_fps  # 0.1s timestep
+        self.carla_fps = 3  # Control loop frequency (Reduced to 3Hz to match ~280ms inference latency)
+        self.dt = 1.0 / self.carla_fps  # 0.25s timestep
         self.data_save_freq = 2  # Data saving cadence during recording (every N control ticks)
-        self.inference_stride = 2  # Inference cadence during control (every N control ticks)
+        self.inference_stride = 1  # Inference cadence during control (every N control ticks) - Set to 1 for max responsiveness
 
         # Waypoint configuration
         self.interpolation_spacing = 0.1
 
-        # Stuck detection
-        # Disable creep/stuck recovery during debugging to avoid unintended forward motion
-        self.stuck_threshold = 80
-        self.creep_duration = 15
-        self.creep_throttle = 0.4
-
-        # Warmup to avoid initial stall
-        self.initial_warmup_steps = 20  
-        self.initial_warmup_speed = 0.5  # m/s minimum target during warmup
-
         # QCar2 physical constraints
         self.qcar2_max_speed = 4.0  # m/s
-        self.qcar2_max_acceleration = 2.0  # m/s^2
-        self.qcar2_max_deceleration = 4.0  # m/s^2
+        self.qcar2_max_acceleration = 0.8  # m/s^2 (Reduced from 2.0 to match 4Hz dt)
+        self.qcar2_max_deceleration = 1.6  # m/s^2 (Reduced from 4.0 to match 4Hz dt)
         self.qcar2_max_steering = np.pi / 9  # radians (~20 degrees)
 
         # QCar2 QLabs

@@ -52,7 +52,7 @@ def initialize_planned_route_tracer(qlabs, config):
     return tracer
 
 
-def main(scene_name=None, split='train', database_root=None):
+def main(scene_name=None, split='train', database_root=None, scene_definition_override=None):
     """Setup QLabs environment and spawn QCar2 for data collection."""
     print("QLabs Data Collection - Cityscape Lite")
 
@@ -60,7 +60,11 @@ def main(scene_name=None, split='train', database_root=None):
     scene_definition = None
 
     # Load scene or use default route
-    if scene_name:
+    if scene_definition_override:
+        print("Using overridden scene definition")
+        scene_definition = scene_definition_override
+        route_name = scene_definition.ego_route
+    elif scene_name:
         print(f"Loading scene: {scene_name}")
         scene_definition = SceneLoader().load_scene(scene_name)
         if not scene_definition:

@@ -1,0 +1,17 @@
+{
+    "name": "obstacle_car_var3",
+    "description": "Static obstacle car in roundabout (Variation 3)",
+    "type": "parked_vehicle",
+    "actor_number": 903,
+    "location": [
+        21.00,
+        33.89,
+        0.005
+    ],
+    "rotation": [
+        0.0,
+        0.0,
+        90.0
+    ],
+    "configuration": 0
+}

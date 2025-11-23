@@ -221,7 +221,32 @@ class BaseDataset(Dataset):  # pylint: disable=locally-disabled, invalid-name
                 route_dirs = route_dirs[:int(split_percentage * len(route_dirs))]
             elif self.split == "val":
                 route_dirs = route_dirs[int(split_percentage * len(route_dirs)):]
-        
+
+        # Optional run-level subsampling of training runs per logical route (used for QLabs).
+        if self.split == "train" and getattr(self, "max_train_runs_per_route", -1) > 0:
+            routes_by_key = {}
+            for route_dir in route_dirs:
+                route_path = Path(route_dir)
+                run_folder = route_path.parent.name
+                try:
+                    # QLabs runs are named like 'Rep_<route_name>_<date>_<time>'
+                    route_key, _, _ = run_folder.rsplit("_", 2)
+                except ValueError:
+                    # Fallback to the full folder name if it does not follow the expected pattern
+                    route_key = run_folder
+                routes_by_key.setdefault(route_key, []).append(route_dir)
+
+            rng = random.Random(getattr(self, "run_subsample_seed", 42))
+            subsampled_route_dirs = []
+            for route_key, dirs in routes_by_key.items():
+                dirs_sorted = sorted(dirs)
+                rng.shuffle(dirs_sorted)
+                keep = dirs_sorted[: self.max_train_runs_per_route]
+                subsampled_route_dirs.extend(keep)
+
+            route_dirs = subsampled_route_dirs
+            print(f"Subsampled training runs per route: max {self.max_train_runs_per_route}, keeping {len(route_dirs)} runs across {len(routes_by_key)} routes.")
+
         total_routes = len(route_dirs)
         
         # route_dirs = route_dirs[:100]

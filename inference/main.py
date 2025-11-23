@@ -21,7 +21,9 @@ from core.scene_loader import SceneLoader
 from core.scene_spawner import SceneSpawner
 from inference.state_estimator import StateEstimator
 from inference.route_manager import RouteManager
+from inference.route_manager import RouteManager
 from inference.control_converter import ControlConverter
+from inference.debug_visualizer import DebugVisualizer
 
 try:
     from core.camera_processor import CameraProcessor
@@ -63,13 +65,13 @@ class SimlingoQCar2Controller:
         self.state_estimator = StateEstimator(self.config)
         self.route_manager = RouteManager(self.config)
         self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode) if SimlingoModelWrapper else None
+        self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode) if SimlingoModelWrapper else None
         self.control_converter = ControlConverter(self.config)
+        self.debug_visualizer = DebugVisualizer()
 
         # State
         self.running = False
         self.step_count = 0
-        self.stuck_detector = 0
-        self.force_move = 0
         self.trajectory_log = []
         self.collision_count = 0
         self.start_time = None
@@ -147,9 +149,12 @@ class SimlingoQCar2Controller:
         print("Scene setup complete")
         print("="*80)
 
-    def run_step(self) -> bool:
+    def run_step(self, dt: float) -> bool:
         """
         Execute one control loop iteration.
+
+        Args:
+            dt: Time elapsed since last step in seconds
 
         Returns:
             True if step successful, False otherwise
@@ -232,29 +237,9 @@ class SimlingoQCar2Controller:
             route_waypoints, velocity, speed_waypoints
         )
 
-        # Warmup to avoid initial stall
-        if self.step_count < getattr(self.config, "initial_warmup_steps", 0):
-            target_speed_cmd = max(target_speed_cmd, getattr(self.config, "initial_warmup_speed", 0.5))
-            brake = False
-
-        # Stuck detection
-        if velocity < 0.1:
-            self.stuck_detector += 1
-        else:
-            self.stuck_detector = 0
-
-        # Stuck recovery
-        if self.stuck_detector > self.config.stuck_threshold:
-            self.force_move = self.config.creep_duration
-
-        if self.force_move > 0:
-            target_speed_cmd = max(self.config.creep_throttle, target_speed_cmd)
-            brake = False
-            self.force_move -= 1
-
         # Convert to QCar2 control using desired speed directly
         forward_velocity, turn_angle = self.control_converter.convert_to_qcar2_control(
-            desired_speed, steer, velocity, self.config.dt, target_speed_cmd, brake
+            desired_speed, steer, velocity, dt, target_speed_cmd, brake
         )
 
         # Update speed display in commentary window
@@ -270,6 +255,21 @@ class SimlingoQCar2Controller:
         # Send control to QCar2
         _, location, rotation = self.qcar_interface.set_control(
             forward_velocity, turn_angle
+        )
+        
+        # Save Debug Frame
+        self.debug_visualizer.save_frame(
+            image=image,
+            step=self.step_count,
+            velocity=velocity,
+            steer=steer,
+            target_speed_cmd=target_speed_cmd,
+            brake=brake,
+            desired_speed=desired_speed,
+            route_wps=route_waypoints,
+            speed_wps=speed_waypoints,
+            intrinsics=camera_intrinsics,
+            extrinsics=camera_extrinsics
         )
 
         # Log trajectory data
@@ -379,11 +379,12 @@ class SimlingoQCar2Controller:
         print("-" * 80)
 
         try:
+            dt = self.config.dt  # Initial dt
             while self.running:
                 loop_start_time = time.time()
 
                 # Execute one step
-                if not self.run_step():
+                if not self.run_step(dt):
                     break
 
                 # Maintain control frequency
@@ -394,6 +395,9 @@ class SimlingoQCar2Controller:
                     time.sleep(sleep_time)
                 else:
                     print(f"WARNING: Control loop running slow ({elapsed:.3f}s > {self.config.dt:.3f}s)")
+                
+                # Calculate actual dt for next step
+                dt = time.time() - loop_start_time
 
         except KeyboardInterrupt:
             print("\n\nControl loop interrupted by user")

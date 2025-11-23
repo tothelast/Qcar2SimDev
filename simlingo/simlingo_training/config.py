@@ -56,6 +56,9 @@ class DatasetBaseConfig:
     use_only_old_towns: bool = False
     use_town13: bool = False
 
+    max_train_runs_per_route: int = -1
+    run_subsample_seed: int = 42
+
     skip_first_n_frames: int = 10
     pred_len: int = 11 # including the current time step
     hist_len: int = 1 # including the current time step

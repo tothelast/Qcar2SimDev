@@ -20,7 +20,7 @@ class GlobalConfig:
         self.max_throttle = 1 # 0.75  # upper limit on throttle signal value in dataset
         self.brake_speed = 0.4  # desired speed below which brake is triggered
         # ratio of speed to desired speed at which brake is triggered
-        self.brake_ratio = 1.1
+        self.brake_ratio = 1.2
         self.clip_delta = 1.0 # 0.25  # maximum change in speed input to longitudinal controller
         self.clip_throttle = 1.0 # 0.75  # Maximum throttle allowed by the controller
 

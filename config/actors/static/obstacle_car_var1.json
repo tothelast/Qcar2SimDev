@@ -1,0 +1,22 @@
+{
+    "name": "obstacle_car_var1",
+    "description": "Static obstacle car at Variation 1 position",
+    "type": "parked_vehicle",
+    "actor_number": 999,
+    "location": [
+        21.00,
+        33.89,
+        0.005
+    ],
+    "rotation": [
+        0.0,
+        0.0,
+        90.0
+    ],
+    "scale": [
+        1.0,
+        1.0,
+        1.0
+    ],
+    "configuration": 0
+}

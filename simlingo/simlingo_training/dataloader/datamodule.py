@@ -1,5 +1,8 @@
 # Standard library imports
 import itertools
+import json
+import os
+from pathlib import Path
 from typing import List
 
 # Third-party imports
@@ -169,6 +172,17 @@ class DataModule(LightningDataModule):
                 if self.driving_dataset is not None:
                     print(f"Num samples all: {datasets['all'].__len__()}")
                 self.sampler_train = torch.utils.data.WeightedRandomSampler(weights=weights_train, num_samples=num_samples, replacement=True)
+
+                # Save annotation count (number of training frames) once per run
+                try:
+                    if not hasattr(self, "_annotation_count_written"):
+                        annotation_info = {"num_annotations": len(self.train_dataset)}
+                        out_path = Path.cwd() / "train_annotation_count.json"
+                        with out_path.open("w") as f:
+                            json.dump(annotation_info, f, indent=2)
+                        self._annotation_count_written = True
+                except Exception as e:
+                    print(f"Failed to write train_annotation_count.json: {e}")
 
             self.val_dataset = torch.utils.data.ConcatDataset(self.val_datasets)
             self.predict_dataset = None

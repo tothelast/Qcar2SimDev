@@ -124,6 +124,10 @@ class ControlConverter:
         self.speed_controller = LongitudinalLinearRegressionController(config)
         self.turn_controller = LateralPIDController(config)
         
+        # Minimal state: just track previous brake for velocity hold
+        self.prev_brake = False
+        self.smoothed_desired_speed = 0.0
+        
     def control_pid(
         self,
         route_waypoints: np.ndarray,
@@ -131,8 +135,8 @@ class ControlConverter:
         speed_waypoints: np.ndarray
     ) -> Tuple[float, float, bool, float]:
         """
-        Compute control from waypoints using PID (exact Simlingo implementation).
-
+        Compute control from waypoints using PID.
+        
         Args:
             route_waypoints: Route waypoints [F, 2]
             velocity: Current velocity in m/s
@@ -142,36 +146,87 @@ class ControlConverter:
             Tuple of (steer, target_speed_command, brake, desired_speed)
         """
         # Calculate desired speed from speed waypoints
-        # Reference: simlingo/team_code/agent_simlingo.py control_pid() method
-        # Uses waypoints[0] to waypoints[2] (first 0.5s of predictions)
-
-        # one_second = int(self.config.carla_fps // (self.config.wp_dilation * self.config.data_save_freq))
-        # half_second = one_second // 2
-
-        # # Indices: [half_second - 2, one_second - 2] = [0, 2]
-        # idx1 = half_second - 2  # Index 0
-        # idx2 = one_second - 2   # Index 2
-        
-        # Make sure there are enough waypoints
+        # Data is collected at 5Hz (0.2s interval).
+        # Slicing [1:-1] in dataset means:
+        # wp[0] is t=0.4s
+        # wp[1] is t=0.6s
+        # wp[2] is t=0.8s
+        # Interval wp[2] - wp[0] is 0.4s.
+        # Speed = Distance / Time = Distance * 2.5
         if len(speed_waypoints) > 2:
-            # Correctly calculate desired speed based on the distance between the first and third waypoint,
-            # which corresponds to a 0.5-second lookahead in the original CARLA training.
-            desired_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.0
+            desired_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.5
         elif len(speed_waypoints) >= 2:
-            # Fallback for fewer waypoints
-            desired_speed = np.linalg.norm(speed_waypoints[1] - speed_waypoints[0]) * 2.0
+            # Interval wp[1] - wp[0] is 0.2s. Multiplier 5.0.
+            desired_speed = np.linalg.norm(speed_waypoints[1] - speed_waypoints[0]) * 5.0
         else:
             desired_speed = 0.0
-
+        
+        # Clamp desired speed to physical max
+        raw_desired_speed = float(np.clip(desired_speed, 0.0, self.config.qcar2_max_speed))
+        
+        # Asymmetric Exponential Moving Average (EMA) Smoothing
+        # Filter out single-frame high-speed spikes while preserving fast braking response
+        if raw_desired_speed < self.smoothed_desired_speed:
+            # Braking: Fast response (trust the brake signal immediately)
+            alpha = 1.0 
+        else:
+            # Accelerating: Slow response (filter out noise/spikes)
+            # If we were at 0 and model predicts 3.1 for 1 frame, we only go to ~0.6
+            alpha = 0.2
+            
+        self.smoothed_desired_speed = alpha * raw_desired_speed + (1.0 - alpha) * self.smoothed_desired_speed
+        
+        # Use smoothed speed for control logic
+        desired_speed = self.smoothed_desired_speed
+        
         # Steering calculation
         route_interp = self.interpolate_waypoints(route_waypoints)
         steer = self.turn_controller.step(route_interp, velocity)
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
+        
+        # SIMPLIFIED BRAKE LOGIC - Trust the model's predictions!
+        # Brake if model predicts very low speed OR if we are going much faster than desired
+        brake_threshold = self.config.brake_speed  # 0.4 m/s
+        
+        if desired_speed < brake_threshold:
+            brake = True
+            target_speed_cmd = 0.0
+        elif (velocity / (desired_speed + 1e-6)) > self.config.brake_ratio:
+            # Emergency Brake: We are going much faster than the model wants (e.g. 4.0 vs 1.0)
+            brake = True
+            target_speed_cmd = desired_speed # Keep target but apply brake flag for sharp decel
+        else:
+            brake = False
+            target_speed_cmd = desired_speed
+        
+        # COLD START LOGIC - Handle initial movement from stopped position
+        # Problem: Model trained on moving data struggles to predict initial movement from standstill
+        # Solution: Apply small minimum speed when stopped and model wants to move
+        cold_start_threshold = 0.05  # m/s - consider stopped below this
+        cold_start_min_speed = 0.3   # m/s - minimum target to break standstill
+        min_desired_for_cold_start = 0.4  # m/s - Only cold start if we actually want to move (was 0.1)
+        
+        if velocity < cold_start_threshold and desired_speed > min_desired_for_cold_start:
+            # Vehicle is stopped but model wants to move (even slightly)
+            # Apply minimum speed to overcome initial friction and get into moving state
+            target_speed_cmd = max(target_speed_cmd, cold_start_min_speed)
+            brake = False
+        
+        # Minimal velocity hold: if we were braking and still moving very slowly,
+        # keep braking to prevent jitter at near-zero speeds
+        velocity_hold_threshold = 0.15  # m/s
+        if self.prev_brake and velocity > 0 and velocity < velocity_hold_threshold:
+            if desired_speed < brake_threshold:
+                brake = True
+                target_speed_cmd = 0.0
+        
+        # Remember previous brake state
+        self.prev_brake = brake
+        
+        return steer, target_speed_cmd, brake, desired_speed
 
-        # QCar2 direct-speed control mode: treat desired speed as the command directly
-        return steer, desired_speed, False, desired_speed
-    
+
     def interpolate_waypoints(self, waypoints: np.ndarray) -> np.ndarray:
         """
         Interpolate waypoints to fixed spacing (exact Simlingo implementation).

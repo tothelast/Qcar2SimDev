@@ -18,7 +18,7 @@ from pathlib import Path
 
 import carla
 import cv2
-import hydra
+import hydraaffects_ego
 import numpy as np
 import torch
 import ujson
@@ -762,10 +762,11 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
             # save
             image.save(f"{self.save_path_img}/{self.step}.png")
             
-        steer, throttle, brake = self.control_pid(pred_route, gt_velocity, pred_speed_wps)
+        steer, throttle, brake, desired_speed = self.control_pid(pred_route, gt_velocity, pred_speed_wps)
 
         # # 0.1 is just an arbitrary low number to threshold when the car is stopped
-        if gt_velocity < 0.1:
+        # Only consider the car stuck if it is stopped AND the model wants to move (desired_speed > 0.5)
+        if gt_velocity < 0.1 and desired_speed > 0.5:
             self.stuck_detector += 1
         else:
             self.stuck_detector = 0
@@ -828,7 +829,7 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
 
-        return steer, throttle, brake
+        return steer, throttle, brake, desired_speed
     
     # In: Waypoints NxD
     # Out: Waypoints NxD equally spaced 0.1 across D

@@ -3,7 +3,6 @@
   "description": "Long route with moving vehicle, pedestrian, and parked car obstacle",
   "ego_route": "long_route",
   "actors": [
-    "circular_car",
     "east_pedestrian",
     "long_route_parked_car",
     "east_crosswalk"
