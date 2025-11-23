@@ -21,7 +21,6 @@ from core.scene_loader import SceneLoader
 from core.scene_spawner import SceneSpawner
 from inference.state_estimator import StateEstimator
 from inference.route_manager import RouteManager
-from inference.route_manager import RouteManager
 from inference.control_converter import ControlConverter
 from inference.debug_visualizer import DebugVisualizer
 
@@ -64,7 +63,6 @@ class SimlingoQCar2Controller:
         self.camera_processor = CameraProcessor(self.config) if CameraProcessor else None
         self.state_estimator = StateEstimator(self.config)
         self.route_manager = RouteManager(self.config)
-        self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode) if SimlingoModelWrapper else None
         self.model_wrapper = SimlingoModelWrapper(self.config, nav_mode=nav_mode) if SimlingoModelWrapper else None
         self.control_converter = ControlConverter(self.config)
         self.debug_visualizer = DebugVisualizer()

@@ -58,56 +58,6 @@ class LateralPIDController:
         self._window = deque([0 for _ in range(self.n)], maxlen=self.n)
 
 
-class LongitudinalLinearRegressionController:
-    """Longitudinal controller using linear regression."""
-
-    def __init__(self, config):
-        """Initialize longitudinal controller."""
-        self.minimum_target_speed = 0.278
-        self.params = np.array([
-            1.1990342347353184, -0.8057602384167799, 1.710818710950062,
-            0.921890257450335, 1.556497522998393, -0.7013479734904027,
-            1.031266635497984
-        ])
-        self.max_acceleration = 1.89
-        self.max_deceleration = -4.82
-
-    def get_throttle_and_brake(self, target_speed: float, current_speed: float) -> Tuple[float, bool]:
-        """Get throttle and brake values using linear regression."""
-        if target_speed < 1e-5:
-            return 0.0, True
-
-        target_speed = max(self.minimum_target_speed, target_speed)
-        current_speed_kmh = current_speed * 3.6
-        target_speed_kmh = target_speed * 3.6
-        speed_error = target_speed_kmh - current_speed_kmh
-
-        if speed_error > self.max_acceleration:
-            return 1.0, False
-
-        if current_speed_kmh / target_speed_kmh > self.params[-1]:
-            return 0.0, True
-
-        # Normalize values (scaling is leftover from optimization)
-        speed_error_cl = np.clip(speed_error, 0.0, np.inf) / 100.0
-        current_speed_norm = current_speed_kmh / 100.0
-
-        # Construct feature vector
-        features = np.array([
-            current_speed_norm,
-            current_speed_norm**2,
-            100 * speed_error_cl,
-            speed_error_cl**2,
-            current_speed_norm * speed_error_cl,
-            current_speed_norm**2 * speed_error_cl
-        ])
-
-        # Linear regression: throttle = features @ coefficients
-        throttle = np.clip(features @ self.params[:-1], 0.0, 1.0)
-
-        return throttle, False
-
-
 class ControlConverter:
     """Converts Simlingo model outputs to QCar2 control commands."""
 
@@ -120,8 +70,6 @@ class ControlConverter:
         """
         self.config = config
 
-        # Legacy longitudinal controller retained for reference (unused in direct-speed mode)
-        self.speed_controller = LongitudinalLinearRegressionController(config)
         self.turn_controller = LateralPIDController(config)
         
         # Minimal state: just track previous brake for velocity hold

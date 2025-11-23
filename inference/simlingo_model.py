@@ -139,14 +139,12 @@ class SimlingoModelWrapper:
         if os.path.isdir(checkpoint_path):
             # DeepSpeed ZeRO checkpoint directory - use the pre-converted pytorch_model.pt
             pytorch_model_path = os.path.join(checkpoint_path, "pytorch_model.pt")
-            if os.path.exists(pytorch_model_path):
-                print(f"Loading from pre-converted checkpoint: {pytorch_model_path}")
-                state_dict = torch.load(pytorch_model_path, map_location="cpu")
-            else:
+            if not os.path.exists(pytorch_model_path):
                 raise FileNotFoundError(
                     f"pytorch_model.pt not found in {checkpoint_path}. "
                     "Please convert the DeepSpeed checkpoint first using zero_to_fp32.py"
                 )
+            state_dict = torch.load(pytorch_model_path, map_location="cpu")
         else:
             # Single file checkpoint
             state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -230,9 +228,9 @@ class SimlingoModelWrapper:
         self.tokenizer.padding_side = "left"
 
         # Store token ids for logging
-        for token in special_tokens_to_add:
-            token_id = self.tokenizer.convert_tokens_to_ids(token)
-            print(f"  {token}: {token_id}")
+        # for token in special_tokens_to_add:
+        #     token_id = self.tokenizer.convert_tokens_to_ids(token)
+        #     print(f"  {token}: {token_id}")
 
         print("Tokenizer loaded successfully")
     

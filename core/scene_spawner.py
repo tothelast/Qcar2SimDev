@@ -366,19 +366,13 @@ class SceneSpawner:
             # Reduce default update rate to 2Hz to prevent QLabs lock contention with main thread
             update_rate_hz = vehicle_def.data.get('control_params', {}).get('update_rate_hz', 2)
 
-            if vehicle_def.data.get('route_type') == 'circular':
+            if vehicle_def.data.get('route_type') in ['circular', 'roundabout']:
+                route_type = vehicle_def.data.get('route_type')
                 thread = threading.Thread(
-                    target=self._circular_vehicle_loop,
-                    args=(qcar, vehicle_def.name, route_nodes, target_speed, update_rate_hz),
+                    target=self._vehicle_control_loop,
+                    args=(qcar, vehicle_def.name, route_nodes, target_speed, update_rate_hz, route_type),
                     daemon=True,
-                    name=f"circular_{vehicle_def.name}"
-                )
-            elif vehicle_def.data.get('route_type') == 'roundabout':
-                thread = threading.Thread(
-                    target=self._roundabout_vehicle_loop,
-                    args=(qcar, vehicle_def.name, route_nodes, target_speed, update_rate_hz),
-                    daemon=True,
-                    name=f"roundabout_{vehicle_def.name}"
+                    name=f"{route_type}_{vehicle_def.name}"
                 )
             else:
                 print(f"  ✗ Unknown route type: {vehicle_def.data.get('route_type')}")
@@ -418,20 +412,22 @@ class SceneSpawner:
         print(f"\nTotal control threads started: {len(self.threads)}")
         print("="*80)
 
-    def _circular_vehicle_loop(self, qcar: QLabsQCar2, actor_name: str, route_nodes: List[int], target_speed: float, update_rate_hz: int):
+    def _vehicle_control_loop(self, qcar: QLabsQCar2, actor_name: str, route_nodes: List[int], target_speed: float, update_rate_hz: int, route_type: str):
         """
-        Control loop for circular route vehicle using Stanley controller.
+        Control loop for vehicle using Stanley controller.
 
         Args:
             qcar: QLabsQCar2 instance
+            actor_name: Name of the actor
             route_nodes: List of node IDs forming the route
             target_speed: Target speed in m/s
             update_rate_hz: Control loop frequency in Hz
+            route_type: Type of route (e.g., 'circular', 'roundabout')
         """
         import numpy as np
 
         thread_id = threading.current_thread().name
-        print(f"  [CIRCULAR-{thread_id}] Starting with route_nodes={route_nodes}, speed={target_speed}, rate={update_rate_hz}Hz", flush=True)
+        print(f"  [{route_type.upper()}-{thread_id}] Starting with route_nodes={route_nodes}, speed={target_speed}, rate={update_rate_hz}Hz", flush=True)
 
         # Generate full route waypoints
         all_waypoints = []
@@ -450,7 +446,7 @@ class SceneSpawner:
                 all_waypoints.append([x_coords[j], y_coords[j]])
 
         all_waypoints = np.array(all_waypoints)
-        print(f"  [CIRCULAR-{thread_id}] Generated {len(all_waypoints)} waypoints", flush=True)
+        print(f"  [{route_type.upper()}-{thread_id}] Generated {len(all_waypoints)} waypoints", flush=True)
 
         # Control parameters
         k_stanley = 0.3  # Stanley controller gain
@@ -466,7 +462,7 @@ class SceneSpawner:
         # Wait before starting (stagger by actor number to avoid simultaneous API calls)
         actor_offset = hash(actor_name) % 100 / 1000.0  # 0-99ms offset based on actor name
         time.sleep(2.0 + actor_offset)
-        print(f"  [CIRCULAR-{thread_id}] Starting movement control loop (offset: {actor_offset*1000:.0f}ms)...", flush=True)
+        print(f"  [{route_type.upper()}-{thread_id}] Starting movement control loop (offset: {actor_offset*1000:.0f}ms)...", flush=True)
 
         iteration = 0
         while self.running:
@@ -555,7 +551,7 @@ class SceneSpawner:
 
                 # Debug output (first 10 iterations)
                 if iteration <= 10:
-                    print(f"  [CIRCULAR-{thread_id}] iter={iteration}, pos=[{current_pos[0]:.2f},{current_pos[1]:.2f}], wp={current_waypoint_idx}/{lookahead_idx}, target=[{target_wp[0]:.2f},{target_wp[1]:.2f}], heading_err={heading_error:.3f}, steering={steering_angle:.3f}", flush=True)
+                    print(f"  [{route_type.upper()}-{thread_id}] iter={iteration}, pos=[{current_pos[0]:.2f},{current_pos[1]:.2f}], wp={current_waypoint_idx}/{lookahead_idx}, heading_err={heading_error:.3f}, steering={steering_angle:.3f}", flush=True)
 
                 # Sleep for remaining time to maintain update rate
                 elapsed = time.time() - loop_start_time
@@ -564,165 +560,12 @@ class SceneSpawner:
                     time.sleep(sleep_time)
 
             except Exception as e:
-                print(f"  [CIRCULAR-{thread_id}] ERROR at iteration {iteration}: {e}", flush=True)
+                print(f"  [{route_type.upper()}-{thread_id}] ERROR at iteration {iteration}: {e}", flush=True)
                 import traceback
                 traceback.print_exc()
                 break
 
-        print(f"  [CIRCULAR-{thread_id}] Loop exited after {iteration} iterations", flush=True)
-
-    def _roundabout_vehicle_loop(self, qcar: QLabsQCar2, actor_name: str, route_nodes: List[int], target_speed: float, update_rate_hz: int):
-        """
-        Control loop for roundabout route vehicle using Stanley controller.
-
-        Args:
-            qcar: QLabsQCar2 instance
-            route_nodes: List of node IDs forming the route
-            target_speed: Target speed in m/s
-            update_rate_hz: Control loop frequency in Hz
-        """
-        import numpy as np
-
-        thread_id = threading.current_thread().name
-        print(f"  [ROUNDABOUT-{thread_id}] Starting with route_nodes={route_nodes}, speed={target_speed}, rate={update_rate_hz}Hz", flush=True)
-
-        # Generate full route waypoints
-        all_waypoints = []
-        for i in range(len(route_nodes)):
-            from_node = route_nodes[i]
-            to_node = route_nodes[(i + 1) % len(route_nodes)]  # Wrap around for circular route
-
-            # Generate path for this edge
-            path = self.roadmap.generate_path([from_node, to_node])
-            x_coords = path[0, :] * 10.0  # Scale to QLabs coordinates
-            y_coords = path[1, :] * 10.0
-
-            # Add waypoints (skip first point if not the first edge to avoid duplicates)
-            start_idx = 1 if i > 0 else 0
-            for j in range(start_idx, len(x_coords)):
-                all_waypoints.append([x_coords[j], y_coords[j]])
-
-        all_waypoints = np.array(all_waypoints)
-        print(f"  [ROUNDABOUT-{thread_id}] Generated {len(all_waypoints)} waypoints", flush=True)
-
-        # Control parameters
-        k_stanley = 0.3  # Stanley controller gain
-        max_steering_angle = math.pi / 6  # 30 degrees max
-        lookahead_distance = 3.0  # meters
-        current_waypoint_idx = 0
-        update_interval = 1.0 / update_rate_hz
-
-        # State variables
-        current_pos = None
-        steering_angle = 0.0
-
-        # Wait before starting (stagger by actor number to avoid simultaneous API calls)
-        actor_offset = hash(actor_name) % 100 / 1000.0  # 0-99ms offset based on actor name
-        time.sleep(2.0 + actor_offset)
-        print(f"  [ROUNDABOUT-{thread_id}] Starting movement control loop (offset: {actor_offset*1000:.0f}ms)...", flush=True)
-
-        iteration = 0
-        while self.running:
-            iteration += 1
-            loop_start_time = time.time()
-
-            try:
-                # Query state and send control (with lock to prevent simultaneous API calls)
-                with self.qlabs_lock:
-                    success, location, rotation, _, _ = qcar.set_velocity_and_request_state(
-                        forward=target_speed if current_pos is not None else 0.0,
-                        turn=steering_angle,
-                        headlights=True,
-                        leftTurnSignal=False,
-                        rightTurnSignal=False,
-                        brakeSignal=False,
-                        reverseSignal=False
-                    )
-
-                if not success:
-                    time.sleep(update_interval)
-                    continue
-
-                current_pos = np.array([location[0], location[1]])
-                current_yaw = rotation[2]
-
-                # Find nearest waypoint on path
-                distances = np.linalg.norm(all_waypoints - current_pos, axis=1)
-                nearest_idx = np.argmin(distances)
-                current_waypoint_idx = nearest_idx
-
-                # Find lookahead waypoint
-                lookahead_idx = current_waypoint_idx
-                accumulated_dist = 0.0
-
-                for i in range(1, min(100, len(all_waypoints))):
-                    idx = (current_waypoint_idx + i) % len(all_waypoints)
-                    prev_idx = (current_waypoint_idx + i - 1) % len(all_waypoints)
-
-                    segment_dist = np.linalg.norm(all_waypoints[idx] - all_waypoints[prev_idx])
-                    accumulated_dist += segment_dist
-
-                    if accumulated_dist >= lookahead_distance:
-                        lookahead_idx = idx
-                        break
-
-                # Get target waypoint
-                target_wp = all_waypoints[lookahead_idx]
-
-                # Calculate cross-track error
-                path_vector = target_wp - current_pos
-                path_distance = np.linalg.norm(path_vector)
-
-                if path_distance < 0.01:  # Too close, skip
-                    time.sleep(update_interval)
-                    continue
-
-                # Path heading
-                path_heading = math.atan2(path_vector[1], path_vector[0])
-
-                # Heading error
-                heading_error = path_heading - current_yaw
-
-                # Normalize to [-pi, pi]
-                while heading_error > math.pi:
-                    heading_error -= 2 * math.pi
-                while heading_error < -math.pi:
-                    heading_error += 2 * math.pi
-
-                # Cross-track error
-                cross_track_error = path_distance * math.sin(heading_error)
-
-                # Stanley controller
-                if target_speed > 0.01:
-                    steering_correction = math.atan(k_stanley * cross_track_error / target_speed)
-                else:
-                    steering_correction = 0.0
-
-                steering_angle = heading_error + steering_correction
-
-                # NEGATE steering angle - flip left/right convention
-                steering_angle = -steering_angle
-
-                # Clip steering angle
-                steering_angle = np.clip(steering_angle, -max_steering_angle, max_steering_angle)
-
-                # Debug output (first 10 iterations)
-                if iteration <= 10:
-                    print(f"  [ROUNDABOUT-{thread_id}] iter={iteration}, pos=[{current_pos[0]:.2f},{current_pos[1]:.2f}], wp={current_waypoint_idx}/{lookahead_idx}, heading_err={heading_error:.3f}, steering={steering_angle:.3f}", flush=True)
-
-                # Sleep for remaining time to maintain update rate
-                elapsed = time.time() - loop_start_time
-                sleep_time = max(0, update_interval - elapsed)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-
-            except Exception as e:
-                print(f"  [ROUNDABOUT-{thread_id}] ERROR at iteration {iteration}: {e}", flush=True)
-                import traceback
-                traceback.print_exc()
-                break
-
-        print(f"  [ROUNDABOUT-{thread_id}] Loop exited after {iteration} iterations", flush=True)
+        print(f"  [{route_type.upper()}-{thread_id}] Loop exited after {iteration} iterations", flush=True)
 
     def _pedestrian_crossing_loop(self, pedestrian: QLabsPerson, ped_def: ActorDefinition):
         """Control loop for pedestrian crossing."""
