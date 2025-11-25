@@ -149,6 +149,7 @@ class TrainConfig:
     val_every_n_epochs: int = 1
 
     checkpoint: Optional[str] = None
+    accumulate_grad_batches: int = 1
 
 
 def register_configs():

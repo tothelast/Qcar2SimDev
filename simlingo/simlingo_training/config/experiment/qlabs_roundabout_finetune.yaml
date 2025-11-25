@@ -19,7 +19,7 @@ model:
     freeze: true
 
 data_module:
-  batch_size: 1
+  batch_size: 4
   num_workers: 4
   train_partitions: null
   train_partitions_dreamer: null
@@ -50,14 +50,15 @@ data_module:
     cut_bottom_quarter: False
     num_route_points: 20
 
-max_epochs: 7
+max_epochs: 15
 precision: 16-mixed
 strategy: deepspeed_stage_2
 gpus: 1
 seed: 42
+accumulate_grad_batches: 4
 name: qlabs_roundabout_finetune
 resume: False
-checkpoint: /home/garegin/Documents/Projects/Qcar2SimDev/simlingo/outputs/2025_11_21_20_42_51_qlabs_roundabout_finetune/checkpoints/last.ckpt
+checkpoint: /home/garegin/Documents/Projects/Qcar2SimDev/models/simlingo/checkpoints/epoch=013.ckpt
 wandb_project: simlingo_qlabs
 
 hydra:
