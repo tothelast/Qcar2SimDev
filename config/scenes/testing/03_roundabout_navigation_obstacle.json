@@ -3,10 +3,6 @@
     "description": "Roundabout navigation with static obstacle for verification",
     "ego_route": "roundabout_navigation",
     "actors": [
-        "north_pedestrian",
-        "stop_sign_roundabout",
-        "north_crosswalk",
-        "north_crosswalk_light",
         "obstacle_car_var4"
     ],
     "actors_backup": []

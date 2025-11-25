@@ -14,7 +14,6 @@ class SimlingoQCar2Config:
     def __init__(self):
         # Model paths
         self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
-        # self.model_checkpoint_path = "new_chekpoint"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
@@ -29,20 +28,23 @@ class SimlingoQCar2Config:
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-        # PID controller parameters (revert to Carla agent tuning)
-        self.turn_kp = 3.0
-        self.turn_ki = 1.0
-        self.turn_kd = 1.0  # Reduced from 2.5 to prevent jitter at 4Hz
-        self.turn_n = 3     # Reduced from 6 to match 3Hz (approx 1s window)
+        # PID Controller (Steering) - MATCH PRETRAINED SIMLINGO EXACTLY
+        # Reference: simlingo/team_code/nav_planner.py (LateralPIDController defaults)
+        self.turn_kp = 3.118357247806046
+        self.turn_ki = 0.6406067986034124
+        self.turn_kd = 1.3782508892109167
+        self.turn_n = 3   # Match nav_planner.py default (n=6)
 
         # Braking Logic
-        self.brake_speed = 0.3  # desired speed below which brake is triggered (Reduced from 0.4 to fix start delay)
+        self.brake_speed = 0.4  # Match original Simlingo (was 0.01) - relying on correct speed prediction now
         self.brake_ratio = 1.2  # ratio of speed/desired_speed at which brake is triggered
 
         # Timing
-        self.carla_fps = 3  # Control loop frequency (Reduced to 3Hz to match ~280ms inference latency)
+        # Original Simlingo: 20Hz control, save every 5th frame -> 4Hz data
+        # QCar2: We run at 4Hz and save every frame -> 4Hz data
+        self.carla_fps = 4  # Control loop frequency (4Hz matches effective data frequency)
         self.dt = 1.0 / self.carla_fps  # 0.25s timestep
-        self.data_save_freq = 2  # Data saving cadence during recording (every N control ticks)
+        self.data_save_freq = 1  # Save every frame (since we run at 4Hz)
         self.inference_stride = 1  # Inference cadence during control (every N control ticks) - Set to 1 for max responsiveness
 
         # Waypoint configuration

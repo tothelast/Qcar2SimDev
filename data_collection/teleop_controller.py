@@ -17,8 +17,13 @@ class TeleopController:
         """
         self.config = config
 
-        # Steering rate (not a physical constraint, just teleop responsiveness)
-        self.steering_rate = np.pi / 4
+        # Steering rate (tuned for 30Hz loop - approx 60 deg/s)
+        self.steering_rate = np.pi / 3
+        
+        # Teleop specific physics
+        self.teleop_accel = 0.6  # Slightly softer than config (0.8)
+        self.teleop_brake = 1.6  # Hard braking
+        self.teleop_coast = 0.3  # Gentle coasting when no keys pressed
 
         # State
         self.target_velocity = 0.0
@@ -106,12 +111,15 @@ class TeleopController:
             self.emergency_stop = False
 
         # Update target velocity based on pressed keys
+        is_braking = False
         if 'up' in self.pressed_keys:
             self.target_velocity = self.config.qcar2_max_speed
         elif 'down' in self.pressed_keys:
             self.target_velocity = 0.0  # No reverse
+            is_braking = True
         else:
             self.target_velocity = 0.0
+            is_braking = False # Coasting
 
         # Update target steering based on pressed keys
         if 'left' in self.pressed_keys and 'right' not in self.pressed_keys:
@@ -126,10 +134,11 @@ class TeleopController:
         if abs(velocity_diff) > 0.01:
             if velocity_diff > 0:
                 # Accelerating
-                self.current_velocity += min(self.config.qcar2_max_acceleration * dt, velocity_diff)
+                self.current_velocity += min(self.teleop_accel * dt, velocity_diff)
             else:
                 # Decelerating
-                self.current_velocity += max(-self.config.qcar2_max_deceleration * dt, velocity_diff)
+                decel_rate = self.teleop_brake if is_braking else self.teleop_coast
+                self.current_velocity += max(-decel_rate * dt, velocity_diff)
         else:
             self.current_velocity = self.target_velocity
 
@@ -171,8 +180,14 @@ def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
     print(f"  Max forward velocity: {teleop_controller.config.qcar2_max_speed} m/s")
     print(f"  Max steering: {np.degrees(teleop_controller.config.qcar2_max_steering):.1f}°")
 
-    # Control loop timing - use config to match inference
-    dt = teleop_controller.config.dt
+    # Control loop timing
+    CONTROL_FPS = 30
+    control_dt = 1.0 / CONTROL_FPS
+    
+    # Recording timing
+    record_dt = teleop_controller.config.dt
+    last_record_time = time.time()
+    
     iteration = 0
 
     # Error tracking
@@ -180,13 +195,14 @@ def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
     max_consecutive_errors = 10
 
     print(f"  Teleop QCar2 ready for manual control!")
+    print(f"  Control Rate: {CONTROL_FPS}Hz | Recording Rate: {1.0/record_dt:.1f}Hz")
 
     while teleop_controller.running:
         try:
-            iteration += 1
-
+            current_time = time.time()
+            
             # Update teleop controller state
-            teleop_controller.update(dt)
+            teleop_controller.update(control_dt)
 
             # Get control values
             velocity, steering = teleop_controller.get_control()
@@ -198,16 +214,16 @@ def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
                     turn=steering,
                     headlights=True,
                     leftTurnSignal=steering > 0.1,  # Left turn signal when steering left
-                        rightTurnSignal=steering < -0.1,  # Right turn signal when steering right
-                        brakeSignal=velocity < -0.1,  # Brake signal when reversing
-                        reverseSignal=velocity < -0.1  # Reverse signal when reversing
-                    )
+                    rightTurnSignal=steering < -0.1,  # Right turn signal when steering right
+                    brakeSignal=velocity < -0.1,  # Brake signal when reversing
+                    reverseSignal=velocity < -0.1  # Reverse signal when reversing
+                )
             except Exception:
                 consecutive_errors += 1
                 if consecutive_errors > max_consecutive_errors:
                     print(f"  ✗ Too many consecutive errors, stopping teleop")
                     break
-                time.sleep(0.2)
+                time.sleep(0.1) # Short sleep on error
                 continue
 
             if not success:
@@ -215,28 +231,30 @@ def teleop_control_loop(qcar, teleop_controller, data_recorder=None):
                 if consecutive_errors > max_consecutive_errors:
                     print(f"  ✗ Too many consecutive failures, stopping teleop")
                     break
-                time.sleep(0.2)
+                time.sleep(0.1)
                 continue
 
             # Reset error counter on success
             consecutive_errors = 0
 
-            if data_recorder:
+            # Record data at the correct frequency (defined by config.dt)
+            if data_recorder and (current_time - last_record_time >= record_dt):
+                iteration += 1
                 data_recorder.record_step(
                     iteration=iteration,
-                    timestamp=time.time(),
+                    timestamp=current_time,
                     location=location,
                     rotation=rotation,
                 )
-
-            # Print status every 2 seconds
-            status_interval = int(2.0 / dt)
-            if iteration % status_interval == 0:
-                print(f"  Teleop: v={velocity:.2f} m/s, steer={np.degrees(steering):.1f}°, "
-                      f"pos=[{location[0]:.1f}, {location[1]:.1f}]")
+                last_record_time = current_time
+                
+                # Print status every ~2 seconds (every 6th record)
+                if iteration % 6 == 0:
+                    print(f"  Teleop: v={velocity:.2f} m/s, steer={np.degrees(steering):.1f}°, "
+                          f"pos=[{location[0]:.1f}, {location[1]:.1f}]")
 
             # Control loop rate
-            time.sleep(dt)
+            time.sleep(control_dt)
 
         except Exception as e:
             print(f"  ✗ Teleop control error: {e}")

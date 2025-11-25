@@ -27,16 +27,21 @@ class LateralPIDController:
     
     def step(self, route_np: np.ndarray, current_speed: float) -> float:
         """Compute steering control."""
-        # Speed-based aim distance
+        # Speed-based aim distance (Match Simlingo reference implementation)
+        # Reference: nav_planner.py LateralPIDController.step
+        # n_lookahead = np.clip(self.speed_scale * current_speed + self.speed_offset, 24, 105) / 10
+        # Default values from nav_planner.py: speed_scale=0.9755, speed_offset=1.915
+        
         speed_kmh = current_speed * 3.6
-        if speed_kmh < self.aim_distance_threshold:
-            aim_distance = self.aim_distance_slow
-        elif speed_kmh < self.aim_distance_threshold2:
-            aim_distance = self.aim_distance_fast
-        else:
-            aim_distance = self.aim_distance_very_fast
-
-        n_lookahead = int(min(aim_distance * 10, len(route_np) - 1))
+        
+        # Linear lookahead formula from reference
+        lookahead_index = np.clip(0.9755 * speed_kmh + 1.915, 24, 105)
+        
+        # Convert index to distance (reference uses 0.1m spacing)
+        # However, our route_np is already interpolated to 0.1m spacing in interpolate_waypoints
+        # So we can use the index directly
+        n_lookahead = int(min(lookahead_index, len(route_np) - 1))
+        
         desired_heading_vec = route_np[n_lookahead]
 
         # Calculate heading error
@@ -44,11 +49,23 @@ class LateralPIDController:
         heading_error = yaw_path % (2 * np.pi)
         heading_error = heading_error if heading_error < np.pi else heading_error - 2 * np.pi
 
+        # Scale the heading error (Match Simlingo reference implementation)
+        # Simlingo scales by 180/pi/90 (approx 0.637), effectively normalizing 90 degrees to 1.0
+        # Without this, QCar2 steering is ~1.57x more aggressive than intended
+        heading_error = heading_error * 180.0 / np.pi / 90.0
+
         self._window.append(heading_error)
 
         # PID terms
         integral = sum(self._window) / len(self._window) if len(self._window) >= 2 else 0.0
-        derivative = self._window[-1] - self._window[-2] if len(self._window) >= 2 else 0.0
+        
+        # Derivative term
+        # Reference code calculates derivative as (current - prev) without dividing by dt
+        # Simlingo runs at 20Hz (dt=0.05s). QCar2 runs at 4Hz (dt=0.25s).
+        # For the same physical movement, the error change per step is ~5x larger in QCar2.
+        # We must divide by 5.0 to normalize the derivative term to the 20Hz expectation.
+        raw_derivative = self._window[-1] - self._window[-2] if len(self._window) >= 2 else 0.0
+        derivative = raw_derivative / 5.0
 
         steering = self.k_p * heading_error + self.k_i * integral + self.k_d * derivative
         return np.clip(steering, -1.0, 1.0)
@@ -76,6 +93,11 @@ class ControlConverter:
         self.prev_brake = False
         self.smoothed_desired_speed = 0.0
         
+        # Minimal state: just track previous brake for velocity hold
+        self.prev_brake = False
+        self.smoothed_desired_speed = 0.0
+
+        
     def control_pid(
         self,
         route_waypoints: np.ndarray,
@@ -94,18 +116,19 @@ class ControlConverter:
             Tuple of (steer, target_speed_command, brake, desired_speed)
         """
         # Calculate desired speed from speed waypoints
-        # Data is collected at 5Hz (0.2s interval).
-        # Slicing [1:-1] in dataset means:
-        # wp[0] is t=0.4s
-        # wp[1] is t=0.6s
-        # wp[2] is t=0.8s
-        # Interval wp[2] - wp[0] is 0.4s.
-        # Speed = Distance / Time = Distance * 2.5
+        # Determine time delta between waypoints based on config
+        # Data collection interval = dt * data_save_freq
+        dt_model = self.config.dt * self.config.data_save_freq
+        # dt_model = 0.2 # 5 Hz assumption from original code
+        
         if len(speed_waypoints) > 2:
-            desired_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) * 2.5
+            # Interval wp[2] - wp[0] is 2 steps
+            time_delta = 2.0 * dt_model
+            desired_speed = np.linalg.norm(speed_waypoints[2] - speed_waypoints[0]) / time_delta
         elif len(speed_waypoints) >= 2:
-            # Interval wp[1] - wp[0] is 0.2s. Multiplier 5.0.
-            desired_speed = np.linalg.norm(speed_waypoints[1] - speed_waypoints[0]) * 5.0
+            # Interval wp[1] - wp[0] is 1 step
+            time_delta = dt_model
+            desired_speed = np.linalg.norm(speed_waypoints[1] - speed_waypoints[0]) / time_delta
         else:
             desired_speed = 0.0
         
@@ -153,7 +176,7 @@ class ControlConverter:
         # Solution: Apply small minimum speed when stopped and model wants to move
         cold_start_threshold = 0.05  # m/s - consider stopped below this
         cold_start_min_speed = 0.3   # m/s - minimum target to break standstill
-        min_desired_for_cold_start = 0.4  # m/s - Only cold start if we actually want to move (was 0.1)
+        min_desired_for_cold_start = self.config.brake_speed  # m/s - Only cold start if we actually want to move (was 0.1)
         
         if velocity < cold_start_threshold and desired_speed > min_desired_for_cold_start:
             # Vehicle is stopped but model wants to move (even slightly)
@@ -171,6 +194,11 @@ class ControlConverter:
         
         # Remember previous brake state
         self.prev_brake = brake
+        
+        # Remember previous brake state
+        self.prev_brake = brake
+
+
         
         return steer, target_speed_cmd, brake, desired_speed
 
