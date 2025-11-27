@@ -91,11 +91,7 @@ class ControlConverter:
         
         # Minimal state: just track previous brake for velocity hold
         self.prev_brake = False
-        self.smoothed_desired_speed = 0.0
-        
-        # Minimal state: just track previous brake for velocity hold
-        self.prev_brake = False
-        self.smoothed_desired_speed = 0.0
+
 
         
     def control_pid(
@@ -119,7 +115,6 @@ class ControlConverter:
         # Determine time delta between waypoints based on config
         # Data collection interval = dt * data_save_freq
         dt_model = self.config.dt * self.config.data_save_freq
-        # dt_model = 0.2 # 5 Hz assumption from original code
         
         if len(speed_waypoints) > 2:
             # Interval wp[2] - wp[0] is 2 steps
@@ -133,22 +128,7 @@ class ControlConverter:
             desired_speed = 0.0
         
         # Clamp desired speed to physical max
-        raw_desired_speed = float(np.clip(desired_speed, 0.0, self.config.qcar2_max_speed))
-        
-        # Asymmetric Exponential Moving Average (EMA) Smoothing
-        # Filter out single-frame high-speed spikes while preserving fast braking response
-        if raw_desired_speed < self.smoothed_desired_speed:
-            # Braking: Fast response (trust the brake signal immediately)
-            alpha = 1.0 
-        else:
-            # Accelerating: Slow response (filter out noise/spikes)
-            # If we were at 0 and model predicts 3.1 for 1 frame, we only go to ~0.6
-            alpha = 0.2
-            
-        self.smoothed_desired_speed = alpha * raw_desired_speed + (1.0 - alpha) * self.smoothed_desired_speed
-        
-        # Use smoothed speed for control logic
-        desired_speed = self.smoothed_desired_speed
+        desired_speed = float(np.clip(desired_speed, 0.0, self.config.qcar2_max_speed))
         
         # Steering calculation
         route_interp = self.interpolate_waypoints(route_waypoints)
@@ -156,50 +136,21 @@ class ControlConverter:
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
         
-        # SIMPLIFIED BRAKE LOGIC - Trust the model's predictions!
-        # Brake if model predicts very low speed OR if we are going much faster than desired
-        brake_threshold = self.config.brake_speed  # 0.4 m/s
-        
-        if desired_speed < brake_threshold:
+        # Brake logic: 
+        # 1. Stop if desired speed is low (e.g. < 0.5 m/s)
+        # If the model predicts a crawl, we interpret it as a desire to stop.
+        if desired_speed < 0.5:
             brake = True
             target_speed_cmd = 0.0
-        elif (velocity / (desired_speed + 1e-6)) > self.config.brake_ratio:
-            # Emergency Brake: We are going much faster than the model wants (e.g. 4.0 vs 1.0)
+        # 2. Apply brake if we need to decelerate (e.g. > 0.2 m/s difference)
+        # Catch even smooth deceleration trends from the model
+        elif (velocity - desired_speed) > 0.2:
             brake = True
-            target_speed_cmd = desired_speed # Keep target but apply brake flag for sharp decel
+            target_speed_cmd = desired_speed
         else:
             brake = False
             target_speed_cmd = desired_speed
-        
-        # COLD START LOGIC - Handle initial movement from stopped position
-        # Problem: Model trained on moving data struggles to predict initial movement from standstill
-        # Solution: Apply small minimum speed when stopped and model wants to move
-        cold_start_threshold = 0.05  # m/s - consider stopped below this
-        cold_start_min_speed = 0.3   # m/s - minimum target to break standstill
-        min_desired_for_cold_start = self.config.brake_speed  # m/s - Only cold start if we actually want to move (was 0.1)
-        
-        if velocity < cold_start_threshold and desired_speed > min_desired_for_cold_start:
-            # Vehicle is stopped but model wants to move (even slightly)
-            # Apply minimum speed to overcome initial friction and get into moving state
-            target_speed_cmd = max(target_speed_cmd, cold_start_min_speed)
-            brake = False
-        
-        # Minimal velocity hold: if we were braking and still moving very slowly,
-        # keep braking to prevent jitter at near-zero speeds
-        velocity_hold_threshold = 0.15  # m/s
-        if self.prev_brake and velocity > 0 and velocity < velocity_hold_threshold:
-            if desired_speed < brake_threshold:
-                brake = True
-                target_speed_cmd = 0.0
-        
-        # Remember previous brake state
-        self.prev_brake = brake
-        
-        # Remember previous brake state
-        self.prev_brake = brake
-
-
-        
+            
         return steer, target_speed_cmd, brake, desired_speed
 
 
@@ -286,6 +237,11 @@ class ControlConverter:
             speed_diff = max(speed_diff, -max_decel)
 
         forward_velocity = current_speed + speed_diff
+        
+        # Panic Brake Logic: If brake flag is set, force 0.0 velocity immediately
+        # This overrides the smooth deceleration ramp to ensure we stop ASAP
+        if brake:
+            forward_velocity = 0.0
 
         # Convert steering to turn angle
         # NOTE: QCar2 convention is opposite to CARLA/Simlingo:

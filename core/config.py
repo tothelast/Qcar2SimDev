@@ -13,7 +13,8 @@ class SimlingoQCar2Config:
     
     def __init__(self):
         # Model paths
-        self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
+        # self.model_checkpoint_path = "models/simlingo/checkpoints/epoch=013.ckpt"
+        self.model_checkpoint_path = "simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/checkpoints/epoch_14.pt"
         self.encoder_variant = "OpenGVLab/InternVL2-1B"
         self.hydra_config_path = "models/simlingo/.hydra/config.yaml"
 
@@ -28,16 +29,13 @@ class SimlingoQCar2Config:
         self.imagenet_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.imagenet_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-        # PID Controller (Steering) - MATCH PRETRAINED SIMLINGO EXACTLY
-        # Reference: simlingo/team_code/nav_planner.py (LateralPIDController defaults)
-        self.turn_kp = 3.118357247806046
-        self.turn_ki = 0.6406067986034124
-        self.turn_kd = 1.3782508892109167
-        self.turn_n = 3   # Match nav_planner.py default (n=6)
 
-        # Braking Logic
-        self.brake_speed = 0.4  # Match original Simlingo (was 0.01) - relying on correct speed prediction now
-        self.brake_ratio = 1.2  # ratio of speed/desired_speed at which brake is triggered
+        # NOTE: Needs tuning
+        self.turn_kp = float(os.environ.get('TURN_KP', 12.0))
+        self.turn_ki = float(os.environ.get('TURN_KI', 0.0))
+        self.turn_kd = float(os.environ.get('TURN_KD', 5.0))
+        self.turn_n = int(os.environ.get('TURN_N', 6))   # Currently matching nav_planner.py default (n=6)
+
 
         # Timing
         # Original Simlingo: 20Hz control, save every 5th frame -> 4Hz data
@@ -53,7 +51,7 @@ class SimlingoQCar2Config:
         # QCar2 physical constraints
         self.qcar2_max_speed = 4.0  # m/s
         self.qcar2_max_acceleration = 0.8  # m/s^2 (Reduced from 2.0 to match 4Hz dt)
-        self.qcar2_max_deceleration = 1.6  # m/s^2 (Reduced from 4.0 to match 4Hz dt)
+        self.qcar2_max_deceleration = 3.0  # m/s^2 (Increased to allow sharper braking)
         self.qcar2_max_steering = np.pi / 9  # radians (~20 degrees)
 
         # QCar2 QLabs

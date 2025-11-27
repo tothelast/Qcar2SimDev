@@ -39,7 +39,7 @@ class ObstacleVariationGenerator:
     ]
     
     # Available obstacle car variations
-    OBSTACLE_VARIANTS = ['obstacle_car_var1', 'obstacle_car_var3', 'obstacle_car_var4']
+    OBSTACLE_VARIANTS = ['obstacle_car_var1', 'obstacle_car_var2', 'obstacle_car_var3', 'obstacle_car_var4', 'obstacle_car_var5']
     
     def __init__(self, route_waypoints: list):
         """

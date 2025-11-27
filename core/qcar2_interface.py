@@ -140,13 +140,14 @@ class QCar2Interface:
             print(f"ERROR: Color conversion failed: {e}")
             return None
     
-    def set_control(self, forward_velocity: float, turn_angle: float) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray]]:
+    def set_control(self, forward_velocity: float, turn_angle: float, brake: bool = False) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray]]:
         """
         Send control command to QCar2.
         
         Args:
             forward_velocity: Forward speed in m/s (full-scale)
             turn_angle: Turn angle in radians (positive = right)
+            brake: If True, apply brakes
             
         Returns:
             Tuple of (success, location, rotation)
@@ -162,7 +163,7 @@ class QCar2Interface:
             headlights=False,
             leftTurnSignal=False,
                 rightTurnSignal=False,
-                brakeSignal=False,
+                brakeSignal=brake,
                 reverseSignal=False
             )
         

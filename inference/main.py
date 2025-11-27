@@ -261,7 +261,7 @@ class SimlingoQCar2Controller:
 
         # Send control to QCar2
         _, location, rotation = self.qcar_interface.set_control(
-            forward_velocity, turn_angle
+            forward_velocity, turn_angle, brake=brake
         )
         
         # Save Debug Frame

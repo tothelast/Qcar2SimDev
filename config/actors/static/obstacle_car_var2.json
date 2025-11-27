@@ -1,0 +1,17 @@
+{
+    "name": "obstacle_car_var2",
+    "description": "Static obstacle car (Variation 2 - Mid Roundabout)",
+    "type": "parked_vehicle",
+    "actor_number": 902,
+    "location": [
+        18.85,
+        44.23,
+        0.005
+    ],
+    "rotation": [
+        0.0,
+        0.0,
+        157.6
+    ],
+    "configuration": 0
+}

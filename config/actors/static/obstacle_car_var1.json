@@ -1,17 +1,17 @@
 {
     "name": "obstacle_car_var1",
-    "description": "Static obstacle car at Variation 1 position",
+    "description": "Static obstacle car at Variation 1 position (Early Roundabout)",
     "type": "parked_vehicle",
-    "actor_number": 999,
+    "actor_number": 901,
     "location": [
-        21.00,
-        33.89,
+        21.01,
+        33.90,
         0.005
     ],
     "rotation": [
         0.0,
         0.0,
-        90.0
+        55.3
     ],
     "scale": [
         1.0,
