@@ -296,6 +296,7 @@ class SimlingoQCar2Controller:
             'heading_deg': float(rotation[2] * 180 / np.pi),
             'heading_rad': float(rotation[2]),  # Store heading in radians for coordinate transformation
             'speed': float(velocity),
+            'desired_speed': float(desired_speed),  # Model's target speed
             'steering': float(steer),
             'throttle': float(target_speed_cmd),
             'brake': bool(brake),

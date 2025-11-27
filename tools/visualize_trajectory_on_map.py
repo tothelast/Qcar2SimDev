@@ -17,7 +17,6 @@ This script:
 import sys
 import os
 import json
-import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -29,6 +28,10 @@ sys.path.insert(0, os.path.join(parent_dir, 'python'))
 
 from hal.products.mats import SDCSRoadMap
 from core.scene_loader import SceneLoader
+
+# Distance-based sampling: sample positions at least MIN_DISTANCE_METERS apart
+# This creates uniform visual spacing regardless of vehicle speed
+MIN_DISTANCE_METERS = 3.0 # Sample every 2 meters of travel
 
 
 def get_all_edges():
@@ -152,19 +155,45 @@ def visualize_trajectory_on_map():
     # Load scene actors
     actors = load_scene_actors(scene_name)
     print(f"  Loaded {len(actors)} scene actors")
-    
-    # Extract ego positions and speeds (sampled every 10 frames)
+
     ego_positions = []
     ego_speeds = []
-    for i, entry in enumerate(trajectory):
-        if i % 5 == 0:
-            pos = entry['position'][:2]  # x, y only
-            speed = entry['speed']
+    ego_desired_speeds = []
+    last_sampled_pos = None
+
+    # Check if desired_speed is available in the log
+    has_desired_speed = 'desired_speed' in trajectory[0] if trajectory else False
+    if not has_desired_speed:
+        print("  Note: 'desired_speed' not found in trajectory log. Run inference again to log it.")
+
+    for entry in trajectory:
+        pos = np.array(entry['position'][:2])  # x, y only
+        speed = entry['speed']
+        desired_speed = entry.get('desired_speed', None)
+
+        if last_sampled_pos is None:
+            # Always include the first position
             ego_positions.append(pos)
             ego_speeds.append(speed)
-    
+            ego_desired_speeds.append(desired_speed)
+            last_sampled_pos = pos
+        else:
+            distance = np.linalg.norm(pos - last_sampled_pos)
+            if distance >= MIN_DISTANCE_METERS:
+                ego_positions.append(pos)
+                ego_speeds.append(speed)
+                ego_desired_speeds.append(desired_speed)
+                last_sampled_pos = pos
+
+    # Always include the final position if not already included
+    final_pos = np.array(trajectory[-1]['position'][:2])
+    if last_sampled_pos is not None and np.linalg.norm(final_pos - last_sampled_pos) > 0.1:
+        ego_positions.append(final_pos)
+        ego_speeds.append(trajectory[-1]['speed'])
+        ego_desired_speeds.append(trajectory[-1].get('desired_speed', None))
+
     ego_positions = np.array(ego_positions)
-    print(f"  Sampled {len(ego_positions)} ego positions (every 10 frames)")
+    print(f"  Sampled {len(ego_positions)} ego positions (distance-based, every {MIN_DISTANCE_METERS}m)")
     
     # Initialize roadmap for background
     roadmap = SDCSRoadMap(leftHandTraffic=False, useSmallMap=False)
@@ -179,35 +208,70 @@ def visualize_trajectory_on_map():
     ax.plot(route_waypoints[:, 0], route_waypoints[:, 1],
             'g-', linewidth=3, alpha=0.8, label='Route Centerline', zorder=2)
     
-    # Plot ego positions (blue dots)
-    ax.scatter(ego_positions[:, 0], ego_positions[:, 1],
-               c='blue', s=60, alpha=0.9, label='Ego Positions', zorder=4,
-               edgecolors='darkblue', linewidths=1)
-    
-    # Add speed labels at each ego position
-    # Skip: zero-speed positions (except last in sequence), and the final position (has end marker)
-    for i, (pos, speed) in enumerate(zip(ego_positions, ego_speeds)):
-        # Skip the last 2 positions - they cluster near the end marker
-        if i >= len(ego_positions) - 2:
-            continue
+    # Plot ego positions (blue dots) and speed labels together
+    # Labels are positioned perpendicular to the trajectory direction (to the left of travel)
+    LABEL_OFFSET_METERS = 1.2  # Distance from dot to label in meters
+
+    for i in range(len(ego_positions)):
+        x = float(ego_positions[i, 0])
+        y = float(ego_positions[i, 1])
+        speed = ego_speeds[i]
+        desired_speed = ego_desired_speeds[i]
+
+        # Plot the dot
+        if i == 0:
+            ax.plot(x, y, 'o', color='blue', markersize=6, alpha=0.9,
+                    markeredgecolor='darkblue', markeredgewidth=1,
+                    label='Ego Positions', zorder=4)
+        else:
+            ax.plot(x, y, 'o', color='blue', markersize=6, alpha=0.9,
+                    markeredgecolor='darkblue', markeredgewidth=1, zorder=4)
 
         # Check if this is a zero-speed position followed by another zero-speed position
-        is_zero_speed = abs(speed) < 0.05  # Treat speeds < 0.05 as zero
+        is_zero_speed = abs(speed) < 0.05
         next_is_zero = (i + 1 < len(ego_speeds) and abs(ego_speeds[i + 1]) < 0.05)
-
-        # Skip label if this is a zero-speed position but not the last in a zero sequence
         if is_zero_speed and next_is_zero:
             continue
 
-        ax.annotate(f'{speed:.1f}',
-                    xy=(pos[0], pos[1]),
-                    xytext=(-10, 0),
-                    textcoords='offset points',
-                    fontsize=7,
-                    color='darkblue',
-                    alpha=0.8,
-                    ha='right',
-                    zorder=5)
+        # Build label: "actual | desired" or just "actual" if desired_speed not available
+        if desired_speed is not None:
+            label_text = f'{speed:.1f}|{desired_speed:.1f}'
+        else:
+            label_text = f'{speed:.1f}'
+
+        # Calculate perpendicular direction (to the left of travel direction)
+        # Use neighboring points to determine trajectory direction
+        if i == 0 and len(ego_positions) > 1:
+            # First point: use direction to next point
+            direction = ego_positions[1] - ego_positions[0]
+        elif i == len(ego_positions) - 1 and len(ego_positions) > 1:
+            # Last point: use direction from previous point
+            direction = ego_positions[-1] - ego_positions[-2]
+        elif len(ego_positions) > 2:
+            # Middle points: use direction from previous to next (smoother)
+            direction = ego_positions[i + 1] - ego_positions[i - 1]
+        else:
+            # Fallback: offset to the left
+            direction = np.array([0.0, 1.0])
+
+        # Normalize direction
+        dir_norm = np.linalg.norm(direction)
+        if dir_norm > 0.001:
+            direction = direction / dir_norm
+        else:
+            direction = np.array([1.0, 0.0])
+
+        # Perpendicular vector (rotate 90 degrees counterclockwise = left side of travel)
+        perp = np.array([-direction[1], direction[0]])
+
+        # Calculate label position
+        label_x = x + perp[0] * LABEL_OFFSET_METERS
+        label_y = y + perp[1] * LABEL_OFFSET_METERS
+
+        # Add label at perpendicular offset position
+        ax.text(label_x, label_y, label_text,
+                fontsize=6, color='darkblue', alpha=0.8,
+                ha='center', va='center', zorder=5)
     
     # Plot scene actors (red dots)
     if actors:
@@ -217,12 +281,12 @@ def visualize_trajectory_on_map():
                    c='red', s=100, marker='o', alpha=0.9,
                    label='Scene Actors', zorder=3,
                    edgecolors='darkred', linewidths=2)
-        
+
         # Add actor labels
-        for actor in actors:
+        for i, actor in enumerate(actors):
             ax.annotate(actor['name'],
-                        xy=(actor['position'][0], actor['position'][1]),
-                        xytext=(5, 5),
+                        xy=(actor_x[i], actor_y[i]),
+                        xytext=(-10, 10),
                         textcoords='offset points',
                         fontsize=8,
                         color='darkred',
@@ -237,8 +301,8 @@ def visualize_trajectory_on_map():
                 markeredgecolor='darkgreen', markeredgewidth=2)
     if len(ego_positions) > 1:
         ax.plot(ego_positions[-1, 0], ego_positions[-1, 1],
-                'rs', markersize=10, label='End', zorder=6,
-                markeredgecolor='darkred', markeredgewidth=2)
+                'ro', markersize=6, label='End', zorder=6,
+                markeredgecolor='darkred', markeredgewidth=1)
     
     # Set axis properties
     ax.set_xlabel('X (meters)', fontsize=12)
