@@ -58,6 +58,7 @@ class SimlingoQCar2Controller:
 
         self.nav_mode = nav_mode
         self.route_name = route_name
+        self.scene_name = self.scene_definition.name if self.scene_definition else None
         # Initialize components
         self.qcar_interface = QCar2Interface(self.config)
         self.camera_processor = CameraProcessor(self.config) if CameraProcessor else None
@@ -348,6 +349,7 @@ class SimlingoQCar2Controller:
         # Prepare metadata
         metadata = {
             'timestamp': timestamp,
+            'scene_name': self.scene_name,
             'route_name': self.route_name,
             'total_steps': self.step_count,
             'total_time': self.trajectory_log[-1]['timestamp'] if self.trajectory_log else 0,
