@@ -29,10 +29,16 @@ class StateEstimator:
         self.velocity = 0.0  # m/s
         self.heading = 0.0  # radians
         
-        # History for filtering
+        # History for state tracking
+        # Note: We use instantaneous velocity (single-frame delta) to match training data.
+        # Training data uses:
+        #   - CARLA: vehicle.get_velocity().length() (instantaneous)
+        #   - QLabs: distance / dt (single-frame delta)
+        # Using moving average here would create train-inference mismatch and lag.
         self.position_history = deque(maxlen=10)
         self.time_history = deque(maxlen=10)
-        self.velocity_history = deque(maxlen=5)
+        self.prev_position = None
+        self.prev_time = None
         
         # GPS and compass for ego frame conversion
         self.gps = None  # Global position [x, y]
@@ -64,29 +70,24 @@ class StateEstimator:
         self.position_history.append(self.position.copy())
         self.time_history.append(current_time)
         
-        # Calculate velocity from position changes
-        if len(self.position_history) >= 2 and len(self.time_history) >= 2:
-            # Use last two positions
-            pos_prev = self.position_history[-2]
-            pos_curr = self.position_history[-1]
-            time_prev = self.time_history[-2]
-            time_curr = self.time_history[-1]
-            
-            # Calculate displacement
-            displacement = pos_curr - pos_prev
-            dt = time_curr - time_prev
-            
+        # Calculate velocity from position changes (instantaneous, single-frame delta)
+        # This matches the training data collection method:
+        #   - CARLA: vehicle.get_velocity().length()
+        #   - QLabs DataRecorder: distance / dt (single frame)
+        if self.prev_position is not None and self.prev_time is not None:
+            dt = current_time - self.prev_time
             if dt > 0:
-                # Calculate speed (magnitude of velocity)
-                speed = np.linalg.norm(displacement[:2]) / dt  # Use only x, y
-                self.velocity_history.append(speed)
-                
-                # Use filtered velocity (moving average)
-                self.velocity = np.mean(self.velocity_history)
+                # Calculate speed from single-frame displacement (matches training)
+                displacement = self.position - self.prev_position
+                self.velocity = np.linalg.norm(displacement[:2]) / dt
             else:
                 self.velocity = 0.0
         else:
             self.velocity = 0.0
+
+        # Store current as previous for next frame
+        self.prev_position = self.position.copy()
+        self.prev_time = current_time
         
         self.last_update_time = current_time
     
@@ -194,6 +195,7 @@ class StateEstimator:
         self.compass = None
         self.position_history.clear()
         self.time_history.clear()
-        self.velocity_history.clear()
+        self.prev_position = None
+        self.prev_time = None
         self.last_update_time = None
 

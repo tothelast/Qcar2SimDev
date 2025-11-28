@@ -33,8 +33,8 @@ class SimlingoQCar2Config:
         # NOTE: Needs tuning
         self.turn_kp = float(os.environ.get('TURN_KP', 12.0))
         self.turn_ki = float(os.environ.get('TURN_KI', 0.0))
-        self.turn_kd = float(os.environ.get('TURN_KD', 5.0))
-        self.turn_n = int(os.environ.get('TURN_N', 6))   # Currently matching nav_planner.py default (n=6)
+        self.turn_kd = float(os.environ.get('TURN_KD', 3.5))
+        self.turn_n = int(os.environ.get('TURN_N', 4))   # Currently matching nav_planner.py default (n=6)
 
 
         # Timing
@@ -50,8 +50,8 @@ class SimlingoQCar2Config:
 
         # QCar2 physical constraints
         self.qcar2_max_speed = 4.0  # m/s
-        self.qcar2_max_acceleration = 0.8  # m/s^2 (Reduced from 2.0 to match 4Hz dt)
-        self.qcar2_max_deceleration = 3.0  # m/s^2 (Increased to allow sharper braking)
+        self.qcar2_max_acceleration = 0.2  # m/s^2 (Reduced from 2.0 to match 4Hz dt)
+        self.qcar2_max_deceleration = 4.0  # m/s^2 (Increased to allow sharper braking)
         self.qcar2_max_steering = np.pi / 9  # radians (~20 degrees)
 
         # QCar2 QLabs

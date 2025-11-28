@@ -161,11 +161,11 @@ class SimlingoQCar2Controller:
         # Hardcoded Cold Start 
         # Force move for the first 10 frames to break static friction
         # NOTE: Comment this out for the fine tuned model (works only for the pretrained model)
-        if self.step_count < 10:
-            print(f"  Cold Start: Forcing move (Frame {self.step_count}/10)")
-            self.qcar_interface.set_control(0.4, 0.0) # 0.4 m/s forward, 0 steer
-            self.step_count += 1
-            return True
+        # if self.step_count < 10:
+        #     print(f"  Cold Start: Forcing move (Frame {self.step_count}/10)")
+        #     self.qcar_interface.set_control(0.4, 0.0) # 0.4 m/s forward, 0 steer
+        #     self.step_count += 1
+        #     return True
 
         # Get camera image (save first image for debugging)
         image = self.qcar_interface.get_camera_image(save_debug_image=not self.first_image_saved)

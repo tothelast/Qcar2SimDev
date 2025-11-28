@@ -33,10 +33,10 @@ class LateralPIDController:
         # Default values from nav_planner.py: speed_scale=0.9755, speed_offset=1.915
         
         speed_kmh = current_speed * 3.6
-        
+
         # Linear lookahead formula from reference
         lookahead_index = np.clip(0.9755 * speed_kmh + 1.915, 24, 105)
-        
+
         # Convert index to distance (reference uses 0.1m spacing)
         # However, our route_np is already interpolated to 0.1m spacing in interpolate_waypoints
         # So we can use the index directly
@@ -136,21 +136,16 @@ class ControlConverter:
         steer = np.clip(steer, -1.0, 1.0)
         steer = round(steer, 3)
         
-        # Brake logic: 
-        # 1. Stop if desired speed is low (e.g. < 0.5 m/s)
-        # If the model predicts a crawl, we interpret it as a desire to stop.
-        if desired_speed < 0.5:
-            brake = True
-            target_speed_cmd = 0.0
-        # 2. Apply brake if we need to decelerate (e.g. > 0.2 m/s difference)
-        # Catch even smooth deceleration trends from the model
-        elif (velocity - desired_speed) > 0.2:
-            brake = True
-            target_speed_cmd = desired_speed
-        else:
-            brake = False
-            target_speed_cmd = desired_speed
-            
+        # Speed control:
+        # Let the model's desired_speed drive the QCar2's speed controller directly.
+        # Expert data shows gradual deceleration (~-0.85 m/s²) over multiple frames,
+        # NOT instant braking. The model learns this gradual profile.
+        #
+        # Removed hardcoded brake rule: "if (velocity - desired_speed) > 0.2: brake = True"
+        # This was interfering with the model's learned deceleration behavior.
+        brake = False
+        target_speed_cmd = desired_speed
+
         return steer, target_speed_cmd, brake, desired_speed
 
 

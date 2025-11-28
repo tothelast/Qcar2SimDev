@@ -210,7 +210,7 @@ def visualize_trajectory_on_map():
     
     # Plot ego positions (blue dots) and speed labels together
     # Labels are positioned perpendicular to the trajectory direction (to the left of travel)
-    LABEL_OFFSET_METERS = 1.2  # Distance from dot to label in meters
+    LABEL_OFFSET_METERS = 1.5  # Distance from dot to label in meters
 
     for i in range(len(ego_positions)):
         x = float(ego_positions[i, 0])
@@ -232,12 +232,6 @@ def visualize_trajectory_on_map():
         next_is_zero = (i + 1 < len(ego_speeds) and abs(ego_speeds[i + 1]) < 0.05)
         if is_zero_speed and next_is_zero:
             continue
-
-        # Build label: "actual | desired" or just "actual" if desired_speed not available
-        if desired_speed is not None:
-            label_text = f'{speed:.1f}|{desired_speed:.1f}'
-        else:
-            label_text = f'{speed:.1f}'
 
         # Calculate perpendicular direction (to the left of travel direction)
         # Use neighboring points to determine trajectory direction
@@ -268,10 +262,20 @@ def visualize_trajectory_on_map():
         label_x = x + perp[0] * LABEL_OFFSET_METERS
         label_y = y + perp[1] * LABEL_OFFSET_METERS
 
-        # Add label at perpendicular offset position
-        ax.text(label_x, label_y, label_text,
-                fontsize=6, color='darkblue', alpha=0.8,
-                ha='center', va='center', zorder=5)
+        # Add labels at perpendicular offset position
+        # Actual speed in blue, desired speed in green (if available)
+        if desired_speed is not None:
+            # Two-part label: "actual|desired" with different colors
+            ax.text(label_x, label_y, f'{speed:.1f}|',
+                    fontsize=6, color='darkblue', alpha=0.8,
+                    ha='right', va='center', zorder=5)
+            ax.text(label_x, label_y, f'{desired_speed:.1f}',
+                    fontsize=6, color='darkgreen', alpha=0.8,
+                    ha='left', va='center', zorder=5)
+        else:
+            ax.text(label_x, label_y, f'{speed:.1f}',
+                    fontsize=6, color='darkblue', alpha=0.8,
+                    ha='center', va='center', zorder=5)
     
     # Plot scene actors (red dots)
     if actors:
