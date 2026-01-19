@@ -30,8 +30,7 @@ from hal.products.mats import SDCSRoadMap
 from core.scene_loader import SceneLoader
 
 # Distance-based sampling: sample positions at least MIN_DISTANCE_METERS apart
-# This creates uniform visual spacing regardless of vehicle speed
-MIN_DISTANCE_METERS = 3.0 # Sample every 2 meters of travel
+MIN_DISTANCE_METERS = 1.5 # Sample every 3 meters of travel
 
 
 def get_all_edges():
