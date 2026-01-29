@@ -1,0 +1,59 @@
+{
+  "checkpoint": "simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/checkpoints/epoch_14.pt",
+  "timestamp": "20260129_121332",
+  "total_runs": 2,
+  "pass_rate": 1.0,
+  "results": [
+    {
+      "scenario_name": "obstacle_var1",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": false,
+        "stopped_before_obstacle": true,
+        "stopping_distance": 23.936972184210255,
+        "min_speed_near_obstacle": -1.0
+      },
+      "route_complete": false,
+      "route_coverage_percent": 23.52941176470588,
+      "distance_traveled": 19.34084689279385,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.2651498443278952,
+      "max_lateral_deviation": 0.5849881363813919,
+      "total_steps": 235,
+      "total_time": 64.22453951835632,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": true,
+      "trajectory_log_path": "results/runs/obstacle_var1_run_1/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var1",
+      "run_number": 2,
+      "safety": {
+        "collision_detected": false,
+        "stopped_before_obstacle": true,
+        "stopping_distance": 23.936972184210255,
+        "min_speed_near_obstacle": -1.0
+      },
+      "route_complete": false,
+      "route_coverage_percent": 23.52941176470588,
+      "distance_traveled": 19.302172228584716,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.25929640340244803,
+      "max_lateral_deviation": 0.5814895001311341,
+      "total_steps": 240,
+      "total_time": 65.70134496688843,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": true,
+      "trajectory_log_path": "results/runs/obstacle_var1_run_2/trajectory_log.json"
+    }
+  ],
+  "aggregate": {
+    "total_pass": 2,
+    "total_fail": 0,
+    "baseline_pass_rate": 0,
+    "obstacle_pass_rate": 1.0,
+    "obstacle_collision_rate": 0.0
+  }
+}
