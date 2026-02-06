@@ -4,7 +4,7 @@
 
 Tests the Simlingo model on roundabout navigation with obstacle variations. Measures safety and route completion.
 
-## Quick Start
+## Running commands
 
 ```bash
 # Full test (15 runs)

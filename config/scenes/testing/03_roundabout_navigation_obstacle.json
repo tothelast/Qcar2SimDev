@@ -3,7 +3,7 @@
     "description": "Roundabout navigation with static obstacle for verification",
     "ego_route": "roundabout_navigation",
     "actors": [
-        "obstacle_car_var3"
+        "obstacle_car_var4"
     ],
     "actors_backup": []
 }
