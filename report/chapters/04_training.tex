@@ -1,0 +1,94 @@
+\chapter{Dataset, Data Collection, and Fine-Tuning}
+\label{ch:training}
+
+This chapter describes how expert demonstrations are collected in QLabs and converted into an on-disk dataset compatible with SimLingo-style training code. The emphasis is on \emph{train--inference alignment}: if the training dataset encodes speed, route geometry, or target points differently than the runtime stack, the model will observe a shifted distribution and performance will degrade.
+
+\section{QLabs expert data collection}
+\label{sec:qlabs-expert-collection}
+Expert demonstrations are recorded using a keyboard teleoperation controller that runs a high-rate control loop while saving samples at a lower, fixed data-logging cadence. In this repository, the teleoperation loop in \path{data_collection/teleop_controller.py} targets \SI{30}{Hz}, while recording uses \texttt{config.dt} (typically \SI{0.25}{s}, i.e., \SI{4}{Hz}), matching the frequency used by the runtime controller (\Cref{ch:inference}).
+
+The implementation explicitly decouples control and logging by maintaining two time bases: (i) a fast loop period for operator responsiveness, and (ii) a fixed recording period \texttt{record\_dt = config.dt}. Let $t$ be the current wall-clock time and $t_{\text{last}}$ the time at which the previous expert sample was logged. A new sample is recorded whenever
+\begin{equation}
+ t - t_{\text{last}} \ge \texttt{record\_dt},
+\end{equation}
+after which $t_{\text{last}}\leftarrow t$. This gating produces uniformly sampled training data even when the interactive control loop experiences small timing jitter.
+
+The design motivation for decoupling control and logging is practical: the operator benefits from a responsive control loop, while the training data benefits from consistent sampling at the rate expected by the VLA model and controller.
+
+\subsection{Multi-actor scene performance constraints (lag and buffer overflow)}
+\label{sec:multi-actor-constraints}
+During development, we attempted to collect expert demonstrations in richer QLabs scenes containing multiple simultaneous dynamic actors (moving vehicles, pedestrians, and traffic-light logic). In practice, these scenarios consistently produced severe simulation lag and ``buffer overflow'' style failures, making reliable closed-loop data collection infeasible within the project timeline.
+
+The codebase structure suggests a plausible root cause: QLabs API interactions for control and state queries are effectively serialized, and the aggregate command rate grows with the number of actors.
+The teleoperation controller issues a \texttt{set\_velocity\_and\_request\_state(...)} call at \SI{30}{Hz} (\path{data_collection/teleop_controller.py}, around lines 184--212). Dynamic scene actors (autonomous vehicles and pedestrians) are driven by background threads in \path{core/scene_spawner.py}, and those threads also use QLabs API calls that are guarded by a shared mutex \texttt{qlabs\_lock} (line~41) to ``prevent simultaneous API calls'' (e.g., lines~474 and~592). To reduce contention, the default actor control update rate is explicitly lowered to \SI{2}{Hz} with an in-code comment noting it is done to prevent ``QLabs lock contention with [the] main thread'' (\path{core/scene_spawner.py}, lines~366--367), and actor thread start times are staggered by an additional 0--99~ms offset (lines~462--464).
+
+Even with these mitigations, complex scenes increase the number of serialized API transactions per second (ego control loop + $N$ actor loops + auxiliary updates such as traffic-light cycling). Once the total transaction time exceeds real-time deadlines, control and logging loops accumulate jitter, the simulator can fall behind, and communication buffers may grow without being drained at the expected rate.
+This interpretation is consistent with additional performance-related safeguards in the runtime stack, including extending the QLabs container wait timeout to 10~s (\path{core/qcar2_interface.py}, lines~54--55) and limiting trajectory visualization history to the most recent 500 points to avoid performance degradation (\path{core/qcar2_interface.py}, lines~281--283).
+
+\subsection{Final dataset scope: roundabout navigation with static obstacle variations}
+\label{sec:final-dataset-scope}
+Due to the above stability constraints in multi-actor scenes, the final expert demonstration dataset used for QLabs fine-tuning was collected on a simplified, repeatable scenario: the \texttt{roundabout\_navigation} route with an optional \emph{single static vehicle obstacle} placed at controlled locations.
+
+The automated collection script \path{data_collection/collect_roundabout_obstacle_variations.py} defines five candidate obstacle placement points along the route by waypoint index (early-roundabout, mid-roundabout, exit, straight section, and late-route; lines~33--39) and five obstacle actor variants (\texttt{obstacle\_car\_var1} through \texttt{obstacle\_car\_var5}; line~42). Runs can be configured to include a mix of clean routes and obstacle routes, and obstacle placements can be selected randomly or systematically using \texttt{--sequential} (lines~207--215 and 351--354). The script also accepts \texttt{--split \{train,val\}} to separate training and validation recordings.
+
+The dataset split is implemented by the recorder rather than the scheduling script: collection entry points pass a \texttt{split} string (\texttt{train} or \texttt{val}) down to \texttt{DataRecorder.start\_run(..., split=...)} (\path{data_collection/collect_data.py}, around lines~221--222 and 297--305; \path{data_collection/collect_roundabout_obstacle_variations.py}, lines~251--256 and 335--341). The recorder maps these values to on-disk folders \path{routes_training} and \path{routes_validation} via \texttt{\_resolve\_split()} (\path{data_collection/data_recorder.py}, lines~234--243).
+
+Finally, the collected supervision is strictly behavioral: images and structured measurements are recorded, but no natural-language ``commentary'' or instruction strings are captured for fine-tuning. This aligns with the current measurement writer, which provides the navigation conditioning primarily through target points and assigns a constant high-level command label rather than relying on language annotation (\path{data_collection/data_recorder.py}).
+
+\section{SimLingo-compatible dataset writer}
+\label{sec:data-recorder}
+The \texttt{DataRecorder} class in \path{data_collection/data_recorder.py} creates the run directory, writes RGB images and measurement JSONs, and produces a \texttt{results.json.gz} file so that existing dataloaders can treat the QLabs run like a CARLA route.
+
+At the start of a run, the recorder constructs a route directory under \path{database/data/simlingo/} and creates a SimLingo-style subfolder \texttt{TownQLabs/} with dedicated subdirectories for images and per-timestep measurements (\texttt{TownQLabs/rgb} and \texttt{TownQLabs/measurements}). The route-level summary file \texttt{results.json.gz} stores metadata needed by downstream tooling (e.g., whether the route completed successfully).
+
+\section{Per-frame measurements}
+\label{sec:measurements}
+Each recorded timestep stores a compressed JSON measurement dictionary alongside the corresponding image. The measurement fields are selected to match what the SimLingo training pipeline expects: an ego pose matrix, a route segment represented in the ego frame, target points for navigation conditioning, and a scalar speed signal.
+
+Each recorded sample includes (i) a homogeneous ego pose matrix, (ii) a local route segment (in the ego frame) as well as the original route representation, (iii) two target points (primary and ``next'') used for target-point conditioning, and (iv) a scalar speed estimate. To support command-conditioning modes without requiring manual annotation, the current implementation assigns a constant high-level command label (\texttt{command=4}, ``follow the road'') in the per-frame measurement dictionary.
+
+\section{Speed estimation and train--inference alignment}
+\label{sec:speed-alignment}
+In imitation learning, seemingly small differences in the definition of ``speed'' can produce systematic mismatch. For example, a moving-average speed estimate introduces lag relative to an instantaneous speed signal and can shift braking behavior.
+
+To minimize mismatch, QLabs recording estimates speed from a single-frame displacement (distance divided by $\Delta t$). If $\mathbf{p}_t$ and $\mathbf{p}_{t-1}$ are consecutive ego positions in a common world frame and $\Delta t=\texttt{config.dt}$ is the recording timestep, then the logged speed is
+\begin{equation}
+ v_t \;=\; \frac{\lVert\mathbf{p}_t-\mathbf{p}_{t-1}\rVert_2}{\Delta t}.
+\end{equation}
+
+The runtime stack uses an analogous single-frame estimate for state estimation (\Cref{ch:inference}), explicitly documenting the alignment goal (see \path{inference/state_estimator.py}).
+
+\section{On-disk dataset structure}
+\label{sec:dataset-structure}
+For compatibility with existing SimLingo dataloaders, each run is stored as a route directory containing a \texttt{TownQLabs/} subdirectory with:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \path{rgb/}: JPEG camera frames indexed by timestep.
+  \item \path{measurements/}: gzip-compressed JSON measurements indexed by timestep.
+  \item \path{results.json.gz}: route-level metadata and success scores.
+\end{itemize}
+This structure is constructed and populated by the \texttt{DataRecorder} implementation in \path{data_collection/data_recorder.py} via a run-initialization step (directory creation and metadata) followed by per-timestep logging of an image file and its corresponding compressed measurement JSON.
+
+\section{Camera configuration and image preprocessing alignment}
+\label{sec:camera-config-preproc}
+The original SimLingo CARLA agent assumes a forward-facing, roof-mounted camera with a narrower field of view. Concretely, the CARLA-side sensor configuration in \path{simlingo/team_code/config_simlingo.py} sets camera~0 to a mounting position of $[-1.5,\,0.0,\,2.0]$ (in the simulator's vehicle frame), a resolution of $1024\times512$, and a field of view of $110^{\circ}$. In contrast, QLabs provides a wide-angle CSI camera mounted at the front of the QCar2 (bumper region). The QLabs integration therefore uses the CSI front camera selector (\texttt{qcar2\_camera=3}, i.e., \texttt{CAMERA\_CSI\_FRONT}) and configures the expected image and nominal camera parameters to match the QLabs sensor: $820\times410$ resolution and $160^{\circ}$ FOV (\path{core/config.py}). The same configuration file encodes a nominal front-camera translation (\texttt{camera\_position} $=[0.183,\,0.0,\,0.110]$) to reflect the bumper-mounted viewpoint.
+
+At runtime, images are captured through the QLabs API call \texttt{get\_image(camera=...)} and converted from BGR to RGB in \path{core/qcar2_interface.py}. This design keeps the data-collection and inference stacks consistent with respect to (i) which physical camera is used and (ii) the raw pixel format presented to the model.
+
+To mitigate distribution shift between training images and online inference frames, the camera preprocessing path applies two optional alignment steps before InternVL2 normalization. First, a configurable bottom crop can remove a fraction of the lower image region (parameter \texttt{camera\_bottom\_crop\_ratio} if provided; default is no crop). Second, the input can be resized to the configured training-time capture size (for the QLabs fine-tune run, $820\times410$) when \texttt{resize\_input\_to\_training\_resolution=True} (\path{core/camera_processor.py} with dimensions defined in \path{core/config.py}); this explicitly compensates for any runtime deviations in camera capture size and preserves the expected aspect ratio. After these alignment steps, the InternVL2 preprocessing pipeline converts the RGB frame to one or more $448\times448$ patches via dynamic tiling (\texttt{dynamic\_preprocess}) followed by a CLIP-style transform (\texttt{build\_transform(input\_size=448)}). In the current online stack, the number of tiles is additionally bounded by \texttt{max\_num\_grid=2} (\path{core/camera_processor.py}), which caps how many $448\times448$ patches can be produced from a wide image. Together, these steps ensure that, although QLabs and CARLA differ substantially in raw sensor geometry, the model ultimately consumes a standardized patch representation while still benefiting from fine-tuning on the QLabs wide-angle viewpoint.
+
+Finally, for completeness and interface parity with SimLingo, \path{core/config.py} defines a pinhole intrinsics matrix derived from the configured $(W,H,\mathrm{FOV})$ and an extrinsics matrix with identity rotation and a translation equal to \texttt{camera\_position}. In the current integration these matrices are retained primarily for legacy data structures (they are not used by the InternVL2 forward path), but documenting them makes the geometric assumptions explicit for any future work that reintroduces projection-based modules.
+
+\section{Training compute environment (QLabs fine-tuning)}
+\label{sec:training-env}
+The QLabs fine-tuning run was executed in a single-GPU setting with mixed precision and DeepSpeed stage~2 (see the Hydra snapshot under \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/.hydra/config.yaml}). The associated offline W\&B run stores the Python package environment under \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/wandb/offline-run-20251126_180635-2025_11_26_18_06_21_qlabs_roundabout_finetune/files/requirements.txt}, which records (among others) \texttt{torch==2.9.1}, \texttt{torchvision==0.24.1}, \texttt{torchaudio==2.9.1}, \texttt{pytorch-lightning==2.5.6}, \texttt{deepspeed==0.18.2}, and \texttt{transformers==4.57.1}, as well as CUDA 12 runtime components (e.g., \texttt{nvidia-cuda-runtime-cu12==12.8.90}). On the training machine, \texttt{nvidia-smi} reports an \textbf{NVIDIA GeForce RTX~5070~Ti} (16~GB VRAM) with driver \textbf{570.195.03} and CUDA \textbf{12.8}; the Python runtime reports \texttt{torch 2.9.1+cu128} with \texttt{torch.version.cuda==12.8}.
+
+\section{Fine-tuning configuration}
+\label{sec:finetune-config}
+Fine-tuning adapts a pretrained multimodal backbone to the QLabs data distribution using parameter-efficient LoRA adapters. Training is configured through Hydra and executed with PyTorch Lightning and DeepSpeed to support mixed precision and memory-efficient optimization. Rather than duplicating configuration listings here, Appendix \Cref{app:hyperparameters} records:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item the QLabs fine-tuning experiment template, 
+  \item the local run configuration used for experiments, and
+  \item the Hydra snapshot stored with the model directory used for inference.
+\end{itemize}
+
+The key modeling intent is to preserve the pretrained visual representation while adapting the language-side (and associated projections) to QLabs-specific visual appearance and dynamics. LoRA hyperparameters (rank, $\alpha$, dropout) and optimizer/scheduler settings are summarized in \Cref{tab:hparams-model}.

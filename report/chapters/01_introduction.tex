@@ -1,0 +1,41 @@
+\chapter{Introduction}
+\label{ch:introduction}
+
+End-to-end autonomous driving policies that map sensory inputs to actions have evolved from modular perception--planning--control stacks to learned policies that directly predict future motion. Recent work extends these policies by incorporating language, enabling a single model to condition behavior on high-level intent (e.g., ``turn right at the next intersection'') while still producing continuous control. These approaches are often described as \emph{Vision--Language--Action} (VLA) systems: camera images provide dense scene context, language provides task-level context, and the policy produces actions or action surrogates such as future waypoints.
+
+SimLingo is a VLA driving policy originally developed and evaluated in the CARLA simulator \citep{simlingo2023,dosovitskiy2017carla}. This repository adapts the SimLingo approach to Quanser QLabs for the QCar~2. The practical goal is to enable repeatable expert data collection, parameter-efficient fine-tuning, and real-time inference in a second simulator with different dynamics, sensing, timing, and coordinate conventions.
+
+\section{Problem statement}
+\label{sec:problem-statement}
+The central problem addressed in this thesis is:
+\begin{quote}
+\emph{How can a CARLA-developed VLA driving policy be adapted to Quanser QLabs in a way that is reproducible, evidence-based, and robust to simulator-specific differences in sensing, dynamics, and coordinate conventions?}
+\end{quote}
+
+\section{Research questions}
+\label{sec:research-questions}
+This work focuses on four concrete questions:
+\begin{enumerate}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Data/interface compatibility:} What dataset schema and measurement definitions are required for QLabs demonstrations to be usable by SimLingo-style training code without extensive rework?
+  \item \textbf{Timing and dynamics alignment:} How should control-loop timing and PID conversion be adapted when the runtime control rate differs from the source simulator assumptions?
+  \item \textbf{Navigation conditioning:} How can target-point conditioning (and optionally high-level commands) be encoded so inference prompts match the training distribution?
+  \item \textbf{Reproducible evaluation:} What scenario-driven tests and baselines are sufficient to characterize safety and route completion in a way that can be rerun as the model changes?
+\end{enumerate}
+
+\section{Contributions}
+\label{sec:contributions}
+This thesis contributes the following artifacts and design decisions, all implemented in the accompanying repository:
+\begin{enumerate}[leftmargin=*,itemsep=0.25em]
+  \item A QLabs expert data collection pipeline (teleoperation + logging) that produces SimLingo-compatible samples, including images and per-frame measurements (\Cref{ch:training}).
+  \item A fine-tuning configuration for \texttt{OpenGVLab/InternVL2-1B} \citep{internvl2} using LoRA adapters \citep{hu2021lora} with PyTorch Lightning \citep{pytorchlightning} and DeepSpeed \citep{deepspeed} (\Cref{ch:training}, \Cref{app:hyperparameters}).
+  \item A real-time inference stack for QCar~2 that aligns state estimation, navigational conditioning, prompt construction, inference cadence, and control conversion (\Cref{ch:inference}).
+  \item A scenario-driven evaluation harness and a LiDAR-based adaptive cruise control (ACC) baseline for comparison (\Cref{ch:evaluation}).
+\end{enumerate}
+
+\section{Reproducibility and traceability}
+\label{sec:repro-trace}
+Because simulator-to-simulator adaptation is sensitive to small implementation details, this thesis adopts an evidence-based writing style: key claims are supported by code excerpts with exact file paths and line ranges. Appendix \Cref{app:repo-map} provides a repository map, \Cref{app:hyperparameters} records training configurations, and \Cref{app:scene-configs} lists all figured scenario JSONs.
+
+\section{Thesis organization}
+\label{sec:thesis-org}
+\Cref{ch:background} reviews related work and the platform context. \Cref{ch:methodology} describes system-level design choices and the CARLA\texorpdfstring{$\rightarrow$}{->}QLabs alignment strategy. \Cref{ch:training} details dataset construction and fine-tuning configuration. \Cref{ch:inference} presents the runtime stack and control conversion. \Cref{ch:evaluation} outlines evaluation methodology and baselines. \Cref{ch:results} provides structured placeholders for final aggregated results. \Cref{ch:limitations} and \Cref{ch:conclusion} summarize limitations, conclusions, and future work.

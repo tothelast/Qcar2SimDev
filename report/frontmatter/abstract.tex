@@ -1,0 +1,10 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+This thesis documents an evidence-based engineering adaptation of a multimodal Vision--Language--Action (VLA) driving policy, SimLingo, from the CARLA autonomous driving simulator to the Quanser QLabs platform controlling a QCar~2 vehicle model.
+
+The contribution of this work is a reproducible end-to-end pipeline spanning (i) expert data collection in QLabs, (ii) LoRA-based fine-tuning of an InternVL2-1B backbone on QLabs demonstrations, and (iii) a real-time inference stack that converts model outputs (waypoint trajectories) into low-level QCar~2 control commands using a simulator-specific PID controller.
+
+The adaptation addresses platform mismatches that materially affect closed-loop behavior, including coordinate frame conventions, control-rate differences (20~Hz in CARLA vs. 4~Hz in QLabs inference), camera resolution preprocessing, and speed estimation consistency with the training data.
+
+\textcolor{red}{Quantitative results are left as structured placeholders pending experimental runs; however, the methodology, instrumentation, and evaluation harness are fully specified to enable rigorous comparison against a LiDAR-based adaptive cruise control baseline and scenario-based safety metrics.}

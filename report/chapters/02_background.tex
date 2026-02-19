@@ -1,0 +1,36 @@
+\chapter{Background and Related Work}
+\label{ch:background}
+
+This chapter summarizes the modeling and systems context needed to understand a SimLingo-style VLA driving policy, and it motivates why simulator-to-simulator transfer is non-trivial even when both platforms provide similar sensors and control APIs.
+
+\section{Vision--Language models and action conditioning}
+Modern multimodal models commonly pair (i) a vision encoder that converts an image into a sequence of visual tokens with (ii) a large language model (LLM) that consumes text tokens, plus (iii) a learned projection that maps vision features into the LLM embedding space. In this formulation, actions can be represented as text (e.g., tokens describing a maneuver), as continuous vectors regressed from hidden states, or as structured outputs such as future waypoints.
+
+Driving is a particularly natural application for VLA systems because navigation intent is often compact and language-like (``follow the road'', ``turn left''), while the environment context is high-dimensional and visual. The key systems challenge is that the policy must run in closed loop, meaning perception, prompt construction, inference, and control must all execute reliably at a fixed cadence.
+
+\section{Imitation learning for driving}
+Imitation learning (IL) for driving learns a policy from expert demonstrations. In simulation, the expert can be a scripted controller, a human teleoperator, or a privileged planner. A core IL consideration is \emph{train--inference mismatch}: if the policy observes a slightly different state distribution at inference than during data collection, errors can compound over time. This mismatch is amplified when transferring across simulators because sensor models, coordinate conventions, and dynamics differ.
+
+\section{SimLingo}
+SimLingo is positioned as an imitation-learning approach for driving with language generation \citep{simlingo2023}. It combines visual inputs with a language prompt and predicts driving-relevant outputs including waypoints; optional language outputs can provide commentary or explanations. The conceptual contribution of SimLingo for this thesis is the \emph{conditioning interface}: a prompt that encodes current speed and navigational conditioning (target waypoint tokens and/or high-level commands).
+
+\section{Backbone model: InternVL2-1B}
+This repository uses \texttt{OpenGVLab/InternVL2-1B} as the multimodal backbone \citep{internvl2}. In practice, this choice affects (i) the image tokenization scheme (patching and downsampling), (ii) the expected conversation/template formatting, and (iii) the compute/memory requirements for fine-tuning. The implementation therefore must carefully reproduce prompt formatting and placeholder replacement to match the pretrained model's conventions (discussed in \Cref{ch:inference}).
+
+\section{Efficient fine-tuning with LoRA}
+Low-Rank Adaptation (LoRA) injects trainable low-rank matrices into selected linear layers of a frozen backbone, enabling efficient fine-tuning with substantially fewer trainable parameters \citep{hu2021lora}. LoRA is particularly useful for multimodal models because the frozen vision encoder can be retained while only adapting the language-side (and any projectors) to the new domain.
+
+In this repository, training is organized using PyTorch Lightning \citep{pytorchlightning} and accelerated with DeepSpeed ZeRO optimizations \citep{deepspeed}; hyperparameters and the relevant Hydra configurations are recorded in Appendix \Cref{app:hyperparameters}.
+
+\section{Simulation platforms: CARLA vs. QLabs}
+CARLA is an open-source simulator widely used for autonomous driving research \citep{dosovitskiy2017carla}. Quanser QLabs is a separate simulation environment designed for education and robotics experimentation, providing a QCar~2 vehicle model and APIs for sensor acquisition and actuation.
+
+From an adaptation perspective, important differences include:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Control-loop cadence:} model and controller assumptions about sampling rate affect PID derivatives and speed estimation.
+  \item \textbf{Steering conventions:} the sign and saturation of steering may differ across simulators.
+  \item \textbf{Sensor geometry:} camera intrinsics/extrinsics and field-of-view affect visual appearance and downstream behavior.
+  \item \textbf{Dynamics/friction:} acceleration limits, braking behavior, and static friction can change closed-loop stability.
+\end{itemize}
+
+The methodology in \Cref{ch:methodology} frames these differences as a distribution-alignment problem: the closer the inference-time signals match the training distribution, the more reliable transfer becomes.

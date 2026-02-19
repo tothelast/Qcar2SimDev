@@ -1,0 +1,92 @@
+\chapter{Inference Stack and Control Conversion}
+\label{ch:inference}
+
+This chapter describes the runtime system that executes closed-loop driving in QLabs. The main engineering goal is to reproduce the \emph{interface} assumed during training: camera preprocessing, state estimation, navigational conditioning, prompt formatting, inference cadence, and control conversion must remain consistent.
+
+\section{Runtime components and closed-loop pipeline}
+\label{sec:runtime-components}
+At a high level, the runtime stack consists of:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item a controller loop that acquires sensor data and applies actions,
+  \item a model wrapper that builds prompts and runs multimodal inference,
+  \item a state estimator that computes speed and heading, 
+  \item a route manager that provides navigational conditioning, and
+  \item a control converter that maps predicted waypoints and speeds into QCar~2 commands.
+\end{itemize}
+
+The central control-loop iteration is implemented in \path{inference/main.py}. Each iteration (i) captures a camera frame, (ii) updates the ego state estimate, (iii) computes target points in the ego frame from the active route, (iv) executes VLA inference at a configured stride (reusing cached predictions on intermediate ticks), and (v) converts predicted waypoints/speeds into low-level QCar~2 commands.
+
+Two practical implementation choices are important for stability and reproducibility. First, the controller isolates time-sensitive state updates from slower model calls by caching inference outputs. Second, the loop logs enough metadata (timestamps, pose, predicted targets, and applied controls) to enable offline debugging and metric computation without re-running the simulator.
+
+\section{Control loop timing and inference stride}
+\label{sec:timing-inference-stride}
+In this repository the nominal control rate is set by \texttt{config.dt}. With the default configuration (\texttt{dt=0.25~s}), the controller runs at \SI{4}{Hz}. Model inference can be executed every control tick or at a lower frequency by setting \texttt{inference\_stride}; intermediate ticks reuse cached predictions.
+
+Reducing inference frequency can improve real-time performance on limited hardware, but it introduces a new design requirement: cached waypoints must remain stable enough across multiple control ticks to avoid oscillation.
+
+\section{Navigation conditioning and prompt construction}
+\label{sec:prompt-construction}
+SimLingo-style conditioning encodes both the current speed and navigational intent. This repository supports two primary modes:
+\begin{enumerate}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Target-point mode:} navigational intent is provided via two special \texttt{<TARGET\_POINT>} placeholder tokens that are replaced by a 2D target-point array.
+  \textcolor{red}{\item \textbf{Command mode:} intent is provided as a natural-language high-level command (HLC) string (e.g., ``go left at the next intersection''), optionally with a distance.}
+\end{enumerate}
+
+Prompt construction is implemented in \path{inference/simlingo_model.py}. The builder produces a conversation-style user message containing an \texttt{<image>} sentinel and a text instruction that encodes the current speed and navigational intent.
+
+In \emph{target-point mode}, intent is represented by two placeholder tokens (primary and ``next'') that are replaced by continuous 2D target-point values in the ego frame. In \emph{command mode}, intent is represented by a natural-language high-level command string (and optionally a distance). These two modes preserve compatibility with SimLingo-style datasets and allow controlled ablations between purely geometric conditioning and language-like HLC conditioning.
+
+\section{Placeholder handling and template formatting}
+\label{sec:placeholder-handling}
+The InternVL2-based implementation follows a conversation-template format where the user message includes an \texttt{<image>} sentinel that is expanded into a fixed number of image context tokens, and where placeholder tokens (e.g., \texttt{<TARGET\_POINT>}) may be replaced by continuous values.
+
+An important edge case is command-only conditioning: when no placeholder values are present, the placeholder replacement logic must be bypassed to avoid unintended behavior. The implementation therefore only constructs placeholder-value tensors when target-point conditioning is active; otherwise, it passes an empty placeholder list so that the downstream formatting pipeline behaves like a standard VLM prompt without continuous token replacement.
+
+\section{State estimation}
+\label{sec:state-estimation}
+Closed-loop driving requires a speed signal that is consistent with what the model saw during training and what the controller expects. As discussed in \Cref{sec:speed-alignment}, this repository uses an instantaneous, single-frame velocity estimate rather than a moving average.
+
+State estimation is implemented in \path{inference/state_estimator.py}. To match the training logs produced by the data recorder (\Cref{sec:speed-alignment}), the runtime speed is computed as an instantaneous, single-frame estimate rather than a filtered signal.
+
+Let $\mathbf{p}(t)\in\mathbb{R}^2$ be the ego position in the simulator world frame at time $t$ (measured using wall-clock timestamps). The estimator computes
+\begin{equation}
+ v(t) \;=\; \frac{\lVert \mathbf{p}(t)-\mathbf{p}(t-\Delta t) \rVert_2}{\Delta t},
+\end{equation}
+where $\Delta t$ is the elapsed real time between successive state updates. This design reduces distribution shift between logged demonstrations and the online controller.
+
+\section{PID-based control conversion}
+\label{sec:pid-conversion}
+The model predicts route waypoints (for lateral control) and speed waypoints (from which a desired speed is derived). The controller must translate these predictions into QCar~2 commands while compensating for simulator differences.
+
+\subsection{Desired speed from speed waypoints}
+\label{sec:desired-speed}
+Desired speed is computed in \path{inference/control_converter.py} from the displacement between the first two predicted speed waypoints divided by the model's implied timestep. The implied timestep is derived from the runtime configuration:
+\begin{equation}
+\texttt{dt\_model} = \texttt{dt} \cdot \texttt{data\_save\_freq}.
+\end{equation}
+If the predicted speed waypoints are $\mathbf{s}_0,\mathbf{s}_1\in\mathbb{R}^2$, the controller sets
+\begin{equation}
+ v_{\text{des}} = \mathrm{clip}\!\left( \frac{\lVert \mathbf{s}_1-\mathbf{s}_0\rVert_2}{\texttt{dt\_model}},\ 0,\ v_{\max}\right),
+\end{equation}
+where $v_{\max}$ is the configured maximum speed. Clamping prevents out-of-range predictions from producing unsafe throttle commands.
+
+\subsection{Lateral PID and frequency compensation}
+\label{sec:lateral-pid}
+The lateral controller uses a PID law on a scaled heading error computed from an interpolated route. Two adaptation details are critical:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Heading-error scaling:} the heading error is normalized by $180/\pi/90$ so that a \SI{90}{\degree} error maps to approximately $1.0$, matching the reference implementation.
+  \item \textbf{Derivative compensation:} because the derivative term is computed as a raw difference (without explicit division by $\Delta t$), differences in control frequency must be compensated. The implementation divides by $5$ to align a \SI{4}{Hz} loop with a \SI{20}{Hz} reference assumption.
+\end{itemize}
+The lateral controller is implemented in \path{inference/control_converter.py} as a PID law acting on a scaled heading error $e_\psi$. With proportional, integral, and derivative gains $(K_P,K_I,K_D)$, the raw steering command before saturation can be written as
+\begin{equation}
+ u = K_P e_\psi + K_I \sum_{\tau\le t} e_\psi(\tau) + K_D\,\Delta e_\psi.
+\end{equation}
+Because the derivative term is implemented as a simple difference (without explicit division by $\Delta t$), the code includes an explicit compensation factor to account for the \SI{4}{Hz} control cadence relative to a \SI{20}{Hz} reference assumption; effectively, $\Delta e_\psi$ is scaled by $1/5$.
+
+\subsection{Steering sign convention}
+\label{sec:steering-sign}
+QLabs and CARLA use opposite steering sign conventions. To preserve the learned behavior, the normalized steering command $u\in[-1,1]$ is negated when mapped to the QCar~2 physical steering range in \path{inference/control_converter.py}:
+\begin{equation}
+ \delta = -u\,\delta_{\max},
+\end{equation}
+where $\delta$ is the commanded steering angle and $\delta_{\max}$ is the configured maximum turn angle.

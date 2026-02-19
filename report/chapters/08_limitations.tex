@@ -1,0 +1,36 @@
+\chapter{Limitations and Future Work}
+\label{ch:limitations}
+
+This thesis focuses on building a reproducible, end-to-end adaptation pipeline with code-level traceability. While this provides a strong foundation for research and engineering iteration, several limitations remain.
+
+\section{Limitations}
+\label{sec:limitations}
+\subsection{Simulation-to-simulation domain gap}
+Although both CARLA and QLabs provide a road-driving environment, the visual domain (textures, lighting, camera model) and the dynamics domain (tire friction, acceleration limits, static friction) are different. These differences can shift both the perception distribution and the closed-loop stability envelope. LoRA fine-tuning reduces but does not eliminate this gap.
+
+\subsection{Sensitivity to timing and measurement definitions}
+The runtime controller and training pipeline are sensitive to sampling cadence and measurement definitions. For example, the lateral PID implementation includes an explicit derivative-term compensation factor to account for running at \SI{4}{Hz} while inheriting assumptions from a \SI{20}{Hz} reference controller (effectively scaling the finite-difference derivative by $1/5$). Similarly, speed is intentionally computed as a single-frame estimate both when recording demonstrations (\path{data_collection/data_recorder.py}) and when running online state estimation (\path{inference/state_estimator.py}); alternative estimators may introduce lag that changes braking behavior.
+
+\subsection{Scenario coverage and generalization}
+Evaluation is currently scenario-driven and limited to the scene and route definitions included in the repository (Appendix \Cref{app:scene-configs}). While this enables repeatable comparisons, it does not guarantee generalization to unseen layouts, different actor behaviors, or substantial appearance changes.
+
+A practical constraint in this work is that expert demonstration collection and repeatable closed-loop testing were not stable in complex, multi-actor scenes. The actor-control stack serializes QLabs API calls using a shared lock (\path{core/scene_spawner.py}), and the ego vehicle teleoperation loop runs at \SI{30}{Hz} while dynamic actors default to \SI{2}{Hz} (\path{data_collection/teleop_controller.py} and \path{core/scene_spawner.py}). As the number of actors grows, the aggregate rate of serialized control/state transactions can exceed real-time deadlines and lead to severe lag and buffer-overflow-type failures (\Cref{sec:multi-actor-constraints}). As a result, the final training dataset was collected on a simplified scenario (roundabout navigation with an optional single static obstacle variation; \path{data_collection/collect_roundabout_obstacle_variations.py}), limiting diversity in both the visual and interaction distribution.
+
+\subsection{No language/commentary supervision during fine-tuning}
+Although SimLingo is a vision--language--action (VLA) model family, the QLabs fine-tuning dataset in this project does not include natural-language instruction strings or human ``commentary.'' Demonstrations are logged as images plus structured measurements (\path{data_collection/data_recorder.py}). Consequently, fine-tuning primarily adapts the visual and control grounding for the QLabs domain but does not explicitly adapt language-following behavior in a supervised manner.
+
+\subsection{Incomplete quantitative results}
+The Results chapter is intentionally left as structured placeholders pending the completion of full experimental sweeps and aggregation. Open items required to finalize quantitative reporting are tracked in Appendix \Cref{app:open-questions}.
+
+\section{Future work}
+\label{sec:future-work}
+The most actionable next steps are:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Broader scenario coverage:} expand the set of evaluation scenes to include additional intersections, merges, and adverse conditions.
+  \item \textbf{Robust multi-actor execution:} improve simulator/telemetry stability in scenes with multiple dynamic actors by reducing lock contention and command-stream pressure (e.g., batching/rate limiting API calls, decoupling actor update loops, or moving logging to asynchronous writers).
+  \item \textbf{Camera calibration studies:} quantify sensitivity to camera intrinsics/extrinsics and align QLabs camera parameters with the source assumptions.
+  \item \textbf{Controller robustness:} study stability margins and systematically tune PID gains for multiple speeds and cadences.
+  \item \textbf{Training ablations:} perform controlled sweeps over LoRA rank, learning rate, and augmentation policies.
+  \item \textbf{Language supervision:} collect paired language annotations (route instructions, obstacle commentary, or high-level intent labels) to explicitly fine-tune instruction-following behavior in QLabs.
+  \item \textbf{Sim-to-real (optional):} evaluate whether the same interface and control conversion can be transferred to physical QCar~2 hardware with appropriate safety constraints.
+\end{itemize}

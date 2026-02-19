@@ -1,0 +1,66 @@
+\chapter{Evaluation Methodology and Baselines}
+\label{ch:evaluation}
+
+This chapter describes the evaluation harness used to assess driving performance in QLabs and the baseline controllers used for comparison. Because closed-loop driving systems can fail in diverse ways (collisions, oscillation, timeouts, and route deviations), evaluation is organized around scenario-driven testing with multiple safety and progress metrics.
+
+\section{Scenario-based evaluation}
+\label{sec:scenario-eval}
+Evaluation is organized around QLabs scenarios specified as JSON scene files (Appendix \Cref{app:scene-configs}). The test harness instantiates the same controller used for interactive driving and runs it in a repeatable loop with a maximum step count and timeout thresholds.
+
+In this repository, a single script (\path{results/test_simlingo_roundabout.py}) defines a set of scenarios including baseline navigation and obstacle variants. Each scenario can be repeated multiple times to estimate pass rates under stochasticity (e.g., small timing variations).
+
+\section{Why evaluation focuses on the roundabout obstacle-variation suite}
+\label{sec:eval-roundabout-rationale}
+Although the repository includes more complex scene definitions (e.g., \path{config/scenes/testing/10_complex_route.json} includes multiple vehicles and a pedestrian), multi-actor scenarios were not a stable basis for expert demonstration collection or for repeatable learned-policy testing in our project setting.
+As discussed in \Cref{sec:multi-actor-constraints}, concurrent actor control increases the aggregate rate of serialized QLabs API transactions (ego control loop plus dynamic actor threads guarded by \texttt{qlabs\_lock} in \path{core/scene_spawner.py}), which manifested as severe lag and buffer-overflow-type failures during attempted data collection.
+
+To keep evaluation faithful to the available training data and to ensure repeatability, we therefore evaluate primarily on the \texttt{roundabout\_navigation} route with a single optional static obstacle.
+This choice provides a controlled stress test of closed-loop behavior (progress, lane keeping, stopping behavior, and collision avoidance) while remaining within the stability envelope of the QLabs control/telemetry stack used during data collection.
+
+\section{Test matrix: baseline plus five obstacle variants}
+\label{sec:eval-test-matrix}
+The evaluation harness enumerates a fixed scenario suite in \path{results/test_simlingo_roundabout.py}:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Baseline (no obstacle):} 5 repeated runs.
+  \item \textbf{Static obstacle variants 1--5:} 2 repeated runs for each variant.
+\end{itemize}
+In total, this yields 15 runs per full sweep, with explicit names \texttt{baseline} and \texttt{obstacle\_var1} through \texttt{obstacle\_var5} (\path{results/test_simlingo_roundabout.py}, lines~6--8 and 153--201).
+Each obstacle variant corresponds to a fixed 3D placement used to instantiate an obstacle actor in the scene (lines~83--90), spanning early/mid/exit/straight/late portions of the route.
+
+\section{Training vs. testing conditions (memorization vs. generalization)}
+\label{sec:memorization-vs-generalization}
+Even within this simplified evaluation scope, it is useful to distinguish (i) the \emph{train/validation split} used by the learning pipeline and (ii) the \emph{seen/unseen} conditions used to interpret memorization versus generalization.
+
+For dataset management, the collection scripts accept \texttt{--split \{train,val\}} (\path{data_collection/collect_data.py}; \path{data_collection/collect_roundabout_obstacle_variations.py}, lines~251--256 and 335--341) and the recorder maps these values to split folders \path{routes_training} and \path{routes_validation} (\path{data_collection/data_recorder.py}, \texttt{\_resolve\_split()}, lines~234--243). This split is a bookkeeping mechanism for training/validation and does not by itself enforce a holdout over obstacle positions.
+
+For obstacle positions, the collection tooling defines five candidate placement points along the route (\path{data_collection/collect_roundabout_obstacle_variations.py}, lines~33--39) and can cover them systematically using \texttt{--sequential} (lines~207--213). The evaluation harness can then instantiate any of the five corresponding obstacle test variants (\path{results/test_simlingo_roundabout.py}, lines~83--90 and 153--201), regardless of which placements appeared in the demonstrations.
+
+In this project, demonstrations were collected only for the roundabout route with a single static obstacle at controlled placements (\Cref{sec:final-dataset-scope}). Consequently, the primary evaluation reported by this thesis is an \emph{in-distribution reliability test} on the same family of placements; a stricter \emph{generalization} protocol would explicitly hold out one or more placement positions during collection and evaluate those withheld positions with the same harness.
+
+\section{Metrics}
+\label{sec:metrics}
+The evaluation harness computes metrics from the logged trajectory produced by the runtime controller (\Cref{ch:inference}). The core metrics are:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Route coverage:} percentage of the route traversed.
+  \item \textbf{Lateral deviation:} average and maximum deviation from the reference route.
+  \item \textbf{Safety metrics:} collision detection and (for obstacle scenarios) whether the vehicle stopped before the obstacle and at what distance.
+  \item \textbf{Timeout/stuck detection:} termination conditions indicating failure to make progress.
+\end{itemize}
+
+Implementation-wise, the harness in \path{results/test_simlingo_roundabout.py} aggregates per-timestep logs into summary statistics (e.g., average/max deviation and coverage) and packages them into a structured result object (\texttt{TestResult}) suitable for downstream tabulation. Pass/fail status is then computed by applying scenario-specific criteria to these metrics (see \Cref{sec:pass-fail}).
+
+\section{Pass/fail criteria}
+\label{sec:pass-fail}
+For quantitative reporting, the harness assigns a boolean pass/fail label to each run based on scenario type. Baseline (no obstacle) runs require high route coverage without timeouts; obstacle scenarios require no collision and either a safe stop or sufficient progress (e.g., navigating around the obstacle).
+
+The criteria are implemented in \texttt{determine\_pass\_status()} in \path{results/test_simlingo_roundabout.py}. Baseline (no-obstacle) runs are marked as passing only if they achieve high route coverage without triggering timeouts or collisions. Obstacle runs additionally enforce safety requirements, e.g., no collision and either a safe stop before the obstacle (within a defined distance band) or a scenario-appropriate alternative (such as navigating around the obstacle when that is part of the test design).
+
+\section{Baseline controller: LiDAR-based ACC}
+\label{sec:acc-baseline}
+To contextualize learned-policy behavior, the repository includes a simple adaptive cruise control (ACC) baseline that uses LiDAR to detect obstacles ahead within a lane-aligned region and then commands speed to maintain a safe distance. The implementation converts polar LiDAR returns into a vehicle frame and applies geometric filtering.
+
+The baseline implementation in \path{results/test_acc_baseline.py} detects candidate obstacles by filtering LiDAR returns to a forward-facing region of interest: points must lie in front of the vehicle ($x>0$ in the ego frame), within a limited angular cone (to focus on the driving corridor), and within approximate lane boundaries (to suppress clutter from sidewalks or off-lane actors). The controller then uses the closest in-lane point to estimate a lead-vehicle distance and reduces commanded speed when the estimated distance falls below a safety threshold.
+
+\section{Logging and artifacts}
+\label{sec:logging}
+Both the runtime controller and the evaluation harness write JSON logs (trajectory and metadata) to support offline analysis, visualization, and aggregation. The Results chapter (\Cref{ch:results}) is intentionally left as structured stubs: the harness provides the instrumentation necessary to populate those tables once full experimental runs are completed.

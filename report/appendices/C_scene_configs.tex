@@ -1,0 +1,60 @@
+\chapter{Scene Configurations}
+\label{app:scene-configs}
+
+QLabs scenarios are specified as JSON scene files under \path{config/scenes/}. Each scene references an ego route (by ID) and a list of actor IDs to spawn. Routes are defined separately under \path{config/routes/*.json}, and actor templates are stored under \path{config/actors/}.
+
+\section{Scene schema (JSON)}
+Across all scenes in this repository, the schema is minimal:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{name}: unique scene identifier.
+  \item \texttt{description}: brief human-readable summary.
+  \item \texttt{\detokenize{ego_route}}: route ID used to load the waypoint route.
+  \item \texttt{actors}: list of actor IDs (vehicles/pedestrians/static) to spawn.
+  \item \texttt{\detokenize{actors_backup}}: optional list of fallback actors (often empty).
+\end{itemize}
+
+\section{Scene index}
+\begingroup
+\singlespacing\small
+\begin{longtable}{p{0.34\linewidth}p{0.18\linewidth}p{0.40\linewidth}}
+\caption{Scene configurations used for training and testing (from \texttt{\detokenize{config/scenes/}}).}\label{tab:scene-index}\\
+\toprule
+Scene file & Ego route & Actors (IDs)\\
+\midrule
+\endfirsthead
+\toprule
+Scene file & Ego route & Actors (IDs)\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+\path{config/scenes/training/01_semi_circle.json} & {\ttfamily\detokenize{semi_circle}} & {\ttfamily\detokenize{semi_circle_crosswalk, semi_circle_pedestrian}}\\
+\path{config/scenes/training/02_short_route.json} & {\ttfamily\detokenize{short_route}} & {\ttfamily\detokenize{circular_car, short_route_cone_1, short_route_cone_2, short_route_cone_3}}\\
+\path{config/scenes/training/03_roundabout_navigation.json} & {\ttfamily\detokenize{roundabout_navigation}} & {\ttfamily\detokenize{north_pedestrian, stop_sign_roundabout, north_crosswalk, north_crosswalk_light}}\\
+\path{config/scenes/training/04_kink_street.json} & {\ttfamily\detokenize{kink_street}} & {\ttfamily\detokenize{south_pedestrian, parked_car_spot4}}\\
+\path{config/scenes/training/05_traffic_circle.json} & {\ttfamily\detokenize{traffic_circle}} & {\ttfamily\detokenize{east_pedestrian, traffic_circle_stop_sign, east_crosswalk, east_crosswalk_light}}\\
+\path{config/scenes/training/06_one_way_street.json} & {\ttfamily\detokenize{one_way_street}} & {\ttfamily\detokenize{parked_car_spot4}}\\
+\path{config/scenes/training/07_long_route.json} & {\ttfamily\detokenize{long_route}} & {\ttfamily\detokenize{east_pedestrian, long_route_parked_car, east_crosswalk}}\\
+\path{config/scenes/training/08_full_circuit.json} & {\ttfamily\detokenize{full_circuit}} & {\ttfamily\detokenize{roundabout_car, east_pedestrian, traffic_circle_stop_sign, east_crosswalk, long_route_parked_car, east_crosswalk_light}}\\
+\path{config/scenes/training/09_roundabout_exit.json} & {\ttfamily\detokenize{roundabout_exit}} & {\ttfamily\detokenize{north_pedestrian, west_pedestrian, north_crosswalk, north_crosswalk_light, west_crosswalk, west_crosswalk_light, roundabout_exit_parked_car}}\\
+\path{config/scenes/testing/03_roundabout_navigation_obstacle.json} & {\ttfamily\detokenize{roundabout_navigation}} & {\ttfamily\detokenize{obstacle_car_var4}}\\
+\path{config/scenes/testing/10_complex_route.json} & {\ttfamily\detokenize{complex_route}} & {\ttfamily\detokenize{circular_car, roundabout_car, east_pedestrian, stop_sign_roundabout}}\\
+
+\end{longtable}
+\endgroup
+
+\section{Worked examples (described instances)}
+Two representative scene files illustrate how the schema is used in practice.
+
+\textbf{Training roundabout navigation (\path{config/scenes/training/03_roundabout_navigation.json}).}
+This scene assigns \texttt{ego\_route=roundabout\_navigation} and spawns a small set of traffic-control and pedestrian actors (e.g., crosswalk and stop-sign related IDs). The purpose is to provide repeated exposure to a single, structured maneuver (entering and exiting a roundabout) with consistent environmental cues.
+
+\textbf{Testing obstacle variant (\path{config/scenes/testing/03_roundabout_navigation_obstacle.json}).}
+This scenario reuses the same \texttt{ego\_route} but changes the \texttt{actors} list to include an explicit obstacle vehicle (e.g., \texttt{obstacle\_car\_var4}). Because the route geometry is held constant, differences in outcomes can be attributed more directly to obstacle handling (stopping behavior, collision avoidance) rather than route-following variation.
+
+\section{Related assets}
+\begin{itemize}[leftmargin=*]
+  \item Routes referenced by \texttt{\detokenize{ego_route}} are stored under \path{config/routes/} (e.g., \path{config/routes/roundabout_navigation.json}).
+  \item Actor templates referenced by \texttt{actors} are stored under \path{config/actors/}.
+\end{itemize}

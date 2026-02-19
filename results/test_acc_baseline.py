@@ -25,7 +25,7 @@ from core.scene_spawner import SceneSpawner
 CRUISE_SPEED = 2.0       # m/s
 CONTROL_HZ = 10          # Hz
 MAX_STEERING = np.pi / 6 # ~30 degrees
-LOOKAHEAD = 3.0          # meters for pure pursuit
+LOOKAHEAD = 4.5          # meters for pure pursuit
 
 # ACC parameters - wider detection, filtered by lane
 LIDAR_HALF_WIDTH = 5.0   # meters - wide detection cone to catch obstacles

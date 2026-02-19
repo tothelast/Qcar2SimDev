@@ -1,0 +1,15 @@
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+This thesis presented a reproducible adaptation of a SimLingo-style vision--language--action (VLA) driving system from CARLA to Quanser QLabs for the QCar~2 platform. The central premise was that simulator transfer requires careful systems alignment: closed-loop performance depends not only on model weights but also on the consistency of coordinate frames, timing, measurement definitions, and prompt formatting.
+
+The repository implements an end-to-end pipeline with evidence-based traceability:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Data collection:} a teleoperation loop in \path{data_collection/teleop_controller.py} running at \SI{30}{Hz} with recording gated at \texttt{config.dt}, producing SimLingo-compatible runs in \path{database/data/simlingo/} with per-frame measurements (ego pose matrix, route/targets, and instantaneous speed) written by \path{data_collection/data_recorder.py}.
+  \item \textbf{Training configuration:} LoRA-based fine-tuning of an InternVL2-1B backbone using Hydra, PyTorch Lightning, and DeepSpeed, with hyperparameters recorded in Appendix \Cref{app:hyperparameters}.
+  \item \textbf{Runtime inference:} a closed-loop controller in \path{inference/main.py} that computes ego-frame navigation targets, constructs SimLingo-compatible prompts (\path{inference/simlingo_model.py}), executes inference at a configurable stride with caching, and applies PID-based control conversion (\path{inference/control_converter.py}).
+  \item \textbf{Control conversion details:} explicit compensation for cadence differences in the lateral PID derivative term and a steering sign inversion to match QCar~2 conventions, both implemented in \path{inference/control_converter.py}.
+  \item \textbf{Evaluation:} a scenario-driven test harness (\path{results/test_simlingo_roundabout.py}) with defined pass/fail criteria and a LiDAR-based ACC baseline (\path{results/test_acc_baseline.py}).
+\end{itemize}
+
+Final quantitative results are left as structured placeholders (\Cref{ch:results}), but the codebase provides the instrumentation needed to run repeatable sweeps and to populate those tables. The remaining experimental gaps---including compute environment documentation, calibration validation, and comprehensive evaluation runs---are tracked in Appendix \Cref{app:open-questions}.

@@ -1,0 +1,31 @@
+% Preamble and formatting helpers (aimed at UA thesis requirements)
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{newtxtext,newtxmath}
+\usepackage{setspace}
+\doublespacing
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{array}
+% newtxmath already provides most AMS symbol coverage; avoid amssymb clash (\Bbbk)
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[nameinlink,capitalize]{cleveref}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+% NOTE: This thesis version intentionally contains no verbatim source-code listings.
+% Implementation details are described in prose and equations with file-path traceability.
+
+% Figures search path (relative to report/)
+\graphicspath{{figures/}}
+
+% Reduce overfull boxes a bit
+\emergencystretch=2em

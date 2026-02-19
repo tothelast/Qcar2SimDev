@@ -1,0 +1,69 @@
+\chapter{Repository Map}
+\label{app:repo-map}
+
+This appendix summarizes the key repository directories used to implement the CARLA\texorpdfstring{$\rightarrow$}{->}QLabs adaptation and highlights the primary entry points referenced throughout the thesis.
+
+\section{High-level structure}
+\begingroup
+\singlespacing\small
+\begin{verbatim}
+Qcar2SimDev/
+  core/                  QLabs + QCar2 interface, camera processing, scene spawning
+  inference/              Runtime controller, model wrapper, state estimation, control conversion
+  data_collection/        Teleoperation + expert data recording scripts
+  simlingo/simlingo_training/  Training/eval code + Hydra configuration tree
+  config/                 QLabs assets (actors), routes, and scene definitions (JSON)
+  results/                Evaluation scripts, baselines, and run logs
+  models/simlingo/         Checkpoints + Hydra snapshot used by inference
+  report/                 This thesis (LaTeX)
+\end{verbatim}
+\endgroup
+
+\begin{itemize}[leftmargin=*]
+  \item \path{core/}: QLabs/QCar~2 interface, scene loading/spawning, coordinate utilities, camera preprocessing.
+  \item \path{inference/}: Runtime controller, model wrapper, state estimator, and control conversion.
+  \item \path{data_collection/}: Teleoperation and expert dataset recording tools.
+  \item \path{simlingo/simlingo_training/}: Training code (datasets, models, Hydra configs).
+  \item \path{config/}: Scene and route JSONs used for both training and evaluation.
+  \item \path{results/}: Automated tests, baselines, and evaluation logs.
+\end{itemize}
+
+\section{Key entry points}
+\begin{itemize}[leftmargin=*]
+  \item Inference (runtime control loop): \path{inference/main.py}
+  \item Training (PyTorch Lightning + Hydra): \path{simlingo/simlingo_training/train.py}
+  \item Data collection (teleop + dataset logging): \path{data_collection/collect_data.py}
+\end{itemize}
+
+\section{Module index}
+\begin{table}[h]
+\centering
+\caption{Key implementation modules (non-exhaustive) used in the CARLA\texorpdfstring{$\rightarrow$}{->}QLabs adaptation.}
+\label{tab:repo-module-index}
+\begin{tabular}{p{0.36\linewidth}p{0.56\linewidth}}
+\toprule
+Module & Purpose\\
+\midrule
+\path{core/qcar2_interface.py} & QLabs API integration, QCar~2 spawning/control, camera capture and RGB conversion.\\
+\path{core/camera_processor.py} & Image preprocessing to match training-time inputs (e.g., patching/resizing).\\
+\path{core/scene_loader.py} & Loads route/scene definitions from \path{config/routes/} and \path{config/scenes/}.\\
+\path{core/scene_spawner.py} & Spawns configured actors (vehicles/pedestrians/static props) from \path{config/actors/}.\\
+\path{inference/main.py} & Main controller that runs the closed-loop inference+control cycle at runtime.\\
+\path{inference/simlingo_model.py} & Loads the fine-tuned checkpoint and formats multimodal prompts/outputs.\\
+\path{inference/state_estimator.py} & Estimates ego state (pose/velocity) used by the controller.\\
+\path{inference/control_converter.py} & Converts model outputs into low-level QCar~2 steering/throttle commands.\\
+\path{data_collection/data_recorder.py} & Persists expert demonstrations (images + measurements) into SimLingo dataset format.\\
+\path{results/test_simlingo_roundabout.py} & Scenario-based evaluation harness and safety/route metrics.\\
+\path{results/test_acc_baseline.py} & Baseline controller (ACC-style) used for comparison.\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Configuration and assets}
+\begin{itemize}[leftmargin=*]
+  \item Scenes (which route + actors are active): \path{config/scenes/training/} and \path{config/scenes/testing/}.
+  \item Routes (waypoints/spawn definitions): \path{config/routes/*.json}.
+  \item Actor templates (vehicles/pedestrians/static props): \path{config/actors/}.
+  \item Training configs (Hydra): \path{simlingo/simlingo_training/config/}.
+  \item Run-time model config snapshot used by inference: \path{models/simlingo/.hydra/config.yaml}.
+\end{itemize}

@@ -1,0 +1,89 @@
+\chapter{Hyperparameters and Configuration}
+\label{app:hyperparameters}
+
+This appendix records the most important hyperparameters and configuration choices for reproducibility.
+
+\section{Primary configuration sources}
+The repository contains multiple configuration artifacts used at different stages (experiment templates, local run configs, and saved Hydra snapshots). The three most relevant sources used in this work are:
+\begin{itemize}[leftmargin=*]
+  \item QLabs fine-tuning experiment (Hydra): \path{simlingo/simlingo_training/config/experiment/qlabs_finetune.yaml}.
+  \item Local project-level config: \path{my_config.yaml}.
+  \item Saved Hydra snapshot (used by inference loading): \path{models/simlingo/.hydra/config.yaml}.
+\end{itemize}
+
+\section{QLabs fine-tuning (Hydra experiment template)}
+The Hydra experiment template in \path{simlingo/simlingo_training/config/experiment/qlabs_finetune.yaml} defines the default QLabs fine-tuning experiment, including the model backbone selection (InternVL2-1B), the LoRA adapter settings, and trainer-level defaults such as precision and distributed strategy. In practice, this file provides a reproducible baseline configuration that can be overridden by local run configs while retaining a consistent naming and logging scheme.
+
+\section{Local run configuration (project root)}
+The local project configuration in \path{my_config.yaml} captures run-specific overrides used during development (e.g., batch size/worker settings, gradient accumulation, and experiment naming). This separation (template vs. local overrides) is helpful when iterating on QLabs-specific data paths and runtime constraints while keeping the canonical experiment definition stable.
+
+\section{Reference Hydra snapshot (SimLingo run)}
+For inference reproducibility, a Hydra configuration snapshot is stored with trained model artifacts under \path{models/simlingo/.hydra/config.yaml}. This snapshot records the exact resolved configuration used during training (after all overrides), enabling later analysis of hyperparameter choices even if templates evolve.
+
+\section{Summary tables}
+\subsection{Model and fine-tuning}
+\begin{table}[h]
+\centering
+\caption{Key model/fine-tuning hyperparameters for the QLabs configuration (compiled from \texttt{simlingo/simlingo\_training/config/experiment/qlabs\_finetune.yaml} and \texttt{my\_config.yaml}).}
+\label{tab:hparams-model}
+\begin{tabular}{p{0.48\linewidth}p{0.42\linewidth}}
+\toprule
+Parameter & Value (QLabs fine-tune)\\
+\midrule
+Backbone (VLM/LLM) & \texttt{OpenGVLab/InternVL2-1B}\\
+Vision encoder frozen & true\\
+Embedding dimension & 512\\
+Fine-tuning method & LoRA\\
+LoRA enabled & true\\
+LoRA rank ($r$) & 32\\
+LoRA $\alpha$ & 64\\
+LoRA dropout & 0.1\\
+Learning rate & $2\times 10^{-5}$\\
+Optimizer & AdamW (betas $[0.9, 0.999]$, weight decay 0.1)\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data module and dataset parameters}
+\begin{table}[h]
+\centering
+\caption{Dataset-related parameters for QLabs fine-tuning (compiled from \texttt{simlingo/simlingo\_training/config/experiment/qlabs\_finetune.yaml} and \texttt{my\_config.yaml}).}
+\label{tab:hparams-data}
+\begin{tabular}{p{0.48\linewidth}p{0.42\linewidth}}
+\toprule
+Parameter & Value (QLabs fine-tune)\\
+\midrule
+Data path & \path{database}\\
+Batch size & 1\\
+Num workers & 4 (Hydra experiment) / 0 (local config)\\
+Prediction horizon (pred\_len) & 11\\
+History length (hist\_len) & 1\\
+Skip first frames & 10\\
+Route representation (route\_as) & \texttt{target\_point}\\
+Number of route points & 20\\
+Commentary/QA & disabled in QLabs template (both false)\\
+Image augmentation & disabled in QLabs template (false; prob 0.0)\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Trainer/infrastructure}
+\begin{table}[h]
+\centering
+\caption{Training infrastructure settings for QLabs fine-tuning (compiled from \texttt{simlingo/simlingo\_training/config/experiment/qlabs\_finetune.yaml} and \texttt{my\_config.yaml}).}
+\label{tab:hparams-trainer}
+\begin{tabular}{p{0.48\linewidth}p{0.42\linewidth}}
+\toprule
+Parameter & Value (QLabs fine-tune)\\
+\midrule
+Max epochs & 15\\
+Precision & \texttt{16-mixed}\\
+Distributed strategy & \texttt{deepspeed\_stage\_2}\\
+GPUs & 1\\
+Gradient accumulation & 4 (local config)\\
+Random seed & 42\\
+Experiment name & \texttt{qlabs\_finetune} / \texttt{qlabs\_roundabout\_finetune}\\
+Weights\&Biases & project \texttt{simlingo\_qlabs} (can be disabled)\\
+\bottomrule
+\end{tabular}
+\end{table}

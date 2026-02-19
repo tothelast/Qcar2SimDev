@@ -1,0 +1,65 @@
+% Main thesis entry point
+% Build (recommended):
+%   cd report && latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+\documentclass[12pt,oneside]{report}
+
+\input{metadata}
+\input{preamble}
+
+\begin{document}
+
+% --------------------
+% Front matter
+% --------------------
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\input{frontmatter/titlepage}
+\cleardoublepage
+
+\input{frontmatter/approval}
+\cleardoublepage
+
+\input{frontmatter/acknowledgements}
+\cleardoublepage
+
+\input{frontmatter/abstract}
+\cleardoublepage
+
+\tableofcontents
+\cleardoublepage
+\listoffigures
+\cleardoublepage
+\listoftables
+\cleardoublepage
+
+% --------------------
+% Main matter
+% --------------------
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{chapters/01_introduction}
+\input{chapters/02_background}
+\input{chapters/03_methodology}
+\input{chapters/04_training}
+\input{chapters/05_inference}
+\input{chapters/06_evaluation}
+\input{chapters/07_results_stub}
+\input{chapters/08_limitations}
+\input{chapters/09_conclusion}
+
+% --------------------
+% Appendices then References (per UA guideline preference)
+% --------------------
+\appendix
+\input{appendices/A_repository_map}
+\input{appendices/B_hyperparameters}
+\input{appendices/C_scene_configs}
+\input{OPEN_QUESTIONS}
+
+\cleardoublepage
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
