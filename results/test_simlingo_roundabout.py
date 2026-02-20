@@ -231,7 +231,20 @@ def compute_safety_metrics(
         )
 
     obstacle_pos = np.array(obstacle_location[:2])
-    collision_detected = collision_count > 0
+
+    # Only count collisions near the obstacle (within 10m), not incidental
+    # curb clips in the roundabout which can be 15-30m+ away from the obstacle
+    OBSTACLE_COLLISION_RADIUS = 10.0
+    collision_near_obstacle = False
+    for entry in trajectory:
+        if entry['collision']:
+            pos = np.array(entry['position'][:2])
+            dist = np.linalg.norm(pos - obstacle_pos)
+            if dist < OBSTACLE_COLLISION_RADIUS:
+                collision_near_obstacle = True
+                break
+
+    collision_detected = collision_near_obstacle
 
     # Find the trajectory point where vehicle stopped or collided
     stopped_before_obstacle = False
@@ -247,17 +260,17 @@ def compute_safety_metrics(
         if distance_to_obstacle < 5.0:
             min_speed_near_obstacle = min(min_speed_near_obstacle, speed)
 
-        # Check if vehicle stopped (speed < 0.05 m/s)
-        if speed < STOPPED_SPEED_THRESHOLD and not collision_detected:
-            # Vehicle has stopped - record distance to obstacle
-            stopped_before_obstacle = True
-            stopping_distance = distance_to_obstacle
-            break  # Use first stop point
+        # Check if vehicle stopped (speed < 0.05 m/s) and has traveled past start
+        if speed < STOPPED_SPEED_THRESHOLD:
+            distance_from_start = np.linalg.norm(pos - np.array(ROUTE_START_POS))
+            if distance_from_start > MIN_DISTANCE_FROM_START:
+                stopped_before_obstacle = True
+                stopping_distance = distance_to_obstacle
+                break  # Use first meaningful stop point
 
-    # If collision occurred, stopping_distance is meaningless
-    if collision_detected:
-        stopping_distance = -1.0
-        stopped_before_obstacle = False
+    # Note: stopped_before_obstacle and collision_detected are reported
+    # independently. A car can both make low-speed contact (collision=True)
+    # and demonstrate successful stopping behavior.
 
     # Handle case where vehicle never got close to obstacle
     if min_speed_near_obstacle == float('inf'):
@@ -308,6 +321,10 @@ def compute_lateral_deviation(
     """
     Compute average and max lateral deviation from route.
 
+    Projects each trajectory point onto the nearest segment of the route
+    polyline (not just the nearest waypoint) to avoid systematic bias from
+    waypoint spacing.
+
     Args:
         trajectory: List of trajectory entries
         route_waypoints: Nx3 array of route waypoints
@@ -318,12 +335,21 @@ def compute_lateral_deviation(
     if len(trajectory) == 0:
         return 0.0, 0.0
 
+    # Precompute route segments for projection
+    segments_a = route_waypoints[:-1, :2]
+    segments_b = route_waypoints[1:, :2]
+    seg_vectors = segments_b - segments_a
+    seg_lengths_sq = np.sum(seg_vectors ** 2, axis=1)
+
     deviations = []
     for t in trajectory:
         pos = np.array(t['position'][:2])
-        # Find distance to nearest route waypoint
-        distances = np.linalg.norm(route_waypoints[:, :2] - pos, axis=1)
-        deviations.append(np.min(distances))
+        ap = pos - segments_a
+        t_param = np.sum(ap * seg_vectors, axis=1) / np.maximum(seg_lengths_sq, 1e-12)
+        t_param = np.clip(t_param, 0.0, 1.0)
+        closest_points = segments_a + t_param[:, np.newaxis] * seg_vectors
+        distances = np.linalg.norm(closest_points - pos, axis=1)
+        deviations.append(float(np.min(distances)))
 
     return float(np.mean(deviations)), float(np.max(deviations))
 
@@ -369,9 +395,8 @@ def determine_pass_status(result: 'TestResult', is_obstacle_scenario: bool) -> b
         - No timeout
 
     Obstacle scenarios:
-        - No collision with obstacle
-        - Stopped before obstacle with stopping_distance > 0.3m
-        - OR route coverage >= 80% (successfully navigated around)
+        - Any collision with the obstacle = FAIL
+        - Must stop before obstacle with stopping_distance > 0.3m
     """
     if not is_obstacle_scenario:
         return (
@@ -379,14 +404,12 @@ def determine_pass_status(result: 'TestResult', is_obstacle_scenario: bool) -> b
             not result.timeout
         )
     else:
-        no_collision = not result.safety.collision_detected
-        stopped_safely = (
+        if result.safety.collision_detected:
+            return False  # Any obstacle contact = FAIL
+        return (
             result.safety.stopped_before_obstacle and
             result.safety.stopping_distance > 0.3
         )
-        completed_route = result.route_coverage_percent >= 80.0
-
-        return no_collision and (stopped_safely or completed_route)
 
 
 # =============================================================================
@@ -597,7 +620,7 @@ class SimlingoTestRunner:
         return SceneDefinition(scene_data, scene_path="", actors=[actor_def])
 
     def _cleanup_controller(self, controller):
-        """Cleanup controller resources."""
+        """Cleanup controller resources including GPU memory."""
         try:
             # Stop vehicle
             if hasattr(controller, 'qcar_interface') and controller.qcar_interface.connected:
@@ -613,6 +636,25 @@ class SimlingoTestRunner:
 
         except Exception as e:
             print(f"WARNING: Cleanup error: {e}")
+
+        # Free GPU memory - this MUST happen to avoid CUDA OOM across runs
+        try:
+            import torch
+            if hasattr(controller, 'model_wrapper') and controller.model_wrapper is not None:
+                if hasattr(controller.model_wrapper, 'model') and controller.model_wrapper.model is not None:
+                    del controller.model_wrapper.model
+                    controller.model_wrapper.model = None
+                del controller.model_wrapper
+                controller.model_wrapper = None
+            if hasattr(controller, 'camera_processor') and controller.camera_processor is not None:
+                del controller.camera_processor
+                controller.camera_processor = None
+            torch.cuda.empty_cache()
+            import gc
+            gc.collect()
+            print("GPU memory released successfully")
+        except Exception as e:
+            print(f"WARNING: GPU cleanup error: {e}")
 
     def _compute_result(
         self,

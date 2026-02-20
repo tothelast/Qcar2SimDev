@@ -1,0 +1,11 @@
+scenario,run,pass,collision,stopped,stopping_distance_m,route_coverage_pct,avg_lateral_dev_m,total_steps,total_time_s
+obstacle_var1,1,True,False,True,23.937,23.5,0.289,225,70.07
+obstacle_var1,2,True,False,True,23.937,23.5,0.269,236,72.85
+obstacle_var2,1,False,True,False,-1.000,41.2,0.274,363,112.20
+obstacle_var2,2,False,True,False,-1.000,41.2,0.269,380,118.08
+obstacle_var3,1,False,True,False,-1.000,51.8,0.290,196,60.60
+obstacle_var3,2,False,True,False,-1.000,52.9,0.296,189,58.35
+obstacle_var4,1,False,True,False,-1.000,74.1,0.282,217,66.76
+obstacle_var4,2,False,True,False,-1.000,72.9,0.277,247,76.20
+obstacle_var5,1,False,True,False,-1.000,100.0,0.414,217,66.95
+obstacle_var5,2,False,True,False,-1.000,92.9,0.494,258,80.04

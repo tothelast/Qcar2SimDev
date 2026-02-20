@@ -12,10 +12,72 @@ Driving is a particularly natural application for VLA systems because navigation
 Imitation learning (IL) for driving learns a policy from expert demonstrations. In simulation, the expert can be a scripted controller, a human teleoperator, or a privileged planner. A core IL consideration is \emph{train--inference mismatch}: if the policy observes a slightly different state distribution at inference than during data collection, errors can compound over time. This mismatch is amplified when transferring across simulators because sensor models, coordinate conventions, and dynamics differ.
 
 \section{SimLingo}
-SimLingo is positioned as an imitation-learning approach for driving with language generation \citep{simlingo2023}. It combines visual inputs with a language prompt and predicts driving-relevant outputs including waypoints; optional language outputs can provide commentary or explanations. The conceptual contribution of SimLingo for this thesis is the \emph{conditioning interface}: a prompt that encodes current speed and navigational conditioning (target waypoint tokens and/or high-level commands).
+\label{sec:simlingo}
+SimLingo is a vision-language-action (VLA) model for closed-loop autonomous driving that unifies waypoint prediction with natural-language generation \citep{simlingo2023}. It was the winning entry of the CARLA Autonomous Driving Challenge~2024 and achieves state-of-the-art performance on the Bench2Drive benchmark. The following subsections describe its architecture in detail; the adaptation of this architecture to QLabs is the subject of \Cref{ch:methodology,ch:training,ch:inference}.
 
-\section{Backbone model: InternVL2-1B}
-This repository uses \texttt{OpenGVLab/InternVL2-1B} as the multimodal backbone \citep{internvl2}. In practice, this choice affects (i) the image tokenization scheme (patching and downsampling), (ii) the expected conversation/template formatting, and (iii) the compute/memory requirements for fine-tuning. The implementation therefore must carefully reproduce prompt formatting and placeholder replacement to match the pretrained model's conventions (discussed in \Cref{ch:inference}).
+\subsection{Backbone model: InternVL2-1B}
+\label{sec:internvl2}
+SimLingo is built on top of \texttt{OpenGVLab/InternVL2-1B} \citep{internvl2}, a multimodal vision--language model comprising two main components:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Vision encoder}: InternViT-300M-448px, a 300\,M-parameter vision transformer pretrained at $448\times448$ resolution.
+  \item \textbf{Language model}: Qwen2-0.5B-Instruct, a 500\,M-parameter causal language model.
+\end{itemize}
+A learned projection layer maps the vision encoder's output features into the language model's embedding space, enabling the LLM to process both visual and textual tokens in a single forward pass. In practice, the choice of InternVL2-1B affects (i)~the image tokenization scheme, (ii)~the conversation template formatting, and (iii)~the compute and memory requirements for fine-tuning.
+
+\subsection{Vision encoder and image tokenization}
+\label{sec:vision-encoder}
+To handle input images at higher resolution than the pretrained $448\times448$ patch size, InternVL2 uses \emph{dynamic tiling}: each input image is split into $N_I$ non-overlapping $448\times448$ tiles that are encoded independently by InternViT. A pixel-unshuffle downsampling step ($\rho$, factor of~4) then reduces the token count, representing each tile by 256~visual tokens. With $N_I{=}2$ tiles (the configuration used in this work), the vision encoder produces $512$~visual tokens total:
+\begin{equation}
+  \mathbf{e}_I \in \mathbb{R}^{(N_I \cdot 256)\times D},
+\end{equation}
+where $D$ is the embedding dimension of the language model. This tiling strategy reuses the pretrained encoder without retraining at a different resolution.
+
+\subsection{Navigational conditioning}
+\label{sec:nav-conditioning}
+SimLingo supports two navigation modes that provide the model with route intent:
+\begin{enumerate}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Target-point mode.} Two GPS-like waypoint coordinates are fed through a learned MLP (the \texttt{WaypointInputAdaptor}: $\text{Linear}(2{\to}256) \to \text{ReLU} \to \text{Linear}(256{\to}512) \to \text{ReLU} \to \text{Linear}(512{\to}D)$), producing two navigational embeddings $\mathbf{e}_{\text{nav}} \in \mathbb{R}^{2\times D}$ that replace \texttt{<TARGET\_POINT>} placeholder tokens in the prompt.
+  \item \textbf{Command mode.} A high-level command string (e.g., ``turn left at the next intersection'') is tokenized by the standard LLM tokenizer, producing variable-length navigational embeddings $\mathbf{e}_{\text{nav}} \in \mathbb{R}^{N_{\text{HLC}}\times D}$.
+\end{enumerate}
+During training, the original SimLingo randomly switches between modes to learn from both geometric and language-based conditioning. This work uses target-point mode exclusively; the rationale is discussed in \Cref{ch:training}.
+
+\subsection{Prompt construction and token interleaving}
+\label{sec:prompt-construction}
+All inputs are assembled into a single global prompt:
+\begin{quote}
+\texttt{<IMG\_CONTEXT>$\backslash$n Current speed: <v>m/s. Command: <TARGET\_POINT><TARGET\_POINT>. <task prompt>.}
+\end{quote}
+A \emph{token interleaver} (IL) replaces placeholder tokens in this prompt with actual embeddings: visual tokens at \texttt{<IMG\_CONTEXT>}, waypoint embeddings at \texttt{<TARGET\_POINT>}, and learnable action query tokens at the end. The resulting unified sequence
+\begin{equation}
+  \mathbf{e}_{\text{LLM}} = \text{IL}(\mathbf{e}_L,\; \mathbf{e}_I,\; \mathbf{e}_{\text{nav}})
+\end{equation}
+is passed to the language model alongside the action query tokens $\mathbf{q}_p$ and $\mathbf{q}_w$:
+\begin{equation}
+  [\mathbf{o}_l,\; \mathbf{o}_p,\; \mathbf{o}_w] = \text{LLM}([\mathbf{e}_{\text{LLM}},\; \mathbf{q}_w,\; \mathbf{q}_p]).
+\end{equation}
+SimLingo defines four task prompts: (i)~driving-only (``Predict the waypoints''), (ii)~commentary (``What should the ego do next?''), (iii)~visual question answering, and (iv)~action dreaming (counterfactual instructions). This work uses only the driving-only prompt.
+
+\subsection{Dual-head action prediction}
+\label{sec:dual-head}
+SimLingo uses a \emph{disentangled} action representation with two complementary waypoint outputs, each predicted non-autoregressively from the LLM's hidden states via learnable query tokens:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Speed waypoints} (temporal): future ego-frame coordinates sampled at $0.25\,\text{s}$ intervals. These capture the vehicle's intended speed profile and are used for longitudinal (throttle/brake) PID control.
+  \item \textbf{Path waypoints} (geometric): future ego-frame coordinates sampled at ${\sim}1\,\text{m}$ intervals along the predicted route. These provide denser geometric supervision and drive the lateral (steering) PID controller.
+\end{itemize}
+Both heads use an MLP on top of the LLM output features: $\text{Linear}(H{\to}512) \to \text{SiLU} \to \text{Linear}(512{\to}256) \to \text{SiLU} \to \text{Linear}(256{\to}2)$, where $H$ is the LLM hidden size. The MLP outputs waypoint \emph{deltas} that are converted to absolute positions via cumulative summation. The separation into temporal and geometric heads prevents the single-head trade-off between speed accuracy and steering precision observed in prior work.
+
+\subsection{Language generation head}
+In addition to action prediction, SimLingo can autoregressively generate natural-language text from the LLM hidden states using standard next-token prediction. This enables commentary generation and visual question answering. The language head is trained with a cross-entropy loss on valid text tokens. In this work, the language head is retained during fine-tuning but is not evaluated, as no natural-language annotations were collected for QLabs (see \Cref{ch:training}).
+
+\subsection{Training losses}
+\label{sec:training-losses}
+SimLingo optimizes a multi-task loss combining:
+\begin{itemize}[leftmargin=*,itemsep=0.25em]
+  \item \textbf{Waypoint loss}: Smooth-$\ell_1$ loss between predicted and ground-truth waypoints, applied independently to both the speed and path heads.
+  \item \textbf{Route loss}: Smooth-$\ell_1$ loss on the predicted route (20~waypoints ahead).
+  \item \textbf{Language loss}: Cross-entropy loss on next-token predictions, masked to valid training tokens only.
+\end{itemize}
+All losses are summed with equal weight. The use of Smooth-$\ell_1$ (rather than $\ell_2$) was adopted to improve training stability when combined with the action-dreaming augmentation data.
 
 \section{Efficient fine-tuning with LoRA}
 Low-Rank Adaptation (LoRA) injects trainable low-rank matrices into selected linear layers of a frozen backbone, enabling efficient fine-tuning with substantially fewer trainable parameters \citep{hu2021lora}. LoRA is particularly useful for multimodal models because the frozen vision encoder can be retained while only adapting the language-side (and any projectors) to the new domain.

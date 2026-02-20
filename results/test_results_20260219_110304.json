@@ -1,0 +1,235 @@
+{
+  "checkpoint": "simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/checkpoints/epoch_14.pt",
+  "timestamp": "20260219_110304",
+  "total_runs": 10,
+  "pass_rate": 0.2,
+  "results": [
+    {
+      "scenario_name": "obstacle_var1",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": false,
+        "stopped_before_obstacle": true,
+        "stopping_distance": 23.936972184210255,
+        "min_speed_near_obstacle": -1.0
+      },
+      "route_complete": false,
+      "route_coverage_percent": 23.52941176470588,
+      "distance_traveled": 19.60528656752106,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.2894471461559073,
+      "max_lateral_deviation": 0.602187291665767,
+      "total_steps": 225,
+      "total_time": 70.07152342796326,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": true,
+      "trajectory_log_path": "results/runs/obstacle_var1_run_1/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var1",
+      "run_number": 2,
+      "safety": {
+        "collision_detected": false,
+        "stopped_before_obstacle": true,
+        "stopping_distance": 23.936972184210255,
+        "min_speed_near_obstacle": -1.0
+      },
+      "route_complete": false,
+      "route_coverage_percent": 23.52941176470588,
+      "distance_traveled": 19.471372940494966,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.26936478091015986,
+      "max_lateral_deviation": 0.5667977691508743,
+      "total_steps": 236,
+      "total_time": 72.85277843475342,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": true,
+      "trajectory_log_path": "results/runs/obstacle_var1_run_2/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var2",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.005643082595558143
+      },
+      "route_complete": false,
+      "route_coverage_percent": 41.17647058823529,
+      "distance_traveled": 35.63853692391617,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.27431015248946045,
+      "max_lateral_deviation": 0.6131738954956312,
+      "total_steps": 363,
+      "total_time": 112.19646620750427,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var2_run_1/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var2",
+      "run_number": 2,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.004735062075241757
+      },
+      "route_complete": false,
+      "route_coverage_percent": 41.17647058823529,
+      "distance_traveled": 35.62285253816081,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.2694396613732097,
+      "max_lateral_deviation": 0.5885642537833721,
+      "total_steps": 380,
+      "total_time": 118.08263731002808,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var2_run_2/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var3",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": -1.0
+      },
+      "route_complete": false,
+      "route_coverage_percent": 51.76470588235295,
+      "distance_traveled": 45.30096043140023,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.29044568332470966,
+      "max_lateral_deviation": 0.5914154338080129,
+      "total_steps": 196,
+      "total_time": 60.59778046607971,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var3_run_1/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var3",
+      "run_number": 2,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.01788306743903836
+      },
+      "route_complete": false,
+      "route_coverage_percent": 52.94117647058824,
+      "distance_traveled": 46.63969095086366,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.2960837896502615,
+      "max_lateral_deviation": 0.5922696819471199,
+      "total_steps": 189,
+      "total_time": 58.34540009498596,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var3_run_2/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var4",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.018688085392748084
+      },
+      "route_complete": false,
+      "route_coverage_percent": 74.11764705882354,
+      "distance_traveled": 65.58949766488757,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.28231539784278475,
+      "max_lateral_deviation": 0.6034521747824252,
+      "total_steps": 217,
+      "total_time": 66.75841474533081,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var4_run_1/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var4",
+      "run_number": 2,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.00533051440372707
+      },
+      "route_complete": false,
+      "route_coverage_percent": 72.94117647058823,
+      "distance_traveled": 64.44287883533445,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.27683664242255984,
+      "max_lateral_deviation": 0.5878582480541312,
+      "total_steps": 247,
+      "total_time": 76.1957859992981,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var4_run_2/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var5",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.5457916930822567
+      },
+      "route_complete": true,
+      "route_coverage_percent": 100.0,
+      "distance_traveled": 88.4670058397904,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.4143384236456427,
+      "max_lateral_deviation": 1.4538503102490248,
+      "total_steps": 217,
+      "total_time": 66.95271468162537,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var5_run_1/trajectory_log.json"
+    },
+    {
+      "scenario_name": "obstacle_var5",
+      "run_number": 2,
+      "safety": {
+        "collision_detected": true,
+        "stopped_before_obstacle": false,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": 0.06490954508889643
+      },
+      "route_complete": true,
+      "route_coverage_percent": 92.94117647058823,
+      "distance_traveled": 88.69407787491005,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.4942068236186552,
+      "max_lateral_deviation": 1.8593518762524686,
+      "total_steps": 258,
+      "total_time": 80.03620100021362,
+      "stuck_detected": false,
+      "timeout": false,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/obstacle_var5_run_2/trajectory_log.json"
+    }
+  ],
+  "aggregate": {
+    "total_pass": 2,
+    "total_fail": 8,
+    "baseline_pass_rate": 0,
+    "obstacle_pass_rate": 0.2,
+    "obstacle_collision_rate": 0.8
+  }
+}

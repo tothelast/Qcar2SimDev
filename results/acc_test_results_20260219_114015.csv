@@ -1,0 +1,16 @@
+scenario,run,pass,collision,stopped,stopping_distance_m,route_coverage_pct,avg_lateral_dev_m,max_lateral_dev_m,total_steps,total_time_s
+baseline,1,True,False,True,-1.000,97.6,0.423,0.840,424,42.34
+baseline,2,True,False,True,-1.000,97.6,0.423,0.840,424,42.34
+baseline,3,True,False,True,-1.000,97.6,0.423,0.840,424,42.35
+baseline,4,True,False,True,-1.000,97.6,0.423,0.840,424,42.34
+baseline,5,True,False,True,-1.000,97.6,0.425,0.840,424,42.36
+obstacle_var1,1,True,False,True,7.425,23.5,0.383,0.691,114,11.37
+obstacle_var1,2,True,False,True,7.425,23.5,0.383,0.691,114,11.37
+obstacle_var2,1,True,False,True,5.409,38.8,0.511,0.840,179,17.87
+obstacle_var2,2,True,False,True,5.409,38.8,0.511,0.840,179,17.87
+obstacle_var3,1,True,False,True,8.257,49.4,0.492,0.840,228,22.77
+obstacle_var3,2,True,False,True,8.257,49.4,0.492,0.840,228,22.77
+obstacle_var4,1,True,False,True,8.131,68.2,0.413,0.840,312,31.17
+obstacle_var4,2,True,False,True,8.131,68.2,0.413,0.840,312,31.17
+obstacle_var5,1,True,False,True,7.344,80.0,0.413,0.840,363,36.27
+obstacle_var5,2,True,False,True,7.345,80.0,0.413,0.840,363,36.27

@@ -1,0 +1,15 @@
+Var 1 (Early) & SimLingo & 23.5 & 0/2 & 2/2 & 6.8 & 0.053 \\
+Var 1 (Early) & ACC & 23.5 & 0/2 & 2/2 & 7.4 & 0.256 \\
+\midrule
+Var 2 (Mid) & SimLingo & 41.2 & 2/2 & 2/2 & 3.2 & 0.033 \\
+Var 2 (Mid) & ACC & 38.8 & 0/2 & 2/2 & 5.4 & 0.383 \\
+\midrule
+Var 3 (Exit) & SimLingo & 52.4 & 0/2 & 2/2 & 5.7 & 0.046 \\
+Var 3 (Exit) & ACC & 49.4 & 0/2 & 2/2 & 8.3 & 0.350 \\
+\midrule
+Var 4 (Straight) & SimLingo & 73.5 & 2/2 & 2/2 & 3.6 & 0.072 \\
+Var 4 (Straight) & ACC & 68.2 & 0/2 & 2/2 & 8.1 & 0.262 \\
+\midrule
+Var 5 (Late) & SimLingo & 96.5 & 2/2 & 0/2 & N/A & 0.284 \\
+Var 5 (Late) & ACC & 80.0 & 0/2 & 2/2 & 7.3 & 0.254 \\
+\bottomrule

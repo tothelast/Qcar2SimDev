@@ -19,8 +19,8 @@ A practical constraint in this work is that expert demonstration collection and 
 \subsection{No language/commentary supervision during fine-tuning}
 Although SimLingo is a vision--language--action (VLA) model family, the QLabs fine-tuning dataset in this project does not include natural-language instruction strings or human ``commentary.'' Demonstrations are logged as images plus structured measurements (\path{data_collection/data_recorder.py}). Consequently, fine-tuning primarily adapts the visual and control grounding for the QLabs domain but does not explicitly adapt language-following behavior in a supervised manner.
 
-\subsection{Incomplete quantitative results}
-The Results chapter is intentionally left as structured placeholders pending the completion of full experimental sweeps and aggregation. Open items required to finalize quantitative reporting are tracked in Appendix \Cref{app:open-questions}.
+\subsection{In-distribution evaluation only}
+The quantitative results reported in \Cref{ch:results} use obstacle placements and route geometry that overlap with the training data distribution. While this demonstrates that the fine-tuned model functions correctly on the adapted domain, it does not constitute a held-out generalization test. A stricter evaluation protocol would test on unseen obstacle positions, route topologies, or visual conditions not represented during fine-tuning.
 
 \section{Future work}
 \label{sec:future-work}

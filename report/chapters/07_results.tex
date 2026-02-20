@@ -1,0 +1,137 @@
+\chapter{Results}
+\label{ch:results}
+
+This chapter presents the experimental evaluation of the fine-tuned SimLingo model on the QLabs roundabout scenario and compares it against a LiDAR-based adaptive cruise control (ACC) baseline. Both controllers are evaluated on the same test matrix using identical metrics (described in \Cref{ch:evaluation}).
+
+\section{Training convergence}
+\label{sec:training-convergence}
+
+\Cref{fig:training-losses} shows the training and validation loss curves over 15~epochs of QLabs fine-tuning. The total loss, route loss, and speed-waypoint loss all decrease rapidly in the first 3--5~epochs before flattening, indicating that the model learns the QLabs driving distribution relatively quickly. The language loss remains near zero throughout training because no natural-language supervision is provided (see \Cref{sec:final-dataset-scope}). The learning rate follows a one-cycle schedule with 5\% warmup, decaying smoothly after the initial ramp.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{metrics.png}
+  \caption{Training loss curves over 15~epochs. Top row (left to right): total loss, route loss, speed waypoints loss. Bottom row: language loss, learning rate schedule, epoch progress. Blue: training (smoothed); orange: validation (smoothed); faint traces: raw values.}
+  \label{fig:training-losses}
+\end{figure}
+
+\Cref{fig:ade-curve} shows the Average Displacement Error (ADE) between the model's predicted waypoints and the expert's ground-truth trajectories across all 15~epoch checkpoints, evaluated on the validation split. ADE drops from $0.447$ at epoch~0 to $0.120$ at epoch~14---a 73\% reduction. The steepest improvement occurs in the first 5~epochs; diminishing returns are visible after epoch~10, where ADE stabilizes around $0.12$. This final value means the model's predicted trajectories average approximately 12~cm from the expert's actual path, which is well within the QCar~2's lateral footprint.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{policy_vs_expert_curve.png}
+  \caption{Average Displacement Error (ADE) across training epochs. The learned policy (blue) converges from 0.447 to 0.120 over 15~epochs. The expert baseline (green dashed) represents perfect imitation (ADE${=}0$).}
+  \label{fig:ade-curve}
+\end{figure}
+
+\section{Baseline route following (no obstacles)}
+\label{sec:baseline-results}
+
+\Cref{tab:baseline-comparison} summarizes the performance of both controllers on the clean roundabout route (no obstacles), averaged over 5~runs each. Both controllers achieve high route coverage, confirming that each can reliably navigate the full roundabout under nominal conditions. SimLingo achieves lower average lateral deviation (0.056~m) than the ACC baseline (0.261~m), reflecting the fact that the learned policy was trained to replicate expert trajectories recorded along this exact route. The ACC baseline uses a generic pure-pursuit algorithm with a 4.5~m lookahead, which produces smoother but less route-adherent trajectories due to corner-cutting on curved segments. SimLingo takes longer per run (68~s vs 43~s) because it operates at 4~Hz inference with a lower average speed, whereas the ACC baseline cruises at a fixed 2.0~m/s.
+
+\begin{table}[htbp]
+\centering
+\caption{Baseline route following (no obstacles), 5~runs per controller.}
+\label{tab:baseline-comparison}
+\begin{tabular}{lcccc}
+\toprule
+Controller & Coverage (\%) & Avg Lat.\ Dev.\ (m) & Max Lat.\ Dev.\ (m) & Avg Time (s)\\
+\midrule
+SimLingo & \input{figures/val_sim_baseline_coverage} & \input{figures/val_sim_baseline_avgdev} & \input{figures/val_sim_baseline_maxdev} & \input{figures/val_sim_baseline_time} \\
+ACC Baseline & \input{figures/val_acc_baseline_coverage} & \input{figures/val_acc_baseline_avgdev} & \input{figures/val_acc_baseline_maxdev} & \input{figures/val_acc_baseline_time} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Obstacle avoidance results}
+\label{sec:obstacle-results}
+
+\Cref{tab:obstacle-results} reports the per-scenario and per-controller metrics for the five obstacle placement variants, with 2~runs each. The test matrix evaluates whether each controller can (a)~detect the static obstacle, (b)~stop safely before reaching it, and (c)~avoid collision. Note that the ``Collision'' and ``Stopped'' columns are reported independently: a run may show both collision and stopped, which indicates that the vehicle decelerated to near-zero speed but made low-speed bumper contact with the obstacle before fully stopping. These runs are classified as failures (any obstacle contact constitutes a collision), but the stopping behavior is reported separately to show that the model did attempt to stop.
+
+\begin{table}[htbp]
+\centering
+\caption{Obstacle scenario results. Each variant is tested with 2~runs per controller.}
+\label{tab:obstacle-results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccc}
+\toprule
+Scenario & Controller & Coverage (\%) & Collision & Stopped & Stop Dist.\ (m) & Avg Lat.\ Dev.\ (m) \\
+\midrule
+\input{figures/obstacle_results_table_rows}
+\end{tabular}%
+}
+\end{table}
+
+\Cref{fig:pass-fail-summary} provides a visual summary of the pass/fail outcomes across all scenarios and controllers. SimLingo achieves an overall pass rate of 60\% (9/15 runs), which includes 5/5 baseline runs and 4/10 obstacle runs. Note that the overall 60\% pass rate and the 60\% collision rate shown in \Cref{fig:safety-comparison} are computed over different denominators: the pass rate includes all 15~runs (baseline + obstacle), whereas the collision rate is computed over the 10 obstacle runs only (6/10 collisions).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{pass_fail_summary.png}
+  \caption{Pass/fail summary across all 15~runs (5~baseline + 10~obstacle) for SimLingo and ACC baseline. The total pass rate includes baseline runs; see \Cref{fig:safety-comparison} for obstacle-only safety metrics.}
+  \label{fig:pass-fail-summary}
+\end{figure}
+
+\section{Comparative analysis}
+\label{sec:comparative-analysis}
+
+\Cref{fig:route-coverage} compares route coverage across all scenarios. On the clean baseline, both controllers achieve near-complete coverage. On obstacle scenarios, coverage diverges: the SimLingo model stops upon perceiving the obstacle through its camera input, typically covering the portion of the route before the obstacle, while the ACC baseline detects obstacles through LiDAR at a fixed detection range.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{route_coverage_comparison.png}
+  \caption{Route coverage comparison across scenarios. Error bars show standard deviation across runs.}
+  \label{fig:route-coverage}
+\end{figure}
+
+\Cref{fig:safety-comparison} compares safety metrics across the 10 obstacle runs only (2~runs $\times$ 5~variants per controller), excluding the baseline. SimLingo shows a 60\% collision rate (6/10 obstacle runs), corresponding to the 40\% obstacle pass rate visible in the per-scenario breakdown of \Cref{fig:pass-fail-summary}. The stop success rate and average stopping distance further characterize how each controller responds to static obstacles.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{safety_comparison.png}
+  \caption{Safety metrics comparison for the 10 obstacle runs only (excludes baseline): collision rate (lower is better), stop success rate (higher is better), and average stopping distance.}
+  \label{fig:safety-comparison}
+\end{figure}
+
+\Cref{fig:lateral-deviation} compares average lateral deviation from the route centerline across scenarios. SimLingo achieves lower average deviation (0.03--0.09~m) than the ACC baseline (0.25--0.38~m) on most scenarios. This difference is explained by the trajectory overlays in \Cref{fig:trajectory-overlays}: on the roundabout curve, the ACC baseline (orange dashed) consistently tracks \emph{inside} the route centerline (black dashed) due to pure-pursuit corner-cutting with a 4.5~m lookahead, whereas SimLingo (blue solid) follows the route more closely because it was trained on expert demonstrations recorded along this exact path. On the straight sections of the route, both controllers track the centerline with similar precision (${\sim}0.06$~m). The overall difference in the bar chart is dominated by the curved portion of the route, where the ACC deviates 0.4--0.7~m from the centerline. The exception is Variant~5, where SimLingo's deviation increases to 0.28~m as the vehicle swerves through the obstacle zone.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{lateral_deviation_comparison.png}
+  \caption{Average lateral deviation from route centerline by scenario. The ACC baseline's higher deviation is primarily caused by pure-pursuit corner-cutting on the roundabout curve, as visible in \Cref{fig:trajectory-overlays}.}
+  \label{fig:lateral-deviation}
+\end{figure}
+
+\Cref{fig:trajectory-overlays} shows bird's-eye trajectory overlays for each obstacle variant. On the roundabout curve (top-right arc of each subplot), the ACC trajectories (orange dashed) are visibly offset inward from the route centerline (black dashed), confirming the lateral deviation pattern in \Cref{fig:lateral-deviation}. SimLingo trajectories (blue solid) follow the route centerline more closely on curves but exhibit higher-frequency oscillations compared to the smooth ACC paths. The stopping positions relative to the obstacle markers (red squares) are also visible: SimLingo stops before the obstacle in Variants~1--4, while in Variant~5 the blue trajectory extends through the obstacle location.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{trajectory_overlays.png}
+  \caption{Trajectory overlays for each obstacle variant. Route centerline (black dashed), SimLingo trajectories (blue solid), ACC trajectories (orange dashed), and obstacle positions (red squares).}
+  \label{fig:trajectory-overlays}
+\end{figure}
+
+\section{Discussion}
+\label{sec:results-discussion}
+
+The results demonstrate that the fine-tuned SimLingo model can navigate the roundabout route and respond to static obstacles using only camera input, without access to LiDAR. The model achieves a 40\% obstacle pass rate (4/10 runs), with contact-free stops on Variants~1 and~3, low-speed contact on Variants~2 and~4, and a complete failure on Variant~5. Several factors explain the observed performance.
+
+\paragraph{Low speed at encounter enables clean stops.}
+The SimLingo model stops cleanly (no bumper contact) for Variant~1 (early roundabout) and Variant~3 (roundabout exit), where the vehicle has not yet reached high speed at the time of obstacle encounter. In Variant~1, the car is still accelerating through the initial straight segment and traveling below 1.5~m/s when it perceives the obstacle, leaving sufficient distance to decelerate and stop at approximately 6.8~m from the obstacle center. In Variant~3, the car has just exited the roundabout curve and begun accelerating on the exit straight; it stops cleanly at 5--6~m.
+
+\paragraph{Higher speed produces low-speed contact.}
+For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 3~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. The higher approach speed and the model's gradual deceleration profile are insufficient for a fully contact-free stop. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle.
+
+\paragraph{Corner obstacles reduce visual lead time.}
+Variant~5 places the obstacle on a curved section late in the route. Because the forward-facing camera has limited visibility around curves, the obstacle enters the field of view later than on straight segments. Combined with the high approach speed (3.4~m/s), the model cannot decelerate in time and drives through the obstacle. This is the only scenario where the model fails to demonstrate any meaningful stopping behavior, suggesting that obstacle visibility on curved segments at high speed is a key limitation of the single-camera setup.
+
+\paragraph{ACC baseline: deterministic detection.}
+The ACC baseline achieves 100\% pass rate across all obstacle variants because LiDAR provides range-independent obstacle detection within an 8~m forward cone, regardless of vehicle speed or road curvature. The detection is purely geometric: once 3 or more LiDAR returns fall within the lane boundaries ahead, the controller immediately sets the target velocity to zero. Because QLabs implements instantaneous velocity control (no inertia model for the commanded velocity), the car stops within one control step. Stopping distances are consistent at 5--8~m across all variants.
+
+\paragraph{Route tracking precision.}
+SimLingo achieves lower average lateral deviation (0.03--0.09~m) than the ACC baseline (0.25--0.38~m) across most scenarios (\Cref{fig:lateral-deviation}). A per-section analysis reveals that this difference originates almost entirely from the roundabout curve: on straight segments, both controllers track the centerline with similar precision (${\sim}0.06$~m), but on the curve the ACC baseline deviates 0.4--0.7~m inward due to pure-pursuit corner-cutting with a 4.5~m lookahead. This systematic offset is visible in the trajectory overlays (\Cref{fig:trajectory-overlays}), where the ACC paths (orange) consistently run inside the route centerline (black dashed) on the arc. SimLingo follows the curve more closely because it was trained on expert demonstrations that traced this exact route geometry. However, the ACC baseline produces noticeably smoother trajectories, whereas SimLingo exhibits higher-frequency lateral oscillations that, while keeping the average deviation low, are visually more apparent during execution.
+
+\paragraph{Collision classification.}
+Collisions in this evaluation are classified based on proximity to the obstacle: only collisions occurring within 10~m of the obstacle location are counted as obstacle collisions. Both controllers occasionally clip the inner curb of the roundabout, but these incidental contacts are excluded from the obstacle avoidance metrics. Any obstacle contact constitutes a failure, regardless of whether the vehicle subsequently stopped. Variants~2 and~4 are classified as failures because the vehicle's front bumper made contact with the obstacle, even though the model demonstrated clear deceleration behavior and came to a stop at 2.7--4.6~m from the obstacle center.
+
+\paragraph{Limitations.}
+All evaluation is conducted on a single route topology (roundabout) with in-distribution obstacle placements at five fixed locations. The QLabs velocity control model does not simulate realistic braking dynamics, which means the ACC baseline's instantaneous stopping is not representative of real-world behavior. Generalization to unseen routes, obstacle types, dynamic obstacles, or multi-actor scenarios remains untested (see \Cref{ch:limitations}).

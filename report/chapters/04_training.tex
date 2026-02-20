@@ -35,6 +35,11 @@ The dataset split is implemented by the recorder rather than the scheduling scri
 
 Finally, the collected supervision is strictly behavioral: images and structured measurements are recorded, but no natural-language ``commentary'' or instruction strings are captured for fine-tuning. This aligns with the current measurement writer, which provides the navigation conditioning primarily through target points and assigns a constant high-level command label rather than relying on language annotation (\path{data_collection/data_recorder.py}).
 
+\paragraph{Target-point mode only.}
+As described in \Cref{sec:nav-conditioning}, the original SimLingo architecture supports two navigation modes: target-point conditioning (geometric waypoints) and command conditioning (natural-language high-level commands such as ``turn left at the next intersection''). During training, the original SimLingo randomly switches between the two modes so the model learns from both. Command mode requires per-sample language annotations that map route geometry to semantically meaningful strings---a capability provided by CARLA's route planner, which supplies discrete high-level commands (HLCs) at each waypoint.
+
+QLabs does not include a route planner with semantic HLC labels, and collecting manual language annotations for each demonstration was out of scope for this work. Consequently, the data recorder assigns a constant \texttt{command=4} (``follow the road'') to every sample, and the fine-tuned model is trained and evaluated exclusively in target-point mode. The inference stack (\Cref{ch:inference}) reflects this choice: although the code supports both modes, only target-point conditioning is active during deployment.
+
 \section{SimLingo-compatible dataset writer}
 \label{sec:data-recorder}
 The \texttt{DataRecorder} class in \path{data_collection/data_recorder.py} creates the run directory, writes RGB images and measurement JSONs, and produces a \texttt{results.json.gz} file so that existing dataloaders can treat the QLabs run like a CARLA route.

@@ -25,16 +25,10 @@ In this repository the nominal control rate is set by \texttt{config.dt}. With t
 Reducing inference frequency can improve real-time performance on limited hardware, but it introduces a new design requirement: cached waypoints must remain stable enough across multiple control ticks to avoid oscillation.
 
 \section{Navigation conditioning and prompt construction}
-\label{sec:prompt-construction}
-SimLingo-style conditioning encodes both the current speed and navigational intent. This repository supports two primary modes:
-\begin{enumerate}[leftmargin=*,itemsep=0.25em]
-  \item \textbf{Target-point mode:} navigational intent is provided via two special \texttt{<TARGET\_POINT>} placeholder tokens that are replaced by a 2D target-point array.
-  \textcolor{red}{\item \textbf{Command mode:} intent is provided as a natural-language high-level command (HLC) string (e.g., ``go left at the next intersection''), optionally with a distance.}
-\end{enumerate}
+\label{sec:prompt-construction-inference}
+SimLingo-style conditioning encodes both the current speed and navigational intent into the prompt (see \Cref{sec:prompt-construction} for the general template). Although the SimLingo architecture supports both target-point and command conditioning modes, \textbf{this work uses target-point mode exclusively} because no language-annotated route data was collected for QLabs (see \Cref{sec:final-dataset-scope} for the rationale). The inference code in \path{inference/simlingo_model.py} retains support for both modes, but command mode was neither fine-tuned nor evaluated.
 
-Prompt construction is implemented in \path{inference/simlingo_model.py}. The builder produces a conversation-style user message containing an \texttt{<image>} sentinel and a text instruction that encodes the current speed and navigational intent.
-
-In \emph{target-point mode}, intent is represented by two placeholder tokens (primary and ``next'') that are replaced by continuous 2D target-point values in the ego frame. In \emph{command mode}, intent is represented by a natural-language high-level command string (and optionally a distance). These two modes preserve compatibility with SimLingo-style datasets and allow controlled ablations between purely geometric conditioning and language-like HLC conditioning.
+In target-point mode, navigational intent is provided via two special \texttt{<TARGET\_POINT>} placeholder tokens that are replaced by continuous 2D target-point values in the ego frame. The prompt builder produces a conversation-style user message containing an \texttt{<image>} sentinel and a text instruction that encodes the current speed and the two target-point coordinates, following the template described in \Cref{sec:prompt-construction}.
 
 \section{Placeholder handling and template formatting}
 \label{sec:placeholder-handling}
