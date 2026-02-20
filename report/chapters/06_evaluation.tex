@@ -59,7 +59,14 @@ The criteria are implemented in \texttt{determine\_pass\_status()} in \path{resu
 \label{sec:acc-baseline}
 To contextualize learned-policy behavior, the repository includes a simple adaptive cruise control (ACC) baseline that uses LiDAR to detect obstacles ahead within a lane-aligned region and then commands speed to maintain a safe distance. The implementation converts polar LiDAR returns into a vehicle frame and applies geometric filtering.
 
-The baseline implementation in \path{results/test_acc_baseline.py} detects candidate obstacles by filtering LiDAR returns to a forward-facing region of interest: points must lie in front of the vehicle ($x>0$ in the ego frame), within a limited angular cone (to focus on the driving corridor), and within approximate lane boundaries (to suppress clutter from sidewalks or off-lane actors). The controller then uses the closest in-lane point to estimate a lead-vehicle distance and reduces commanded speed when the estimated distance falls below a safety threshold.
+The baseline implementation in \path{results/test_acc_baseline.py} detects candidate obstacles by filtering LiDAR returns to a forward-facing region of interest: points must lie in front of the vehicle ($x>0$ in the ego frame), within a limited angular cone (to focus on the driving corridor), and within approximate lane boundaries (to suppress clutter from sidewalks or off-lane actors), as illustrated in \Cref{fig:lidar-filtering}. The controller then uses the closest in-lane point to estimate a lead-vehicle distance and reduces commanded speed when the estimated distance falls below a safety threshold.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{figures/lidar_filtering_explained.png}
+  \caption{LiDAR filtering pipeline for the ACC baseline. From left to right: (1) raw LiDAR returns in the vehicle frame; (2) forward-cone filter retaining only points ahead of the vehicle within an angular threshold; (3) transformation to the world frame; (4) lane-boundary filter suppressing off-lane clutter.}
+  \label{fig:lidar-filtering}
+\end{figure}
 
 \section{Logging and artifacts}
 \label{sec:logging}

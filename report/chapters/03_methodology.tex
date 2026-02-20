@@ -62,7 +62,14 @@ The inverse mapping is $\mathbf{p}_w=\mathbf{R}(\psi)\mathbf{p}_e+\mathbf{t}$. K
 
 \section{Target-point conditioning from routes}
 \label{sec:target-point-conditioning}
-QLabs scenarios specify an ego route as a sequence of world-frame waypoints (Appendix \Cref{app:scene-configs}). At runtime, the route manager implemented in \path{inference/route_manager.py} selects a lookahead target point along the polyline and converts it into the ego frame for prompt conditioning.
+QLabs scenarios specify an ego route as a sequence of world-frame waypoints (Appendix \Cref{app:scene-configs}). \Cref{fig:sdcs-roadmap} shows the QLabs SDCS environment layout with its numbered waypoint nodes. At runtime, the route manager implemented in \path{inference/route_manager.py} selects a lookahead target point along the polyline and converts it into the ego frame for prompt conditioning.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figures/SDCS_RoadMap_RightHandTraffic.png}
+  \caption{QLabs SDCS road map with numbered nodes representing waypoint locations. Routes are defined as ordered sequences of these nodes; the roundabout route used in this work traverses a subset of this layout.}
+  \label{fig:sdcs-roadmap}
+\end{figure}
 
 Concretely, starting from the current (or nearest) route index $k$, the implementation advances along the waypoint list until the accumulated arc-length exceeds a configured lookahead distance $d$:
 \begin{equation}
