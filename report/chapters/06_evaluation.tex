@@ -5,7 +5,7 @@ This chapter describes the evaluation harness used to assess driving performance
 
 \section{Scenario-based evaluation}
 \label{sec:scenario-eval}
-Evaluation is organized around QLabs scenarios specified as JSON scene files (Appendix \Cref{app:scene-configs}). The test harness instantiates the same controller used for interactive driving and runs it in a repeatable loop with a maximum step count and timeout thresholds.
+Evaluation is organized around QLabs scenarios specified as JSON scene files (Appendix \Cref{app:scene-configs}). The test runner instantiates the same controller used for interactive driving and runs it in a repeatable loop with a maximum step count and timeout thresholds.
 
 In this repository, a single script (\path{results/test_simlingo_roundabout.py}) defines a set of scenarios including baseline navigation and obstacle variants. Each scenario can be repeated multiple times to estimate pass rates under stochasticity (e.g., small timing variations).
 
@@ -19,7 +19,7 @@ This choice provides a controlled stress test of closed-loop behavior (progress,
 
 \section{Test matrix: baseline plus five obstacle variants}
 \label{sec:eval-test-matrix}
-The evaluation harness enumerates a fixed scenario suite in \path{results/test_simlingo_roundabout.py}:
+The test script enumerates a fixed scenario suite in \path{results/test_simlingo_roundabout.py}:
 \begin{itemize}[leftmargin=*,itemsep=0.25em]
   \item \textbf{Baseline (no obstacle):} 5 repeated runs.
   \item \textbf{Static obstacle variants 1--5:} 2 repeated runs for each variant.
@@ -33,25 +33,46 @@ Even within this simplified evaluation scope, it is useful to distinguish (i) th
 
 For dataset management, the collection scripts accept \texttt{--split \{train,val\}} (\path{data_collection/collect_data.py}; \path{data_collection/collect_roundabout_obstacle_variations.py}, lines~251--256 and 335--341) and the recorder maps these values to split folders \path{routes_training} and \path{routes_validation} (\path{data_collection/data_recorder.py}, \texttt{\_resolve\_split()}, lines~234--243). This split is a bookkeeping mechanism for training/validation and does not by itself enforce a holdout over obstacle positions.
 
-For obstacle positions, the collection tooling defines five candidate placement points along the route (\path{data_collection/collect_roundabout_obstacle_variations.py}, lines~33--39) and can cover them systematically using \texttt{--sequential} (lines~207--213). The evaluation harness can then instantiate any of the five corresponding obstacle test variants (\path{results/test_simlingo_roundabout.py}, lines~83--90 and 153--201), regardless of which placements appeared in the demonstrations.
+For obstacle positions, the collection tooling defines five candidate placement points along the route (\path{data_collection/collect_roundabout_obstacle_variations.py}, lines~33--39), derived from waypoint indices 25, 35, 50, 65, and~75 of the route polyline. The test script uses the same five positions as hardcoded 3D coordinates (\path{results/test_simlingo_roundabout.py}, lines~84--89). In other words, the five test obstacle placements are \emph{identical} to the five training obstacle placements---there is no held-out position.
 
-In this project, demonstrations were collected only for the roundabout route with a single static obstacle at controlled placements (\Cref{sec:final-dataset-scope}). Consequently, the primary evaluation reported by this thesis is an \emph{in-distribution reliability test} on the same family of placements; a stricter \emph{generalization} protocol would explicitly hold out one or more placement positions during collection and evaluate those withheld positions with the same harness.
+Consequently, the primary evaluation reported by this thesis is strictly an \emph{in-distribution reliability test}: it measures whether the model can reliably handle obstacle positions it has already seen during training, not whether it generalizes to novel placements. For an adaptation project whose goal is to validate the end-to-end transfer pipeline (data collection, fine-tuning, and inference), in-distribution reliability is the appropriate primary test---if the model fails on positions it was trained on, the pipeline itself has a defect. However, generalization to unseen obstacle positions would provide stronger evidence that the model has learned a transferable concept (``obstacle ahead $\rightarrow$ stop'') rather than memorized responses to specific visual frames. A stricter protocol would hold out one or more of the five positions during data collection and evaluate only on those withheld positions using the same test infrastructure, but this was not pursued in this project due to the limited total number of demonstrations collected (\Cref{sec:final-dataset-scope}).
 
 \section{Metrics}
 \label{sec:metrics}
-The evaluation harness computes metrics from the logged trajectory produced by the runtime controller (\Cref{ch:inference}). The core metrics are:
-\begin{itemize}[leftmargin=*,itemsep=0.25em]
-  \item \textbf{Route coverage:} percentage of the route traversed.
-  \item \textbf{Lateral deviation:} average and maximum deviation from the reference route.
-  \item \textbf{Safety metrics:} collision detection and (for obstacle scenarios) whether the vehicle stopped before the obstacle and at what distance.
-  \item \textbf{Timeout/stuck detection:} termination conditions indicating failure to make progress.
-\end{itemize}
+The evaluation pipeline computes metrics from the logged trajectory produced by the runtime controller (\Cref{ch:inference}). The core metrics are described below.
 
-Implementation-wise, the harness in \path{results/test_simlingo_roundabout.py} aggregates per-timestep logs into summary statistics (e.g., average/max deviation and coverage) and packages them into a structured result object (\texttt{TestResult}) suitable for downstream tabulation. Pass/fail status is then computed by applying scenario-specific criteria to these metrics (see \Cref{sec:pass-fail}).
+\paragraph{Lateral deviation (cross-track error).}
+Lateral deviation measures how far the vehicle strays from the reference route at each logged timestep. Rather than measuring the distance to the nearest \emph{waypoint} (which would be sensitive to uneven waypoint spacing), the metric is computed as the distance to the nearest \emph{segment} of the route polyline. Concretely, for a trajectory point~$\mathbf{p}$ and a route segment from~$\mathbf{a}$ to~$\mathbf{b}$, the closest point on the segment is obtained by clamped projection:
+\begin{equation}
+\label{eq:lateral-dev}
+t = \frac{(\mathbf{p}-\mathbf{a})\cdot(\mathbf{b}-\mathbf{a})}{\lVert\mathbf{b}-\mathbf{a}\rVert^2},\qquad
+t^{*}=\operatorname{clamp}(t,\,0,\,1),\qquad
+d = \lVert\mathbf{p} - \bigl(\mathbf{a}+t^{*}(\mathbf{b}-\mathbf{a})\bigr)\rVert_2.
+\end{equation}
+The lateral deviation for each trajectory point is the minimum~$d$ across all route segments (computed in 2D, using only the $x$--$y$ coordinates). The pipeline reports both the arithmetic mean over all timesteps (\emph{average lateral deviation}) and the single worst case (\emph{maximum lateral deviation}).
+
+\paragraph{Route coverage.}
+Route coverage quantifies how much of the reference route the vehicle successfully traversed. A route waypoint~$\mathbf{w}_i$ is considered \emph{reached} if any logged trajectory position comes within a threshold distance $r$ of it:
+\begin{equation}
+\label{eq:route-coverage}
+\text{reached}(\mathbf{w}_i) = \begin{cases}1 & \text{if } \min_{t}\lVert\mathbf{pos}(t)-\mathbf{w}_i\rVert_2 < r,\\0 & \text{otherwise,}\end{cases}
+\qquad
+\text{coverage} = \frac{\sum_i \text{reached}(\mathbf{w}_i)}{N_{\text{waypoints}}}\times 100\%.
+\end{equation}
+The threshold is set to $r=1.5$~m.
+
+\paragraph{Safety metrics.}
+Collision detection uses the bumper-hit flags returned by the QLabs QCar~2 API at each control step. For obstacle scenarios, the pipeline additionally records whether the vehicle came to a stop (speed below 0.05~m/s) and the distance from the stopped position to the obstacle center.
+
+\paragraph{Timeout/stuck detection.}
+Runs that exceed the maximum step count or fail to make forward progress for an extended period are terminated and marked as failures.
+
+\medskip\noindent
+Implementation-wise, the code in \path{results/test_simlingo_roundabout.py} aggregates per-timestep logs into summary statistics and packages them into a structured result object (\texttt{TestResult}) suitable for downstream tabulation. Pass/fail status is then computed by applying scenario-specific criteria to these metrics (see \Cref{sec:pass-fail}).
 
 \section{Pass/fail criteria}
 \label{sec:pass-fail}
-For quantitative reporting, the harness assigns a boolean pass/fail label to each run based on scenario type. Baseline (no obstacle) runs require high route coverage without timeouts; obstacle scenarios require no collision and either a safe stop or sufficient progress (e.g., navigating around the obstacle).
+For quantitative reporting, the evaluation logic assigns a boolean pass/fail label to each run based on scenario type. Baseline (no obstacle) runs require high route coverage without timeouts; obstacle scenarios require no collision and either a safe stop or sufficient progress (e.g., navigating around the obstacle).
 
 The criteria are implemented in \texttt{determine\_pass\_status()} in \path{results/test_simlingo_roundabout.py}. Baseline (no-obstacle) runs are marked as passing only if they achieve high route coverage without triggering timeouts or collisions. Obstacle runs additionally enforce safety requirements, e.g., no collision and either a safe stop before the obstacle (within a defined distance band) or a scenario-appropriate alternative (such as navigating around the obstacle when that is part of the test design).
 
@@ -59,7 +80,9 @@ The criteria are implemented in \texttt{determine\_pass\_status()} in \path{resu
 \label{sec:acc-baseline}
 To contextualize learned-policy behavior, the repository includes a simple adaptive cruise control (ACC) baseline that uses LiDAR to detect obstacles ahead within a lane-aligned region and then commands speed to maintain a safe distance. The implementation converts polar LiDAR returns into a vehicle frame and applies geometric filtering.
 
-The baseline implementation in \path{results/test_acc_baseline.py} detects candidate obstacles by filtering LiDAR returns to a forward-facing region of interest: points must lie in front of the vehicle ($x>0$ in the ego frame), within a limited angular cone (to focus on the driving corridor), and within approximate lane boundaries (to suppress clutter from sidewalks or off-lane actors), as illustrated in \Cref{fig:lidar-filtering}. The controller then uses the closest in-lane point to estimate a lead-vehicle distance and reduces commanded speed when the estimated distance falls below a safety threshold.
+The longitudinal (speed) component of the baseline implementation in \path{results/test_acc_baseline.py} detects candidate obstacles by filtering LiDAR returns to a forward-facing region of interest: points must lie in front of the vehicle ($x>0$ in the ego frame), within a limited angular cone (to focus on the driving corridor), and within approximate lane boundaries (to suppress clutter from sidewalks or off-lane actors), as illustrated in \Cref{fig:lidar-filtering}. The controller then uses the closest in-lane point to estimate a lead-vehicle distance and reduces commanded speed when the estimated distance falls below a safety threshold.
+
+The lateral (steering) component uses a pure-pursuit controller with a fixed lookahead distance of 4.5~m. Pure pursuit steers toward a target point on the route polyline at the configured lookahead distance ahead of the vehicle, computing the steering angle from the geometric relationship between the vehicle's heading and the target. While this produces smooth trajectories, pure pursuit has a well-known limitation: because the controller always aims at a point \emph{ahead} on the path rather than correcting the current cross-track error, it systematically cuts corners on curved segments. The severity of this effect is governed by the lookahead distance---a longer lookahead produces smoother steering but larger corner-cutting deviations, while a shorter lookahead tightens curve tracking at the cost of oscillatory behavior. Alternative geometric controllers such as the Stanley method, which explicitly minimizes both heading error and cross-track error, or model predictive control (MPC), which optimizes steering over a future horizon subject to constraints, can achieve tighter curve tracking. For this project the pure-pursuit baseline is retained intentionally: its known corner-cutting behavior provides a useful contrast with the learned policy's lateral tracking on the roundabout curve (see \Cref{sec:baseline-results}).
 
 \begin{figure}[ht]
   \centering
@@ -70,4 +93,4 @@ The baseline implementation in \path{results/test_acc_baseline.py} detects candi
 
 \section{Logging and artifacts}
 \label{sec:logging}
-Both the runtime controller and the evaluation harness write JSON logs (trajectory and metadata) to support offline analysis, visualization, and aggregation. The Results chapter (\Cref{ch:results}) is intentionally left as structured stubs: the harness provides the instrumentation necessary to populate those tables once full experimental runs are completed.
+Both the runtime controller and the evaluation pipeline write JSON logs (trajectory and metadata) to support offline analysis, visualization, and aggregation. The Results chapter (\Cref{ch:results}) is intentionally left as structured stubs: the pipeline provides the instrumentation necessary to populate those tables once full experimental runs are completed.
