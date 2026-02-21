@@ -5,7 +5,7 @@ This chapter describes the evaluation harness used to assess driving performance
 
 \section{Scenario-based evaluation}
 \label{sec:scenario-eval}
-Evaluation is organized around QLabs scenarios specified as JSON scene files (Appendix \Cref{app:scene-configs}). The test runner instantiates the same controller used for interactive driving and runs it in a repeatable loop with a maximum step count and timeout thresholds.
+Evaluation is organized around QLabs scenarios specified as JSON scene files (\Cref{app:scene-configs}). The test runner instantiates the same controller used for interactive driving and runs it in a repeatable loop with a maximum step count and timeout thresholds.
 
 In this repository, a single script (\path{results/test_simlingo_roundabout.py}) defines a set of scenarios including baseline navigation and obstacle variants. Each scenario can be repeated multiple times to estimate pass rates under stochasticity (e.g., small timing variations).
 
@@ -93,4 +93,4 @@ The lateral (steering) component uses a pure-pursuit controller \citep{coulter19
 
 \section{Logging and artifacts}
 \label{sec:logging}
-Both the runtime controller and the evaluation pipeline write JSON logs (trajectory and metadata) to support offline analysis, visualization, and aggregation. The Results chapter (\Cref{ch:results}) is intentionally left as structured stubs: the pipeline provides the instrumentation necessary to populate those tables once full experimental runs are completed.
+Both the runtime controller and the evaluation pipeline write JSON logs (trajectory and metadata) to support offline analysis, visualization, and aggregation. The Results chapter (\Cref{ch:results}) presents the full experimental evaluation produced by this pipeline.

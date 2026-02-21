@@ -82,7 +82,7 @@ All losses are summed with equal weight. The use of Smooth-$\ell_1$ (rather than
 \section{Efficient fine-tuning with LoRA}
 Low-Rank Adaptation (LoRA) injects trainable low-rank matrices into selected linear layers of a frozen backbone, enabling efficient fine-tuning with substantially fewer trainable parameters \citep{hu2021lora}. LoRA is particularly useful for multimodal models because the frozen vision encoder can be retained while only adapting the language-side (and any projectors) to the new domain.
 
-In this repository, training is organized using PyTorch Lightning \citep{pytorchlightning} and accelerated with DeepSpeed ZeRO optimizations \citep{deepspeed}; hyperparameters and the relevant Hydra \citep{yadan2019hydra} configurations are recorded in Appendix \Cref{app:hyperparameters}.
+In this repository, training is organized using PyTorch Lightning \citep{pytorchlightning} and accelerated with DeepSpeed ZeRO optimizations \citep{deepspeed}; hyperparameters and the relevant Hydra \citep{yadan2019hydra} configurations are recorded in \Cref{app:hyperparameters}.
 
 \section{Simulation platforms: CARLA vs. QLabs}
 CARLA is an open-source simulator widely used for autonomous driving research \citep{dosovitskiy2017carla}. Quanser QLabs is a separate simulation environment designed for education and robotics experimentation, providing a QCar~2 vehicle model and APIs for sensor acquisition and actuation.

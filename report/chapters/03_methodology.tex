@@ -15,7 +15,7 @@ At runtime, the controller executes a closed-loop pipeline:
   \item Log trajectory, safety events, and diagnostics.
 \end{enumerate}
 
-This decomposition is reflected in the repository structure (Appendix \Cref{app:repo-map}): data collection is implemented under \path{data_collection/}, runtime control under \path{inference/}, and shared utilities under \path{core/}.
+This decomposition is reflected in the repository structure (\Cref{app:repo-map}): data collection is implemented under \path{data_collection/}, runtime control under \path{inference/}, and shared utilities under \path{core/}.
 
 \section{Compatibility targets as distribution alignment}
 \label{sec:compat-targets}
@@ -29,7 +29,7 @@ The guiding principle is \emph{distribution alignment}: the inference-time signa
 
 \section{Key simulator differences}
 \label{sec:sim-diffs}
-Table \Cref{tab:carla-qlabs-diffs} summarizes simulator differences that directly influence implementation choices.
+\Cref{tab:carla-qlabs-diffs} summarizes simulator differences that directly influence implementation choices.
 
 \begin{table}[h]
 \centering
@@ -64,7 +64,7 @@ The inverse mapping is $\mathbf{p}_w=\mathbf{R}(\psi)\mathbf{p}_e+\mathbf{t}$. K
 
 \section{Target-point conditioning from routes}
 \label{sec:target-point-conditioning}
-QLabs scenarios specify an ego route as a sequence of world-frame waypoints (Appendix \Cref{app:scene-configs}). \Cref{fig:sdcs-roadmap} shows the QLabs SDCS environment layout with its numbered waypoint nodes. At runtime, the route manager implemented in \path{inference/route_manager.py} selects a lookahead target point along the polyline and converts it into the ego frame for prompt conditioning.
+QLabs scenarios specify an ego route as a sequence of world-frame waypoints (\Cref{app:scene-configs}). \Cref{fig:sdcs-roadmap} shows the QLabs SDCS environment layout with its numbered waypoint nodes. At runtime, the route manager implemented in \path{inference/route_manager.py} selects a lookahead target point along the polyline and converts it into the ego frame for prompt conditioning.
 
 \begin{figure}[ht]
   \centering
@@ -82,4 +82,4 @@ The selected world-frame target $\mathbf{w}_j$ (and an optional ``next'' target 
 
 \section{Traceability strategy}
 \label{sec:traceability}
-Throughout this thesis, design claims are tied to concrete source file paths in this repository (e.g., \path{inference/main.py}, \path{data_collection/data_recorder.py}). Rather than reproducing verbatim code, implementation details are described in prose and equations to keep the document readable while preserving technical specificity. Where hyperparameters are referenced, Appendix \Cref{app:hyperparameters} records the source YAML configuration files used for training and inference.
+Throughout this thesis, design claims are tied to concrete source file paths in this repository (e.g., \path{inference/main.py}, \path{data_collection/data_recorder.py}). Rather than reproducing verbatim code, implementation details are described in prose and equations to keep the document readable while preserving technical specificity. Where hyperparameters are referenced, \Cref{app:hyperparameters} records the source YAML configuration files used for training and inference.
