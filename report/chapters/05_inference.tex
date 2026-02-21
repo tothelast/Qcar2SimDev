@@ -71,7 +71,7 @@ The lateral controller uses a PID law on a scaled heading error computed from an
   \item \textbf{Heading-error scaling:} the heading error is normalized by $180/\pi/90$ so that a \SI{90}{\degree} error maps to approximately $1.0$, matching the reference implementation.
   \item \textbf{Derivative compensation:} because the derivative term is computed as a raw difference (without explicit division by $\Delta t$), differences in control frequency must be compensated. The implementation divides by $5$ to align a \SI{4}{Hz} loop with a \SI{20}{Hz} reference assumption.
 \end{itemize}
-The lateral controller is implemented in \path{inference/control_converter.py} as a PID law acting on a scaled heading error $e_\psi$. With proportional, integral, and derivative gains $(K_P,K_I,K_D)$, the raw steering command before saturation can be written as
+The lateral controller is implemented in \path{inference/control_converter.py} as a PID law \citep{astrom1995pid} acting on a scaled heading error $e_\psi$. With proportional, integral, and derivative gains $(K_P,K_I,K_D)$, the raw steering command before saturation can be written as
 \begin{equation}
  u = K_P e_\psi + K_I \sum_{\tau\le t} e_\psi(\tau) + K_D\,\Delta e_\psi.
 \end{equation}
