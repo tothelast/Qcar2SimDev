@@ -99,9 +99,9 @@ def calculate_waypoint_metrics(route_wps, speed_wps, current_speed=0):
             metrics['route_curvature'] = np.degrees(np.mean(np.abs(angles)))
 
     # Speed waypoint metrics
-    if speed_wps is not None and len(speed_wps) >= 4:
-        # Predicted speed (using same calculation as controller)
-        desired_speed = np.linalg.norm(speed_wps[0] - speed_wps[3]) * 2.0
+    if speed_wps is not None and len(speed_wps) >= 3:
+        # Predicted speed (same as controller: norm(wp[2]-wp[0]) / (2*dt*data_save_freq))
+        desired_speed = np.linalg.norm(speed_wps[2] - speed_wps[0]) * 2.0
         metrics['predicted_speed'] = desired_speed
         metrics['speed_error'] = abs(desired_speed - current_speed)
 

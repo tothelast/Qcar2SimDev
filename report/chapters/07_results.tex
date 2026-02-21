@@ -135,29 +135,29 @@ The SimLingo model stops cleanly (no bumper contact) for Variant~1 (early rounda
 \end{figure}
 
 \paragraph{Higher speed produces low-speed contact.}
-For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 3~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. The higher approach speed and the model's gradual deceleration profile are insufficient for a fully contact-free stop. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle. The waypoint visualizations in \Cref{fig:waypoints-var2,fig:waypoints-var4} show the model progressively reducing its predicted speed but not reaching zero before contact.
+For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 3~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. The higher approach speed and the model's gradual deceleration profile are insufficient for a fully contact-free stop. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle. The waypoint visualizations in \Cref{fig:waypoints-var2,fig:waypoints-var4} show the model progressively reducing its predicted speed, making low-speed bumper contact, and eventually coming to a full stop.
 
 \paragraph{Corner obstacles reduce visual lead time.}
-Variant~5 places the obstacle on a curved section late in the route. Because the forward-facing camera has limited visibility around curves, the obstacle enters the field of view later than on straight segments. Combined with the high approach speed (3.4~m/s), the model cannot decelerate in time and drives through the obstacle. This is the only scenario where the model fails to demonstrate any meaningful stopping behavior, suggesting that obstacle visibility on curved segments at high speed is a key limitation of the single-camera setup. As shown in \Cref{fig:waypoints-var5}, the model's predicted speed remains high (3--5~m/s) throughout the approach, and the predicted route waypoints do not deviate from the planned route, suggesting the model does not perceive the obstacle until it is too late.
+Variant~5 places the obstacle on a curved section late in the route. Because the forward-facing camera has limited visibility around curves, the obstacle enters the field of view later than on straight segments. Combined with the high approach speed (3.4~m/s), the model cannot decelerate in time and drives through the obstacle. This is the only scenario where the model fails to demonstrate any meaningful stopping behavior, suggesting that obstacle visibility on curved segments at high speed is a key limitation of the single-camera setup. As shown in \Cref{fig:waypoints-var5}, the model's predicted speed remains high (3--4~m/s) throughout the approach, and the predicted route waypoints do not deviate from the planned route, suggesting the model does not perceive the obstacle until it is too late.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var2.png}
-  \caption{Ego-frame waypoint predictions for Variant~2 (mid-roundabout obstacle). The model predicts decreasing but non-zero speed, resulting in low-speed contact. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \caption{Ego-frame waypoint predictions for Variant~2 (mid-roundabout obstacle). The vehicle decelerates from 2.0 to 1.0~m/s at first contact (step~271) and comes to a full stop by step~298. Same visual encoding as \Cref{fig:waypoints-var1}.}
   \label{fig:waypoints-var2}
 \end{figure}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var4.png}
-  \caption{Ego-frame waypoint predictions for Variant~4 (straight section obstacle). The model decelerates from 2.8 to 0.9~m/s but makes bumper contact before fully stopping. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \caption{Ego-frame waypoint predictions for Variant~4 (straight section obstacle). The vehicle decelerates from 2.4~m/s, makes bumper contact at 0.6~m/s (step~162), and comes to a full stop by step~167. Same visual encoding as \Cref{fig:waypoints-var1}.}
   \label{fig:waypoints-var4}
 \end{figure}
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var5.png}
-  \caption{Ego-frame waypoint predictions for Variant~5 (curved-section obstacle). The model maintains high predicted speed (3--5~m/s) and drives through the obstacle. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \caption{Ego-frame waypoint predictions for Variant~5 (curved-section obstacle). The model maintains high predicted speed (3--4~m/s) and drives through the obstacle. Same visual encoding as \Cref{fig:waypoints-var1}.}
   \label{fig:waypoints-var5}
 \end{figure}
 

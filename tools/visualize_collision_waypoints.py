@@ -124,9 +124,11 @@ def plot_ego_frame_panel(ax, entry, route_waypoints_world, obstacle_world, title
     speed_wps = np.array(entry['predicted_speed_waypoints']) if entry.get('predicted_speed_waypoints') else None
 
     # Compute predicted speed from speed waypoints (same as controller)
+    # Controller: desired_speed = norm(wp[2] - wp[0]) / (2 * dt * data_save_freq)
+    # With dt=0.25, data_save_freq=1 → time_delta = 0.5 → multiply by 2.0
     predicted_speed = None
-    if speed_wps is not None and len(speed_wps) >= 4:
-        predicted_speed = np.linalg.norm(speed_wps[0] - speed_wps[3]) * 2.0
+    if speed_wps is not None and len(speed_wps) >= 3:
+        predicted_speed = np.linalg.norm(speed_wps[2] - speed_wps[0]) * 2.0
 
     # Transform obstacle to ego frame
     obstacle_ego = None
@@ -208,11 +210,11 @@ def plot_ego_frame_panel(ax, entry, route_waypoints_world, obstacle_world, title
                                   alpha=0.3, zorder=1)
         ax.add_patch(obstacle_circle)
 
-    # Build title with predicted speed
+    # Build title with actual and predicted speed
     collision_str = " [COLLISION]" if entry.get('collision', False) else ""
     title_text = f'Step {entry["step"]}'
     if predicted_speed is not None:
-        title_text += f' | Pred Speed: {predicted_speed:.1f} m/s'
+        title_text += f' | Speed: {current_speed:.1f} m/s (pred {predicted_speed:.1f})'
     else:
         title_text += f' | Speed: {current_speed:.1f} m/s'
     title_text += f'{collision_str}{title_suffix}'
@@ -296,18 +298,36 @@ def visualize_obstacle_scenario(data, save_path=None, pre_steps=15, num_panels=6
         trajectory, pre_steps=pre_steps, obstacle_location=obstacle_world)
 
     if collision_idx is not None:
-        # Collision mode
-        print(f"Collision at step {trajectory[collision_idx]['step']} (index {collision_idx})")
-        print(f"Pre-collision segment: steps {trajectory[start_idx]['step']}-{trajectory[collision_idx]['step']}")
-        anchor_idx = collision_idx
-        segment_len = collision_idx - start_idx + 1
-        panel_indices = list(np.linspace(start_idx, collision_idx, min(num_panels, segment_len), dtype=int))
-        title = f'Pre-Collision Waypoint Analysis: {scenario} (run {run_num})'
+        # Collision mode — check if the vehicle stops after collision
+        stopped_idx = None
+        STOPPED_THRESHOLD = 0.05
+        for si in range(collision_idx, len(trajectory)):
+            if trajectory[si]['speed'] < STOPPED_THRESHOLD:
+                stopped_idx = si
+                break
+
+        if stopped_idx is not None:
+            # Vehicle stopped after collision — extend panels to the stop point
+            end_idx = stopped_idx
+            print(f"Collision at step {trajectory[collision_idx]['step']} (index {collision_idx})")
+            print(f"Vehicle stopped at step {trajectory[stopped_idx]['step']} (index {stopped_idx})")
+            print(f"Segment: steps {trajectory[start_idx]['step']}-{trajectory[end_idx]['step']}")
+        else:
+            end_idx = collision_idx
+            print(f"Collision at step {trajectory[collision_idx]['step']} (index {collision_idx})")
+            print(f"Pre-collision segment: steps {trajectory[start_idx]['step']}-{trajectory[end_idx]['step']}")
+
+        anchor_idx = end_idx
+        segment_len = end_idx - start_idx + 1
+        panel_indices = list(np.linspace(start_idx, end_idx, min(num_panels, segment_len), dtype=int))
+        title = f'Collision Waypoint Analysis: {scenario} (run {run_num})'
         default_name = f'results/pre_collision_waypoints_{scenario}.png'
 
         def suffix_fn(idx):
+            if idx >= collision_idx:
+                return ""
             d = collision_idx - idx
-            return f" ({d} steps to collision)" if d > 0 else ""
+            return f" ({d} steps to collision)"
     else:
         # Closest-approach mode (no obstacle collision)
         if obstacle_world is None:
