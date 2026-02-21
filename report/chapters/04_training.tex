@@ -85,15 +85,16 @@ Finally, for completeness and interface parity with SimLingo, \path{core/config.
 
 \section{Training compute environment (QLabs fine-tuning)}
 \label{sec:training-env}
-The QLabs fine-tuning run was executed in a single-GPU setting with mixed precision and DeepSpeed stage~2 (see the Hydra snapshot under \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/.hydra/config.yaml}). The associated offline W\&B run stores the Python package environment under \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/wandb/offline-run-20251126_180635-2025_11_26_18_06_21_qlabs_roundabout_finetune/files/requirements.txt}, which records (among others) \texttt{torch==2.9.1}, \texttt{torchvision==0.24.1}, \texttt{torchaudio==2.9.1}, \texttt{pytorch-lightning==2.5.6}, \texttt{deepspeed==0.18.2}, and \texttt{transformers==4.57.1}, as well as CUDA 12 runtime components (e.g., \texttt{nvidia-cuda-runtime-cu12==12.8.90}). On the training machine, \texttt{nvidia-smi} reports an \textbf{NVIDIA GeForce RTX~5070~Ti} (16~GB VRAM) with driver \textbf{570.195.03} and CUDA \textbf{12.8}; the Python runtime reports \texttt{torch 2.9.1+cu128} with \texttt{torch.version.cuda==12.8}.
+The QLabs fine-tuning run was initialized from the pretrained CARLA model checkpoint \path{models/simlingo/checkpoints/epoch=013.ckpt} (epoch~13 of the original CARLA training, not epoch~13 of QLabs fine-tuning) and executed in a single-GPU setting with mixed precision and DeepSpeed stage~2 (see the Hydra snapshot under \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/.hydra/config.yaml}). The associated offline W\&B run stores the Python package environment under \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/wandb/offline-run-20251126_180635-2025_11_26_18_06_21_qlabs_roundabout_finetune/files/requirements.txt}, which records (among others) \texttt{torch==2.9.1}, \texttt{torchvision==0.24.1}, \texttt{torchaudio==2.9.1}, \texttt{pytorch-lightning==2.5.6}, \texttt{deepspeed==0.18.2}, and \texttt{transformers==4.57.1}, as well as CUDA 12 runtime components (e.g., \texttt{nvidia-cuda-runtime-cu12==12.8.90}). On the training machine, \texttt{nvidia-smi} reports an \textbf{NVIDIA GeForce RTX~5070~Ti} (16~GB VRAM) with driver \textbf{570.195.03} and CUDA \textbf{12.8}; the Python runtime reports \texttt{torch 2.9.1+cu128} with \texttt{torch.version.cuda==12.8}.
 
 \section{Fine-tuning configuration}
 \label{sec:finetune-config}
 Fine-tuning adapts a pretrained multimodal backbone to the QLabs data distribution using parameter-efficient LoRA adapters. Training is configured through Hydra and executed with PyTorch Lightning and DeepSpeed to support mixed precision and memory-efficient optimization. Rather than duplicating configuration listings here, \Cref{app:hyperparameters} records:
 \begin{itemize}[leftmargin=*,itemsep=0.25em]
-  \item the QLabs fine-tuning experiment template, 
-  \item the local run configuration used for experiments, and
-  \item the Hydra snapshot stored with the model directory used for inference.
+  \item the QLabs fine-tuning experiment template,
+  \item the local run configuration used for experiments,
+  \item the resolved Hydra snapshot from the QLabs fine-tuning run, and
+  \item the pretrained CARLA model snapshot (shipped with the initialization checkpoint).
 \end{itemize}
 
 The key modeling intent is to preserve the pretrained visual representation while adapting the language-side (and associated projections) to QLabs-specific visual appearance and dynamics. LoRA hyperparameters (rank, $\alpha$, dropout) and optimizer/scheduler settings are summarized in \Cref{tab:hparams-model}.

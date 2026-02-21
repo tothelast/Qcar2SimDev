@@ -4,11 +4,12 @@
 This appendix records the most important hyperparameters and configuration choices for reproducibility.
 
 \section{Primary configuration sources}
-The repository contains multiple configuration artifacts used at different stages (experiment templates, local run configs, and saved Hydra snapshots). The three most relevant sources used in this work are:
+The repository contains multiple configuration artifacts used at different stages (experiment templates, local run configs, and saved Hydra snapshots). The four most relevant sources used in this work are:
 \begin{itemize}[leftmargin=*]
   \item QLabs fine-tuning experiment (Hydra): \path{simlingo/simlingo_training/config/experiment/qlabs_finetune.yaml}.
   \item Local project-level config: \path{my_config.yaml}.
-  \item Saved Hydra snapshot (used by inference loading): \path{models/simlingo/.hydra/config.yaml}.
+  \item Resolved Hydra snapshot from the QLabs fine-tuning run: \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/.hydra/config.yaml}.
+  \item Pretrained CARLA model snapshot (shipped with the pretrained checkpoint): \path{models/simlingo/.hydra/config.yaml}.
 \end{itemize}
 
 \section{QLabs fine-tuning (Hydra experiment template)}
@@ -17,14 +18,17 @@ The Hydra experiment template in \path{simlingo/simlingo_training/config/experim
 \section{Local run configuration (project root)}
 The local project configuration in \path{my_config.yaml} captures run-specific overrides used during development (e.g., batch size/worker settings, gradient accumulation, and experiment naming). This separation (template vs. local overrides) is helpful when iterating on QLabs-specific data paths and runtime constraints while keeping the canonical experiment definition stable.
 
-\section{Reference Hydra snapshot (SimLingo run)}
-For inference reproducibility, a Hydra configuration snapshot is stored with trained model artifacts under \path{models/simlingo/.hydra/config.yaml}. This snapshot records the exact resolved configuration used during training (after all overrides), enabling later analysis of hyperparameter choices even if templates evolve.
+\section{Resolved Hydra snapshot (QLabs fine-tuning run)}
+The resolved Hydra snapshot for the QLabs fine-tuning run is stored at \path{simlingo/outputs/2025_11_26_18_06_21_qlabs_roundabout_finetune/.hydra/config.yaml}. This snapshot records the exact resolved configuration used during QLabs fine-tuning (after all overrides), enabling later analysis of hyperparameter choices even if templates evolve. The summary tables in \Cref{tab:hparams-model,tab:hparams-data,tab:hparams-trainer} are compiled from this snapshot.
+
+\paragraph{Note on the pretrained model snapshot.}
+A separate Hydra snapshot exists at \path{models/simlingo/.hydra/config.yaml}; this file records the configuration of the \emph{pretrained CARLA model} and contains different settings (e.g., \texttt{lr=3e-5}, \texttt{freeze=false}, \texttt{use\_commentary=true}). It should not be confused with the QLabs fine-tuning configuration. The corresponding pretrained checkpoint is \path{models/simlingo/checkpoints/epoch=013.ckpt} (epoch~13 of the original CARLA training run, not epoch~13 of QLabs fine-tuning); this checkpoint serves as the initialization point from which QLabs fine-tuning begins.
 
 \section{Summary tables}
 \subsection{Model and fine-tuning}
 \begin{table}[h]
 \centering
-\caption{Key model/fine-tuning hyperparameters for the QLabs configuration (compiled from \texttt{simlingo/simlingo\_training/config/experiment/qlabs\_finetune.yaml} and \texttt{my\_config.yaml}).}
+\caption{Key model/fine-tuning hyperparameters for the QLabs configuration (compiled from the resolved Hydra snapshot at \texttt{simlingo/outputs/.../\allowbreak .hydra/config.yaml}).}
 \label{tab:hparams-model}
 \begin{tabular}{p{0.48\linewidth}p{0.42\linewidth}}
 \toprule
@@ -47,15 +51,17 @@ Optimizer & AdamW (betas $[0.9, 0.999]$, weight decay 0.1)\\
 \subsection{Data module and dataset parameters}
 \begin{table}[h]
 \centering
-\caption{Dataset-related parameters for QLabs fine-tuning (compiled from \texttt{simlingo/simlingo\_training/config/experiment/qlabs\_finetune.yaml} and \texttt{my\_config.yaml}).}
+\caption{Dataset-related parameters for QLabs fine-tuning (compiled from the resolved Hydra snapshot at \texttt{simlingo/outputs/.../\allowbreak .hydra/config.yaml}).}
 \label{tab:hparams-data}
 \begin{tabular}{p{0.48\linewidth}p{0.42\linewidth}}
 \toprule
 Parameter & Value (QLabs fine-tune)\\
 \midrule
-Data path & \path{database}\\
-Batch size & 1\\
-Num workers & 4 (Hydra experiment) / 0 (local config)\\
+Data path & \path{database} (\path{../database} in resolved snapshot)\\
+Batch size & 4 (resolved; template default 1, overridden by local config)\\
+Gradient accumulation steps & 4\\
+Effective batch size & 16 (batch size $\times$ accumulation steps)\\
+Num workers & 4\\
 Prediction horizon (pred\_len) & 11\\
 History length (hist\_len) & 1\\
 Skip first frames & 10\\
@@ -70,7 +76,7 @@ Image augmentation & disabled in QLabs template (false; prob 0.0)\\
 \subsection{Trainer/infrastructure}
 \begin{table}[h]
 \centering
-\caption{Training infrastructure settings for QLabs fine-tuning (compiled from \texttt{simlingo/simlingo\_training/config/experiment/qlabs\_finetune.yaml} and \texttt{my\_config.yaml}).}
+\caption{Training infrastructure settings for QLabs fine-tuning (compiled from the resolved Hydra snapshot at \texttt{simlingo/outputs/.../\allowbreak .hydra/config.yaml}).}
 \label{tab:hparams-trainer}
 \begin{tabular}{p{0.48\linewidth}p{0.42\linewidth}}
 \toprule
@@ -80,7 +86,6 @@ Max epochs & 15\\
 Precision & \texttt{16-mixed}\\
 Distributed strategy & \texttt{deepspeed\_stage\_2}\\
 GPUs & 1\\
-Gradient accumulation & 4 (local config)\\
 Random seed & 42\\
 Experiment name & \texttt{qlabs\_finetune} / \texttt{qlabs\_roundabout\_finetune}\\
 Weights\&Biases & project \texttt{simlingo\_qlabs} (can be disabled)\\
