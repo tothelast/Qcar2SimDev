@@ -16,8 +16,19 @@ sys.path.append(os.path.join(os.getcwd(), 'simlingo'))
 
 from simlingo_training.utils.custom_types import DrivingExample
 
-def calculate_ade(route_preds, route_gt):
-    return np.mean(np.linalg.norm(route_preds - route_gt, axis=-1))
+def point_to_segment_dist(p, a, b):
+    """Distance from point p to line segment a-b."""
+    ab = b - a
+    t = np.clip(np.dot(p - a, ab) / (np.dot(ab, ab) + 1e-8), 0, 1)
+    return np.linalg.norm(p - (a + t * ab))
+
+def trajectory_to_route_ade(trajectory, route):
+    """Average distance from each trajectory point to the nearest point on route polyline."""
+    dists = []
+    for p in trajectory:
+        min_d = min(point_to_segment_dist(p, route[i], route[i+1]) for i in range(len(route)-1))
+        dists.append(min_d)
+    return np.mean(dists)
 
 def to_device(obj, device, dtype=None):
     if torch.is_tensor(obj):
@@ -82,8 +93,29 @@ def main(cfg):
     model.half()
     model.cuda()
     
+    # ── Compute expert ADE (constant, independent of model checkpoint) ──
+    print("Computing expert ADE (expert trajectory vs ground truth route)...")
+    expert_ade_values = []
+    with torch.no_grad():
+        for i, batch in enumerate(tqdm(val_loader, desc="Expert ADE")):
+            if i % 50 != 0:
+                continue
+
+            batch = to_device(batch, model.device, dtype=torch.float16)
+            # Expert's actual future trajectory (from ego_matrix positions)
+            waypoints_gt = batch.driving_label.waypoints.cpu().numpy()  # [B, 11, 2]
+            # Ground truth route waypoints
+            route_gt = batch.driving_label.path.cpu().numpy()           # [B, 20, 2]
+
+            for b in range(waypoints_gt.shape[0]):
+                expert_ade_values.append(trajectory_to_route_ade(waypoints_gt[b], route_gt[b]))
+
+    expert_ade = float(np.mean(expert_ade_values))
+    print(f"Expert ADE: {expert_ade:.6f}")
+
+    # ── Compute policy ADE per checkpoint ──
     results = {}
-    
+
     # Iterate over checkpoints
     checkpoint_dirs = sorted(glob.glob(os.path.join(checkpoints_dir, "epoch=*.ckpt")))
     
@@ -115,18 +147,15 @@ def main(cfg):
                     batch = to_device(batch, model.device, dtype=torch.float16)
                     
                     speed_wps, route, language = model(batch, return_language=True)
-                    
-                    # Get GT
-                    route_gt = batch.driving_label.path.cuda()
-                    
-                    # Calculate ADE for this batch
-                    # route: [B, N, 2], route_gt: [B, N, 2]
-                    # Ensure they are on same device and numpy
-                    route_np = route.cpu().numpy()
-                    route_gt_np = route_gt.cpu().numpy()
-                    
-                    batch_ade = calculate_ade(route_np, route_gt_np)
-                    all_ade.append(batch_ade)
+
+                    # Get GT route
+                    route_gt = batch.driving_label.path.cpu().numpy()  # [B, 20, 2]
+
+                    # Use speed_wps (trajectory prediction) instead of route
+                    speed_wps_np = speed_wps.cpu().numpy()  # [B, 10, 2]
+
+                    for b in range(speed_wps_np.shape[0]):
+                        all_ade.append(trajectory_to_route_ade(speed_wps_np[b], route_gt[b]))
             
             epoch_ade = np.mean(all_ade)
             results[epoch_name] = float(epoch_ade)
@@ -137,9 +166,13 @@ def main(cfg):
             traceback.print_exc()
             print(f"Error processing {epoch_name}: {e}")
             
-    # Save results
+    # Save results (enhanced format with expert ADE)
+    output = {
+        "expert_ade": expert_ade,
+        "policy_ade": results,
+    }
     with open("ade_results_all_epochs.json", "w") as f:
-        json.dump(results, f, indent=4)
+        json.dump(output, f, indent=4)
     print("Results saved to ade_results_all_epochs.json")
 
 if __name__ == "__main__":

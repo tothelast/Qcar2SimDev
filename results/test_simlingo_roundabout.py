@@ -558,7 +558,10 @@ class SimlingoTestRunner:
 
         # Save trajectory log
         trajectory_path = run_dir / "trajectory_log.json"
-        self._save_trajectory_log(trajectory_log, trajectory_path, scenario, result)
+        self._save_trajectory_log(
+            trajectory_log, trajectory_path, scenario, result,
+            route_waypoints=controller.route_manager.route_waypoints
+        )
         result.trajectory_log_path = str(trajectory_path)
 
         # Print summary
@@ -757,7 +760,8 @@ class SimlingoTestRunner:
         trajectory_log: List[dict],
         path: Path,
         scenario: TestScenario,
-        result: TestResult
+        result: TestResult,
+        route_waypoints: Optional[np.ndarray] = None,
     ):
         """Save trajectory log to JSON file."""
         data = {
@@ -770,6 +774,8 @@ class SimlingoTestRunner:
                 'collision_detected': result.safety.collision_detected,
                 'stopping_distance': result.safety.stopping_distance,
                 'route_coverage_percent': result.route_coverage_percent,
+                'route_waypoints': route_waypoints.tolist() if route_waypoints is not None else None,
+                'obstacle_location': scenario.obstacle_location,
             },
             'trajectory': trajectory_log
         }
@@ -939,12 +945,16 @@ class _TestController:
             'timestamp': float(time.time() - self.start_time if self.start_time else 0),
             'position': current_position.tolist(),
             'heading_deg': float(rotation[2] * 180 / np.pi),
+            'heading_rad': float(rotation[2]),
             'speed': float(velocity),
             'desired_speed': float(desired_speed),
             'steering': float(steer),
             'collision': bool(collision_detected),
             'current_waypoint_index': int(self.route_manager.current_waypoint_index),
             'distance_to_target': float(distance_to_target),
+            'predicted_route_waypoints': route_waypoints.tolist(),
+            'predicted_speed_waypoints': speed_waypoints.tolist(),
+            'target_waypoint': target_world.tolist(),
         }
         self.trajectory_log.append(trajectory_entry)
 

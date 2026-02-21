@@ -15,12 +15,14 @@ This chapter presents the experimental evaluation of the fine-tuned SimLingo mod
   \label{fig:training-losses}
 \end{figure}
 
-\Cref{fig:ade-curve} shows the Average Displacement Error (ADE) between the model's predicted waypoints and the expert's ground-truth trajectories across all 15~epoch checkpoints, evaluated on the validation split. ADE drops from $0.447$ at epoch~0 to $0.120$ at epoch~14---a 73\% reduction. The steepest improvement occurs in the first 5~epochs; diminishing returns are visible after epoch~10, where ADE stabilizes around $0.12$. This final value means the model's predicted trajectories average approximately 12~cm from the expert's actual path, which is well within the QCar~2's lateral footprint.
+\Cref{fig:ade-curve} shows the Average Displacement Error (ADE) for both the learned policy and the expert demonstrations, evaluated on the validation split across all 15~epoch checkpoints. ADE is computed as the mean point-to-polyline distance: for each predicted trajectory point (10~speed waypoints for the policy, 11~ego-position waypoints for the expert), the perpendicular distance to the nearest segment of the ground-truth route polyline (20~points) is calculated, and the distances are averaged. This metric handles the differing number of trajectory and route points without resampling artifacts by measuring how closely each trajectory follows the planned route regardless of spatial extent.
+
+The expert demonstration ADE is $0.087$~m, representing how closely the human teleoperator followed the planned route. The policy ADE drops from $0.114$ at epoch~0 to approximately $0.085$ by epoch~11---a 25\% reduction---converging toward the expert baseline. After epoch~1 the policy already operates near expert-level performance, with the remaining epochs producing marginal gains. The final ADE of ${\sim}0.085$~m means the model's predicted trajectories deviate less than 9~cm on average from the planned route, comparable to the expert's own deviation and well within the QCar~2's lateral footprint.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.75\textwidth]{policy_vs_expert_curve.png}
-  \caption{Average Displacement Error (ADE) across training epochs. The learned policy (blue) converges from 0.447 to 0.120 over 15~epochs. The expert baseline (green dashed) represents perfect imitation (ADE${=}0$).}
+  \caption{Average Displacement Error (ADE) across training epochs. ADE is measured as the mean point-to-polyline distance from each trajectory point to the nearest segment of the ground-truth route. The learned policy (blue) converges from $0.114$ toward the expert demonstration baseline (red dashed, ADE${=}0.087$). The green dashed line represents the ground-truth route (ADE${=}0$).}
   \label{fig:ade-curve}
 \end{figure}
 
@@ -116,13 +118,48 @@ Scenario & Controller & Coverage (\%) & Collision & Stopped & Stop Dist.\ (m) & 
 The results demonstrate that the fine-tuned SimLingo model can navigate the roundabout route and respond to static obstacles using only camera input, without access to LiDAR. The model achieves a 40\% obstacle pass rate (4/10 runs), with contact-free stops on Variants~1 and~3, low-speed contact on Variants~2 and~4, and a complete failure on Variant~5. Several factors explain the observed performance.
 
 \paragraph{Low speed at encounter enables clean stops.}
-The SimLingo model stops cleanly (no bumper contact) for Variant~1 (early roundabout) and Variant~3 (roundabout exit), where the vehicle has not yet reached high speed at the time of obstacle encounter. In Variant~1, the car is still accelerating through the initial straight segment and traveling below 1.5~m/s when it perceives the obstacle, leaving sufficient distance to decelerate and stop at approximately 6.8~m from the obstacle center. In Variant~3, the car has just exited the roundabout curve and begun accelerating on the exit straight; it stops cleanly at 5--6~m.
+The SimLingo model stops cleanly (no bumper contact) for Variant~1 (early roundabout) and Variant~3 (roundabout exit), where the vehicle has not yet reached high speed at the time of obstacle encounter. In Variant~1, the car is still accelerating through the initial straight segment and traveling below 1.5~m/s when it perceives the obstacle, leaving sufficient distance to decelerate and stop at approximately 6.8~m from the obstacle center. In Variant~3, the car has just exited the roundabout curve and begun accelerating on the exit straight; it stops cleanly at 5--6~m. The ego-frame waypoint predictions in \Cref{fig:waypoints-var1,fig:waypoints-var3} confirm that the model predicts near-zero speed across the entire approach segment for both variants, indicating confident obstacle detection well before reaching it.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{near_obstacle_waypoints_obstacle_var1.png}
+  \caption{Ego-frame waypoint predictions for Variant~1 (obstacle on initial straight). The model predicts zero speed across all panels, stopping well before the obstacle. The vehicle is at the origin; green: predicted route waypoints, orange: speed waypoints, blue: planned route, red X: obstacle. The spatial spread of the orange speed waypoints encodes the predicted speed: clustered points indicate near-zero speed (braking), while a longer spread indicates higher predicted speed.}
+  \label{fig:waypoints-var1}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{near_obstacle_waypoints_obstacle_var3.png}
+  \caption{Ego-frame waypoint predictions for Variant~3 (obstacle on exit straight). The model predicts near-zero speed and the predicted route curves away from the obstacle. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \label{fig:waypoints-var3}
+\end{figure}
 
 \paragraph{Higher speed produces low-speed contact.}
-For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 3~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. The higher approach speed and the model's gradual deceleration profile are insufficient for a fully contact-free stop. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle.
+For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 3~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. The higher approach speed and the model's gradual deceleration profile are insufficient for a fully contact-free stop. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle. The waypoint visualizations in \Cref{fig:waypoints-var2,fig:waypoints-var4} show the model progressively reducing its predicted speed but not reaching zero before contact.
 
 \paragraph{Corner obstacles reduce visual lead time.}
-Variant~5 places the obstacle on a curved section late in the route. Because the forward-facing camera has limited visibility around curves, the obstacle enters the field of view later than on straight segments. Combined with the high approach speed (3.4~m/s), the model cannot decelerate in time and drives through the obstacle. This is the only scenario where the model fails to demonstrate any meaningful stopping behavior, suggesting that obstacle visibility on curved segments at high speed is a key limitation of the single-camera setup.
+Variant~5 places the obstacle on a curved section late in the route. Because the forward-facing camera has limited visibility around curves, the obstacle enters the field of view later than on straight segments. Combined with the high approach speed (3.4~m/s), the model cannot decelerate in time and drives through the obstacle. This is the only scenario where the model fails to demonstrate any meaningful stopping behavior, suggesting that obstacle visibility on curved segments at high speed is a key limitation of the single-camera setup. As shown in \Cref{fig:waypoints-var5}, the model's predicted speed remains high (3--5~m/s) throughout the approach, and the predicted route waypoints do not deviate from the planned route, suggesting the model does not perceive the obstacle until it is too late.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var2.png}
+  \caption{Ego-frame waypoint predictions for Variant~2 (mid-roundabout obstacle). The model predicts decreasing but non-zero speed, resulting in low-speed contact. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \label{fig:waypoints-var2}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var4.png}
+  \caption{Ego-frame waypoint predictions for Variant~4 (straight section obstacle). The model decelerates from 2.8 to 0.9~m/s but makes bumper contact before fully stopping. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \label{fig:waypoints-var4}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var5.png}
+  \caption{Ego-frame waypoint predictions for Variant~5 (curved-section obstacle). The model maintains high predicted speed (3--5~m/s) and drives through the obstacle. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \label{fig:waypoints-var5}
+\end{figure}
 
 \paragraph{ACC baseline: deterministic detection.}
 The ACC baseline achieves 100\% pass rate across all obstacle variants because LiDAR provides range-independent obstacle detection within an 8~m forward cone, regardless of vehicle speed or road curvature. The detection is purely geometric: once 3 or more LiDAR returns fall within the lane boundaries ahead, the controller immediately sets the target velocity to zero. Because QLabs implements instantaneous velocity control (no inertia model for the commanded velocity), the car stops within one control step. Stopping distances are consistent at 5--8~m across all variants.
