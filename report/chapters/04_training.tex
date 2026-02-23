@@ -40,6 +40,9 @@ As described in \Cref{sec:nav-conditioning}, the original SimLingo architecture 
 
 QLabs does not include a route planner with semantic HLC labels, and collecting manual language annotations for each demonstration was out of scope for this work. Consequently, the data recorder assigns a constant \texttt{command=4} (``follow the road'') to every sample, and the fine-tuned model is trained and evaluated exclusively in target-point mode. The inference stack (\Cref{ch:inference}) reflects this choice: although the code supports both modes, only target-point conditioning is active during deployment.
 
+\paragraph{Dataset size.}
+The final collected dataset comprises \textbf{40} training runs (7\,498~frames) and \textbf{15} validation runs (2\,997~frames), totalling 10\,495~frames across 55~runs. Individual run lengths range from 98 to 301~frames for training and 171 to 234~frames for validation, reflecting variation in route-completion time under teleoperation. Each frame consists of one RGB JPEG image and one gzip-compressed JSON measurement file. Data were collected across two sessions (2025-11-25 and 2025-11-26); the combined on-disk footprint is approximately \SI{470}{\mebi\byte}.
+
 \section{SimLingo-compatible dataset writer}
 \label{sec:data-recorder}
 The \texttt{DataRecorder} class in \path{data_collection/data_recorder.py} creates the run directory, writes RGB images and measurement JSONs, and produces a \texttt{results.json.gz} file so that existing dataloaders can treat the QLabs run like a CARLA route.
