@@ -25,7 +25,14 @@ The test script enumerates a fixed scenario suite in \path{results/test_simlingo
   \item \textbf{Static obstacle variants 1--5:} 2 repeated runs for each variant.
 \end{itemize}
 In total, this yields 15 runs per full sweep, with explicit names \texttt{baseline} and \texttt{obstacle\_var1} through \texttt{obstacle\_var5} (\path{results/test_simlingo_roundabout.py}, lines~6--8 and 153--201).
-Each obstacle variant corresponds to a fixed 3D placement used to instantiate an obstacle actor in the scene (lines~83--90), spanning early/mid/exit/straight/late portions of the route.
+Each obstacle variant corresponds to a fixed 3D placement used to instantiate an obstacle actor in the scene (lines~83--90), spanning early/mid/exit/straight/late portions of the route. \Cref{fig:obstacle-map} shows a bird's-eye view of the roundabout navigation route with all five obstacle placements overlaid on the road network; obstacle colors indicate the SimLingo test outcomes reported in \Cref{ch:results}.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{figures/roundabout_obstacle_map.png}
+  \caption{Roundabout navigation route with five static obstacle placement variants (V1--V5). Obstacle colors indicate SimLingo test outcomes: green = clean stop, orange = low-speed contact, red = collision. Waypoint indices (WP) denote position along the 85-waypoint route.}
+  \label{fig:obstacle-map}
+\end{figure}
 
 \section{Training vs. testing conditions (memorization vs. generalization)}
 \label{sec:memorization-vs-generalization}
