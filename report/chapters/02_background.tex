@@ -3,8 +3,50 @@
 
 This chapter summarizes the modeling and systems context needed to understand a SimLingo-style VLA driving policy, and motivates why simulator-to-simulator transfer is non-trivial even when both platforms provide similar sensors and control APIs.
 
-\section{Vision--Language models and action conditioning}
-Modern Vision-Language models commonly pair (i) a vision encoder that converts an image into a sequence of visual tokens with (ii) a large language model (LLM) that consumes text tokens, plus (iii) a learned projection that maps vision features into the LLM embedding space. In this formulation, actions can be represented as text (e.g., tokens describing a maneuver), as continuous vectors regressed from hidden states, or as structured outputs such as future waypoints.
+\section{Two-level autonomous driving architecture}
+\label{sec:two-level}
+Learned driving systems typically separate the problem into two levels. The \emph{upper level} is a learned policy that takes sensor data (camera images) and route intent (e.g., a target-point coordinate) and predicts a future trajectory as a sequence of waypoints in the vehicle's ego frame. The \emph{lower level} is a classical controller that converts these waypoints into low-level actuator commands---steering angle and throttle/brake---using PID control loops.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners, minimum height=1cm, minimum width=2.2cm, align=center, font=\small},
+  arrow/.style={-{Stealth[length=2.5mm]}, thick},
+  label/.style={font=\scriptsize, midway},
+]
+  % Upper level
+  \node[block, fill=blue!10] (vision) at (0,0) {Vision\\Encoder};
+  \node[block, fill=blue!10] (llm) at (3.5,0) {Language\\Model};
+  \node[block, fill=orange!10] (lateral) at (7.5,0.5) {Lateral PID};
+  \node[block, fill=orange!10] (speed) at (7.5,-0.8) {Speed\\Controller};
+  \node[block, fill=green!10] (vehicle) at (11,0) {Vehicle};
+
+  % Inputs
+  \node[font=\small, left=0.6cm of vision] (img) {Camera};
+  \node[font=\small, below=0.6cm of llm] (nav) {Speed, Target Point};
+
+  % Arrows
+  \draw[arrow] (img) -- (vision);
+  \draw[arrow] (vision) -- node[label, above] {visual tokens} (llm);
+  \draw[arrow] (nav) -- (llm);
+  \draw[arrow] (llm.east) ++(0,0.2) -- node[label, above] {route WPs} (lateral.west);
+  \draw[arrow] (llm.east) ++(0,-0.2) -- node[label, below] {speed WPs} (speed.west);
+  \draw[arrow] (lateral.east) -- node[label, above] {steer} (vehicle.west |- lateral.east);
+  \draw[arrow] (speed.east) -- node[label, below] {throttle} (vehicle.west |- speed.east);
+
+  % Level labels
+  \draw[dashed, gray] (5.5,-1.6) -- (5.5,1.4);
+  \node[font=\scriptsize\itshape, gray] at (1.75,1.5) {Upper level (learned)};
+  \node[font=\scriptsize\itshape, gray] at (9.25,1.5) {Lower level (classical)};
+\end{tikzpicture}
+\caption{Two-level driving architecture. The learned upper level predicts future waypoints from vision and route intent; the classical lower level converts waypoints to steering and throttle via PID controllers.}
+\label{fig:two-level}
+\end{figure}
+
+This separation means the learned model never directly outputs steering or throttle values---it only predicts \emph{where} the vehicle should go. The PID controllers then determine \emph{how} to get there. This decoupling simplifies the learning problem and makes the controller independently tunable.
+
+\section{Vision--Language--Action models}
+Modern Vision-Language models commonly pair (i) a vision encoder that converts an image into a sequence of visual tokens with (ii) a large language model (LLM) that consumes text tokens, plus (iii) a learned projection that maps vision features into the LLM embedding space. In this formulation, actions can be represented as text (e.g., tokens describing a maneuver), as continuous vectors regressed from hidden states (the internal vector representations a transformer produces for each token at its final layer), or as structured outputs such as future waypoints.
 
 Driving is a particularly natural application for VLA systems because navigation intent is often compact and language-like (``follow the road'', ``turn left''), while the environment context is high-dimensional and visual. The key systems challenge is that the policy must run in closed loop, meaning perception, prompt construction, inference, and control must all execute reliably at a fixed cadence.
 
@@ -47,14 +89,20 @@ All inputs are assembled into a single global prompt:
 \begin{quote}
 \texttt{<IMG\_CONTEXT>$\backslash$n Current speed: <v>m/s. Command: <TARGET\_POINT><TARGET\_POINT>. <task prompt>.}
 \end{quote}
-A \emph{token interleaver} (IL) replaces placeholder tokens in this prompt with actual embeddings: visual tokens at \texttt{<IMG\_CONTEXT>}, waypoint embeddings at \texttt{<TARGET\_POINT>}, and learnable action query tokens at the end. The resulting unified sequence
+A \emph{token interleaver} (IL) replaces placeholder tokens in this prompt with actual embeddings: visual tokens at \texttt{<IMG\_CONTEXT>}, waypoint embeddings at \texttt{<TARGET\_POINT>}, and learnable action query tokens at the end. Let $\mathbf{e}_L$ denote the text token embeddings produced by the LLM embedding layer from the tokenized prompt, $\mathbf{e}_I$ the visual token embeddings from the vision encoder (which replace \texttt{<IMG\_CONTEXT>} placeholders in $\mathbf{e}_L$), and $\mathbf{e}_{\text{nav}}$ the navigational embeddings produced by the \texttt{WaypointInputAdaptor} (which replace \texttt{<TARGET\_POINT>} placeholders). The resulting unified sequence
 \begin{equation}
   \mathbf{e}_{\text{LLM}} = \text{IL}(\mathbf{e}_L,\; \mathbf{e}_I,\; \mathbf{e}_{\text{nav}})
 \end{equation}
-is passed to the language model alongside the action query tokens $\mathbf{q}_p$ and $\mathbf{q}_w$:
+is passed to the language model alongside learnable \emph{action query tokens} $\mathbf{q}_{\text{route}}$ and $\mathbf{q}_{\text{speed}}$:
 \begin{equation}
-  [\mathbf{o}_l,\; \mathbf{o}_p,\; \mathbf{o}_w] = \text{LLM}([\mathbf{e}_{\text{LLM}},\; \mathbf{q}_w,\; \mathbf{q}_p]).
+  [\mathbf{o}_l,\; \mathbf{o}_{\text{route}},\; \mathbf{o}_{\text{speed}}] = \text{LLM}([\mathbf{e}_{\text{LLM}},\; \mathbf{q}_{\text{route}},\; \mathbf{q}_{\text{speed}}]).
 \end{equation}
+Here $\mathbf{q}_{\text{route}}$ consists of 20~learnable vectors (one per route waypoint to predict) and $\mathbf{q}_{\text{speed}}$ consists of 10~learnable vectors (one per speed waypoint). These are randomly initialized parameters (\texttt{nn.Parameter}) that are appended after the prompt tokens so the transformer can attend over the full visual-linguistic context. After the forward pass, the hidden states at each query position are decoded by an MLP head into 2-D ego-frame coordinate deltas; cumulative summation converts the deltas to absolute waypoint positions. For example, a concrete input sequence looks like:
+
+\medskip
+\noindent\texttt{\small <system> Current speed: 2.5\,m/s. <img>[512 visual tokens]</img> Target waypoint: [nav$_1$][nav$_2$]. Predict the waypoints. <assistant> Waypoints: $|$ $\mathbf{q}_{\text{route}} \times 20$ $|$ $\mathbf{q}_{\text{speed}} \times 10$}
+\medskip
+
 SimLingo defines four task prompts: (i)~driving-only (``Predict the waypoints''), (ii)~commentary (``What should the ego do next?''), (iii)~visual question answering, and (iv)~action dreaming (counterfactual instructions). This work uses only the driving-only prompt.
 
 \subsection{Dual-head action prediction}
@@ -64,7 +112,7 @@ SimLingo uses a \emph{disentangled} action representation with two complementary
   \item \textbf{Speed waypoints} (temporal): future ego-frame coordinates sampled at $0.25\,\text{s}$ intervals. These capture the vehicle's intended speed profile and are used for longitudinal (throttle/brake) PID control.
   \item \textbf{Path waypoints} (geometric): future ego-frame coordinates sampled at ${\sim}1\,\text{m}$ intervals along the predicted route. These provide denser geometric supervision and drive the lateral (steering) PID controller.
 \end{itemize}
-Both heads use an MLP on top of the LLM output features: $\text{Linear}(H{\to}512) \to \text{SiLU} \to \text{Linear}(512{\to}256) \to \text{SiLU} \to \text{Linear}(256{\to}2)$, where $H$ is the LLM hidden size. The MLP outputs waypoint \emph{deltas} that are converted to absolute positions via cumulative summation. The separation into temporal and geometric heads prevents the single-head trade-off between speed accuracy and steering precision observed in prior work.
+Each head applies an MLP on top of the LLM output features. The route head uses $\text{Linear}(H{\to}512) \to \text{SiLU} \to \text{Linear}(512{\to}256) \to \text{SiLU} \to \text{Linear}(256{\to}2)$; the speed head is smaller: $\text{Linear}(H{\to}256) \to \text{SiLU} \to \text{Linear}(256{\to}2)$, where $H$ is the LLM hidden size. Both MLPs output waypoint \emph{deltas} that are converted to absolute positions via cumulative summation. The separation into temporal and geometric heads prevents the single-head trade-off between speed accuracy and steering precision observed in prior work.
 
 \subsection{Language generation head}
 In addition to action prediction, SimLingo can autoregressively generate natural-language text from the LLM hidden states using standard next-token prediction. This enables commentary generation and visual question answering. The language head is trained with a cross-entropy loss on valid text tokens. In this work, the language head is retained during fine-tuning but is not evaluated, as no natural-language annotations were collected for QLabs (see \Cref{ch:training}).

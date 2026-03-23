@@ -17,8 +17,8 @@ The central problem addressed in this thesis is:
 This work focuses on four concrete questions:
 \begin{enumerate}[leftmargin=*,itemsep=0.25em]
   \item \textbf{Data/interface compatibility:} What dataset schema and measurement definitions are required for QLabs demonstrations to be usable by SimLingo-style training code?
-  \item \textbf{Timing and dynamics alignment:} How should control-loop timing and PID conversion be adapted when the runtime control rate differs from the source simulator assumptions?
-  \item \textbf{Navigation conditioning:} How can target-point conditioning (and optionally high-level commands) be encoded so inference prompts match the training distribution?
+  \item \textbf{Parameter-efficient domain transfer:} How can a CARLA-pretrained VLA model be fine-tuned to QLabs data using LoRA adapters while preserving the knowledge learned from CARLA?
+  \item \textbf{Runtime alignment:} How should control-loop timing, PID conversion, steering conventions, and ego-frame target-point computation be adapted so that the inference-time signal distribution matches the training distribution?
   \item \textbf{Reproducible evaluation:} What scenario-driven tests and baselines are sufficient to characterize safety and route completion in a way that can be rerun as the model changes?
 \end{enumerate}
 
