@@ -1,15 +1,15 @@
 \chapter{Background and Related Work}
 \label{ch:background}
 
-This chapter summarizes the modeling and systems context needed to understand a SimLingo-style VLA driving policy, and it motivates why simulator-to-simulator transfer is non-trivial even when both platforms provide similar sensors and control APIs.
+This chapter summarizes the modeling and systems context needed to understand a SimLingo-style VLA driving policy, and motivates why simulator-to-simulator transfer is non-trivial even when both platforms provide similar sensors and control APIs.
 
 \section{Vision--Language models and action conditioning}
-Modern multimodal models commonly pair (i) a vision encoder that converts an image into a sequence of visual tokens with (ii) a large language model (LLM) that consumes text tokens, plus (iii) a learned projection that maps vision features into the LLM embedding space. In this formulation, actions can be represented as text (e.g., tokens describing a maneuver), as continuous vectors regressed from hidden states, or as structured outputs such as future waypoints.
+Modern Vision-Language models commonly pair (i) a vision encoder that converts an image into a sequence of visual tokens with (ii) a large language model (LLM) that consumes text tokens, plus (iii) a learned projection that maps vision features into the LLM embedding space. In this formulation, actions can be represented as text (e.g., tokens describing a maneuver), as continuous vectors regressed from hidden states, or as structured outputs such as future waypoints.
 
 Driving is a particularly natural application for VLA systems because navigation intent is often compact and language-like (``follow the road'', ``turn left''), while the environment context is high-dimensional and visual. The key systems challenge is that the policy must run in closed loop, meaning perception, prompt construction, inference, and control must all execute reliably at a fixed cadence.
 
-\section{Imitation learning for driving}
-Imitation learning (IL) for driving learns a policy from expert demonstrations \citep{pomerleau1988alvinn,bojarski2016end}. In simulation, the expert can be a scripted controller, a human teleoperator, or a privileged planner. A core IL consideration is \emph{train--inference mismatch}: if the policy observes a slightly different state distribution at inference than during data collection, errors can compound over time \citep{ross2011dagger}. This mismatch is amplified when transferring across simulators because sensor models, coordinate conventions, and dynamics differ.
+\section{Imitation learning}
+Imitation learning (IL) learns a policy from expert demonstrations \citep{pomerleau1988alvinn,bojarski2016end}. In simulation, the expert can be a scripted controller, a human teleoperator, or a privileged planner. A core IL consideration is \emph{train--inference mismatch}: if the policy observes a slightly different state distribution at inference than during data collection, errors can compound over time \citep{ross2011dagger}. This mismatch is amplified when transferring across simulators because sensor models, coordinate conventions, and dynamics differ.
 
 \section{SimLingo}
 \label{sec:simlingo}
