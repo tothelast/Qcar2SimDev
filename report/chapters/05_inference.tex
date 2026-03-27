@@ -36,7 +36,7 @@ The InternVL2-based implementation follows a conversation-template format where 
 
 An important edge case is command-only conditioning: when no placeholder values are present, the placeholder replacement logic must be bypassed. If replacement proceeds anyway, the formatting pipeline attempts to inject continuous values into non-existent placeholder positions, which can corrupt the token sequence or raise a dimension-mismatch error during embedding lookup. The implementation therefore only constructs placeholder-value tensors when target-point conditioning is active; otherwise, it passes an empty placeholder list so that the downstream formatting pipeline behaves like a standard VLM prompt without continuous token replacement.
 
-\section{State estimation}
+\section{Speed estimation}
 \label{sec:state-estimation}
 Closed-loop driving requires a speed signal that is consistent with what the model saw during training and what the controller expects. As discussed in \Cref{sec:speed-alignment}, this repository uses an instantaneous, single-frame velocity estimate rather than a moving average.
 
@@ -54,16 +54,24 @@ The model predicts route waypoints (for lateral control) and speed waypoints (fr
 
 \subsection{Desired speed from speed waypoints}
 \label{sec:desired-speed}
-Desired speed is computed in \path{inference/control_converter.py} from the displacement between the first two predicted speed waypoints divided by the model's implied timestep. The implied timestep is derived from the runtime configuration:
+Desired speed is computed in \path{inference/control_converter.py} from the displacement between predicted speed waypoints divided by the corresponding time interval. The model predicts ten speed waypoints; the controller uses the first and third ($\mathbf{s}_0$ and $\mathbf{s}_2$) to obtain a smoother estimate that spans two prediction steps. The implied timestep per step is derived from the runtime configuration:
 \begin{equation}
 \texttt{dt\_model} = \texttt{dt} \cdot \texttt{data\_save\_freq}.
 \end{equation}
 Here \texttt{data\_save\_freq} is the number of control ticks between consecutively saved training frames during data collection (\Cref{sec:qlabs-expert-collection}), so \texttt{dt\_model} represents the physical time separating successive waypoint predictions in the training data.
-If the predicted speed waypoints are $\mathbf{s}_0,\mathbf{s}_1\in\mathbb{R}^2$, the controller sets
+If the predicted speed waypoints are $\mathbf{s}_0,\mathbf{s}_1,\mathbf{s}_2\in\mathbb{R}^2$, the controller sets
 \begin{equation}
- v_{\text{des}} = \mathrm{clip}\!\left( \frac{\lVert \mathbf{s}_1-\mathbf{s}_0\rVert_2}{\texttt{dt\_model}},\ 0,\ v_{\max}\right),
+ v_{\text{des}} = \mathrm{clip}\!\left( \frac{\lVert \mathbf{s}_2-\mathbf{s}_0\rVert_2}{2\,\texttt{dt\_model}},\ 0,\ v_{\max}\right),
 \end{equation}
 where $v_{\max}$ is the configured maximum speed. Clamping prevents out-of-range predictions from producing unsafe throttle commands.
+
+\subsection{Longitudinal speed control}
+\label{sec:longitudinal-control}
+Unlike the lateral channel, which is adapted from SimLingo's PID-based steering controller (\Cref{sec:lateral-pid}), longitudinal control is redesigned for QCar~2. SimLingo's reference implementation uses a linear-regression-based throttle/brake controller that outputs a throttle value and a brake flag; this does not transfer directly because QCar~2 accepts a velocity command rather than throttle and brake inputs. The QCar~2 controller instead directly tracks the desired speed $v_{\text{des}}$ with rate limiting to enforce physical plausibility. At each control tick the speed increment is clamped:
+\begin{equation}
+  v_{\text{cmd}}(t) = v(t) + \mathrm{clip}\!\bigl(v_{\text{des}} - v(t),\; -a_{\text{dec}}\,\Delta t,\; a_{\text{acc}}\,\Delta t\bigr),
+\end{equation}
+where $v(t)$ is the current speed, and $a_{\text{acc}}$, $a_{\text{dec}}$ are the configured maximum acceleration and deceleration magnitudes. This approach relies on the model's predicted speed profile to supply the deceleration trajectory rather than imposing a separate braking heuristic; expert data shows gradual deceleration over multiple frames, and the model learns this profile during training.
 
 \subsection{Lateral PID and frequency compensation}
 \label{sec:lateral-pid}
@@ -72,7 +80,7 @@ The lateral controller uses a PID law on a scaled heading error computed from an
   \item \textbf{Heading-error scaling:} the heading error (in radians) is first converted to degrees ($\times 180/\pi$) and then divided by $90$, yielding an effective factor of $180/\pi/90 \approx 0.637$. This maps the $\pm\SI{90}{\degree}$ range to $\pm 1.0$, keeping the PID gains interpretable in a unit-normalized error space and matching the reference SimLingo implementation.
   \item \textbf{Derivative compensation:} because the derivative term is computed as a raw difference (without explicit division by $\Delta t$), differences in control frequency must be compensated. Specifically, the raw error difference is divided by the sampling-period ratio $\Delta t_{\text{runtime}}/\Delta t_{\text{ref}} = 0.25\,\text{s}\,/\,0.05\,\text{s} = 5$, so that the derivative magnitude matches what the \SI{20}{Hz} reference controller would observe.
 \end{itemize}
-The lateral controller is implemented in \path{inference/control_converter.py} as a PID law \citep{astrom1995pid} acting on a scaled heading error $e_\psi$. With proportional, integral, and derivative gains $(K_P,K_I,K_D)$, the raw steering command before saturation can be written as
+The lateral controller is implemented in \path{inference/control_converter.py} as a PID law \citep{astrom1995pid} acting on a scaled heading error $e_\psi$, defined as the angle between the ego forward direction and a speed-dependent lookahead point on the interpolated route (the lookahead distance increases linearly with speed). With proportional, integral, and derivative gains $(K_P,K_I,K_D)$, the raw steering command before saturation can be written as
 \begin{equation}
  u = K_P e_\psi + K_I \sum_{\tau\le t} e_\psi(\tau) + K_D\,\Delta e_\psi.
 \end{equation}
