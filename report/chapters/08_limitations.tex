@@ -16,11 +16,10 @@ Evaluation is currently scenario-driven and limited to the scene and route defin
 
 A practical constraint in this work is that expert demonstration collection and repeatable closed-loop testing were not stable in complex, multi-actor scenes. The actor-control stack serializes QLabs API calls using a shared lock (\path{core/scene_spawner.py}), and the ego vehicle teleoperation loop runs at \SI{30}{Hz} while dynamic actors default to \SI{2}{Hz} (\path{data_collection/teleop_controller.py} and \path{core/scene_spawner.py}). As the number of actors grows, the aggregate rate of serialized control/state transactions can exceed real-time deadlines and lead to severe lag and buffer-overflow-type failures (\Cref{sec:multi-actor-constraints}). As a result, the final training dataset was collected on a simplified scenario (roundabout navigation with an optional single static obstacle variation; \path{data_collection/collect_roundabout_obstacle_variations.py}), limiting diversity in both the visual and interaction distribution.
 
+As a direct consequence, the quantitative results reported in \Cref{ch:results} use obstacle placements and route geometry that overlap with the training data distribution. While this demonstrates that the fine-tuned model functions correctly on the adapted domain, it does not constitute a held-out generalization test. A stricter evaluation protocol would test on unseen obstacle positions, route topologies, or visual conditions not represented during fine-tuning.
+
 \subsection{No language/commentary supervision during fine-tuning}
 Although SimLingo is a vision--language--action (VLA) model family, the QLabs fine-tuning dataset in this project does not include natural-language instruction strings or human ``commentary.'' Demonstrations are logged as images plus structured measurements (\path{data_collection/data_recorder.py}). Consequently, fine-tuning primarily adapts the visual and control grounding for the QLabs domain but does not explicitly adapt language-following behavior in a supervised manner.
-
-\subsection{In-distribution evaluation only}
-The quantitative results reported in \Cref{ch:results} use obstacle placements and route geometry that overlap with the training data distribution. While this demonstrates that the fine-tuned model functions correctly on the adapted domain, it does not constitute a held-out generalization test. A stricter evaluation protocol would test on unseen obstacle positions, route topologies, or visual conditions not represented during fine-tuning.
 
 \section{Future work}
 \label{sec:future-work}
