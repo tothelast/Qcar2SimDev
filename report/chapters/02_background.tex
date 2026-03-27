@@ -100,7 +100,7 @@ is passed to the language model alongside learnable \emph{action query tokens} $
 Here $\mathbf{q}_{\text{route}}$ consists of 20~learnable vectors (one per route waypoint to predict) and $\mathbf{q}_{\text{speed}}$ consists of 10~learnable vectors (one per speed waypoint). These are randomly initialized parameters (\texttt{nn.Parameter}) that are appended after the prompt tokens so the transformer can attend over the full visual-linguistic context. After the forward pass, the hidden states at each query position are decoded by an MLP head into 2-D ego-frame coordinate deltas; cumulative summation converts the deltas to absolute waypoint positions. For example, a concrete input sequence looks like:
 
 \medskip
-\noindent\texttt{\small <system> Current speed: 2.5\,m/s. <img>[512 visual tokens]</img> Target waypoint: [nav$_1$][nav$_2$]. Predict the waypoints. <assistant> Waypoints: $|$ $\mathbf{q}_{\text{route}} \times 20$ $|$ $\mathbf{q}_{\text{speed}} \times 10$}
+\noindent\texttt{\small <system> Current speed: 2.5\,m/s. <img>[512 visual tokens]</img> Target: [nav$_1$(x,y)][nav$_2$(x,y)]. Predict the waypoints. <assistant> Waypoints: $|$ $\mathbf{q}_{\text{route}} \times 20$ $|$ $\mathbf{q}_{\text{speed}} \times 10$}
 \medskip
 
 SimLingo defines four task prompts: (i)~driving-only (``Predict the waypoints''), (ii)~commentary (``What should the ego do next?''), (iii)~visual question answering, and (iv)~action dreaming (counterfactual instructions). This work uses only the driving-only prompt.

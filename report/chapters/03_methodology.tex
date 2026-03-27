@@ -19,7 +19,7 @@ This decomposition is reflected in the repository structure (\Cref{app:repo-map}
 
 \section{Compatibility targets as distribution alignment}
 \label{sec:compat-targets}
-The guiding principle is \emph{distribution alignment}: the inference-time signals should match the training-time data format as closely as practical. In this repository the most important alignment targets are:
+The guiding principle is \emph{distribution alignment}: the inference-time signals should match the training-time data format as closely as possible. In this repository the most important alignment targets are:
 \begin{itemize}[leftmargin=*,itemsep=0.25em]
   \item \textbf{Coordinate frames:} target points and waypoints must be expressed in the same ego frame convention used during training.
   \item \textbf{Speed definition:} instantaneous speed should be computed in a way that matches the training data.
@@ -33,7 +33,7 @@ The guiding principle is \emph{distribution alignment}: the inference-time signa
 
 \begin{table}[h]
 \centering
-\caption{Implementation-relevant differences between CARLA and QLabs for this project.}
+\caption{Implementation-relevant differences between learning to drive in CARLA and QLabs for this project.}
 \label{tab:carla-qlabs-diffs}
 \begin{tabular}{p{0.28\linewidth}p{0.30\linewidth}p{0.34\linewidth}}
 \toprule
