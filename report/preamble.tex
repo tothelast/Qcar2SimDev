@@ -18,6 +18,17 @@
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage[nameinlink,capitalize]{cleveref}
+
+% Fix: hyperref v7.01l+ breaks cleveref's appendix type detection.
+% Force chapter/section counters to map to appendix types after \appendix.
+% See https://github.com/latex3/hyperref/issues/362
+\makeatletter
+\AddToHook{cmd/appendix/before}{%
+  \crefalias{chapter}{appendix}%
+  \crefalias{section}{subappendix}%
+  \crefalias{subsection}{subsubappendix}%
+}
+\makeatother
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{xcolor}
 \usepackage{enumitem}
