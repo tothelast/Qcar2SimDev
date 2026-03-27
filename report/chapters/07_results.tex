@@ -6,7 +6,7 @@ This chapter presents the experimental evaluation of the fine-tuned SimLingo mod
 \section{Training convergence}
 \label{sec:training-convergence}
 
-\Cref{fig:training-losses} shows the training and validation loss curves over 15~epochs of QLabs fine-tuning. The total loss, route loss, and speed-waypoint loss all decrease rapidly in the first 3--5~epochs before flattening, indicating that the model learns the QLabs driving distribution relatively quickly. The language loss remains near zero throughout training because no natural-language supervision is provided (see \Cref{sec:final-dataset-scope}). The learning rate follows a one-cycle schedule with 5\% warmup, decaying smoothly after the initial ramp.
+\Cref{fig:training-losses} shows the training and validation loss curves over 15~epochs of QLabs fine-tuning. The three loss components---route loss, speed-waypoint loss, and their sum (total loss)---are each Smooth-$\ell_1$ losses on the predicted vs.\ ground-truth waypoints, as defined in \Cref{sec:training-losses}. All three decrease rapidly in the first 3--5~epochs before flattening, indicating that the model learns the QLabs driving distribution relatively quickly. The language loss remains near zero throughout training because no natural-language supervision is provided (see \Cref{sec:final-dataset-scope}). The learning rate follows a one-cycle schedule with 5\% warmup, decaying smoothly after the initial ramp.
 
 \begin{figure}[htbp]
   \centering
@@ -39,8 +39,8 @@ The expert demonstration ADE is $0.087$~m, representing how closely the human te
 \toprule
 Controller & Coverage (\%) & Avg Lat.\ Dev.\ (m) & Max Lat.\ Dev.\ (m) & Avg Time (s)\\
 \midrule
-SimLingo & \input{figures/val_sim_baseline_coverage} & \input{figures/val_sim_baseline_avgdev} & \input{figures/val_sim_baseline_maxdev} & \input{figures/val_sim_baseline_time} \\
-ACC Baseline & \input{figures/val_acc_baseline_coverage} & \input{figures/val_acc_baseline_avgdev} & \input{figures/val_acc_baseline_maxdev} & \input{figures/val_acc_baseline_time} \\
+SimLingo & \textbf{\input{figures/val_sim_baseline_coverage}} & \textbf{\input{figures/val_sim_baseline_avgdev}} & \textbf{\input{figures/val_sim_baseline_maxdev}} & \input{figures/val_sim_baseline_time} \\
+ACC Baseline & \input{figures/val_acc_baseline_coverage} & \input{figures/val_acc_baseline_avgdev} & \input{figures/val_acc_baseline_maxdev} & \textbf{\input{figures/val_acc_baseline_time}} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -76,7 +76,7 @@ Scenario & Controller & Coverage (\%) & Collision & Stopped & Stop Dist.\ (m) & 
 \section{Comparative analysis}
 \label{sec:comparative-analysis}
 
-\Cref{fig:route-coverage} compares route coverage across all scenarios. On the clean baseline, both controllers achieve near-complete coverage. On obstacle scenarios, coverage diverges: the SimLingo model stops upon perceiving the obstacle through its camera input, typically covering the portion of the route before the obstacle, while the ACC baseline detects obstacles through LiDAR at a fixed detection range.
+\Cref{fig:route-coverage} compares route coverage across all scenarios. On the clean baseline, both controllers achieve near-complete coverage. On obstacle scenarios, coverage diverges: the ACC baseline consistently stops 5--8.5~m before the obstacle due to its fixed LiDAR detection cone, whereas SimLingo's stopping distance varies with approach speed and obstacle visibility (see \Cref{sec:results-discussion}). Note that higher coverage in obstacle scenarios does not indicate better performance---it primarily reflects shorter stopping distances and, in the case of Variant~5, a complete failure to stop. Coverage is therefore most informative on the obstacle-free baseline; for obstacle scenarios, the safety metrics in \Cref{fig:safety-comparison} are the appropriate comparison.
 
 \begin{figure}[htbp]
   \centering
@@ -123,7 +123,7 @@ The SimLingo model stops cleanly (no bumper contact) for Variant~1 (early rounda
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{near_obstacle_waypoints_obstacle_var1.png}
-  \caption{Ego-frame waypoint predictions for Variant~1 (obstacle on initial straight). The model predicts zero speed across all panels, stopping well before the obstacle. The vehicle is at the origin; green: predicted route waypoints, orange: speed waypoints, blue: planned route, red X: obstacle. The spatial spread of the orange speed waypoints encodes the predicted speed: clustered points indicate near-zero speed (braking), while a longer spread indicates higher predicted speed.}
+  \caption{Ego-frame waypoint predictions for Variant~1 (obstacle on initial straight). The model predicts zero speed across all panels, stopping well before the obstacle. The vehicle is at the origin; green: predicted route waypoints, orange: speed waypoints, blue: planned route, red X: obstacle. The spatial spread of the orange speed waypoints encodes the predicted speed: clustered points indicate near-zero speed (braking), while a longer spread indicates higher predicted speed. Each subplot title shows the simulation step, current and predicted speed, and the number of steps remaining until the vehicle reaches its closest approach to the obstacle; the final panel marked \textsc{closest} is the timestep of minimum distance.}
   \label{fig:waypoints-var1}
 \end{figure}
 
@@ -135,7 +135,7 @@ The SimLingo model stops cleanly (no bumper contact) for Variant~1 (early rounda
 \end{figure}
 
 \paragraph{Higher speed produces low-speed contact.}
-For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 2.4~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. The higher approach speed and the model's gradual deceleration profile are insufficient for a fully contact-free stop. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle. The waypoint visualizations in \Cref{fig:waypoints-var2,fig:waypoints-var4} show the model progressively reducing its predicted speed, making low-speed bumper contact, and eventually coming to a full stop.
+For Variants~2 and~4, the vehicle encounters the obstacle at higher speeds (2--3~m/s) and successfully decelerates but makes slight bumper contact before fully stopping. In Variant~2 (mid-roundabout), the car decelerates from approximately 2~m/s to near-zero, coming to rest at 3.1--3.2~m from the obstacle center. In Variant~4 (straight section), the car decelerates from approximately 2.4~m/s to under 0.05~m/s, settling at 2.7--4.6~m from the obstacle center. Although these runs are classified as failures (any obstacle contact constitutes a collision), the model clearly demonstrates obstacle detection and deceleration behavior in both cases. Inspection of the per-step logs confirms that the contact is caused by the model's waypoint predictions rather than by PID tracking lag: the controller accurately tracks the desired speed derived from the speed waypoints, but the model itself does not predict sufficiently low speeds early enough. In Variant~2, the predicted speed remains above 1.5~m/s until approximately 3~steps before collision, dropping sharply only when the obstacle fills most of the camera frame. In Variant~4, the model exhibits a consistent ${\sim}0.2$~m/s overprediction bias throughout the approach. Trajectory positions represent the car's center of gravity; the front bumper extends approximately 0.2~m further toward the obstacle. The waypoint visualizations in \Cref{fig:waypoints-var2,fig:waypoints-var4} show the model progressively reducing its predicted speed, making low-speed bumper contact, and eventually coming to a full stop.
 
 \paragraph{Corner obstacles reduce visual lead time.}
 Variant~5 places the obstacle on a curved section late in the route (see \Cref{fig:obstacle-map}). Because the forward-facing camera has limited visibility around curves, the obstacle enters the field of view later than on straight segments. Combined with the high approach speed (3.4~m/s), the model cannot decelerate in time and drives through the obstacle. This is the only scenario where the model fails to demonstrate any meaningful stopping behavior, suggesting that obstacle visibility on curved segments at high speed is a key limitation of the single-camera setup. As shown in \Cref{fig:waypoints-var5}, the model's predicted speed remains high (3--4~m/s) throughout the approach, and the predicted route waypoints do not deviate from the planned route, suggesting the model does not perceive the obstacle until it is too late.
@@ -143,7 +143,7 @@ Variant~5 places the obstacle on a curved section late in the route (see \Cref{f
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{pre_collision_waypoints_obstacle_var2.png}
-  \caption{Ego-frame waypoint predictions for Variant~2 (mid-roundabout obstacle). The vehicle decelerates from 2.0 to 1.0~m/s at first contact (step~271) and comes to a full stop by step~298. Same visual encoding as \Cref{fig:waypoints-var1}.}
+  \caption{Ego-frame waypoint predictions for Variant~2 (mid-roundabout obstacle). The vehicle decelerates from 2.0 to 1.0~m/s at first contact (step~271) and comes to a full stop by step~298. Same visual encoding as \Cref{fig:waypoints-var1}; subplot titles count steps to \textsc{collision} (first contact) instead of closest approach.}
   \label{fig:waypoints-var2}
 \end{figure}
 
