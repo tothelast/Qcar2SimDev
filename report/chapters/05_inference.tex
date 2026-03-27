@@ -1,7 +1,7 @@
 \chapter{Inference Stack and Control Conversion}
 \label{ch:inference}
 
-This chapter describes the runtime system that executes closed-loop driving in QLabs. The main engineering goal is to reproduce the \emph{interface} assumed during training: camera preprocessing, state estimation, navigational conditioning, prompt formatting, inference cadence, and control conversion must remain consistent.
+This chapter describes the runtime system that executes closed-loop driving in QLabs. The main engineering goal is to reproduce the \emph{interface} assumed during training: camera preprocessing, state estimation, navigational conditioning, prompt formatting, inference cadence, and control conversion must remain consistent. Any mismatch between these runtime signals and their training-time counterparts introduces distribution shift, which degrades closed-loop performance (see \Cref{sec:compat-targets}).
 
 \section{Runtime components and closed-loop pipeline}
 \label{sec:runtime-components}
@@ -16,17 +16,17 @@ At a high level, the runtime stack consists of:
 
 The central control-loop iteration is implemented in \path{inference/main.py}. Each iteration (i) captures a camera frame, (ii) updates the ego state estimate, (iii) computes target points in the ego frame from the active route, (iv) executes VLA inference at a configured stride (reusing cached predictions on intermediate ticks), and (v) converts predicted waypoints/speeds into low-level QCar~2 commands.
 
-Two practical implementation choices are important for stability and reproducibility. First, the controller isolates time-sensitive state updates from slower model calls by caching inference outputs. Second, the loop logs enough metadata (timestamps, pose, predicted targets, and applied controls) to enable offline debugging and metric computation without re-running the simulator.
+Two practical implementation choices are important for stability and reproducibility. First, the controller isolates time-sensitive state updates from slower model calls by caching inference outputs. Second, the loop logs enough metadata (timestamps, pose, predicted targets, and applied controls) to enable offline debugging and metric computation without re-running the simulator. All components use the same wall-clock time source (\texttt{time.time()}); within a single iteration the state update and trajectory logging occur in rapid succession, so pose, speed, and control signals remain temporally coherent.
 
 \section{Control loop timing and inference stride}
 \label{sec:timing-inference-stride}
 In this repository the nominal control rate is set by \texttt{config.dt}. With the default configuration (\texttt{dt=0.25~s}), the controller runs at \SI{4}{Hz}. Model inference can be executed every control tick or at a lower frequency by setting \texttt{inference\_stride}; intermediate ticks reuse cached predictions.
 
-Reducing inference frequency can improve real-time performance on limited hardware, but it introduces a new design requirement: cached waypoints must remain stable enough across multiple control ticks to avoid oscillation.
+Reducing inference frequency can improve real-time performance on limited hardware, but it introduces a new design requirement: cached waypoints must remain stable enough across multiple control ticks to avoid oscillation. In practice, if successive inference calls produce laterally inconsistent waypoints (e.g., due to visual aliasing or noisy speed estimates), the PID controller alternates steering direction on each new prediction, causing visible swerving.
 
 \section{Navigation conditioning and prompt construction}
 \label{sec:prompt-construction-inference}
-SimLingo-style conditioning encodes both the current speed and navigational intent into the prompt (see \Cref{sec:prompt-construction} for the general template). Although the SimLingo architecture supports both target-point and command conditioning modes, \textbf{this work uses target-point mode exclusively} because no language-annotated route data was collected for QLabs (see \Cref{sec:final-dataset-scope} for the rationale). The inference code in \path{inference/simlingo_model.py} retains support for both modes, but command mode was neither fine-tuned nor evaluated.
+SimLingo-style conditioning encodes both the current speed and navigational intent into the prompt (see \Cref{sec:prompt-construction} for the general template). Although the SimLingo architecture supports both target-point and command conditioning modes, \textbf{this work uses target-point mode exclusively} because no language-annotated route data was collected for QLabs (see \Cref{sec:final-dataset-scope} for the rationale). The inference code in \path{inference/simlingo_model.py} retains support for both modes because the implementation is inherited from the upstream SimLingo codebase; keeping it intact avoids divergence and allows future work to enable command conditioning if language-annotated data becomes available. In the current project, however, command mode was neither fine-tuned nor evaluated.
 
 In target-point mode, navigational intent is provided via two special \texttt{<TARGET\_POINT>} placeholder tokens that are replaced by continuous 2D target-point values in the ego frame. The prompt builder produces a conversation-style user message containing an \texttt{<image>} sentinel and a text instruction that encodes the current speed and the two target-point coordinates, following the template described in \Cref{sec:prompt-construction}.
 
@@ -34,7 +34,7 @@ In target-point mode, navigational intent is provided via two special \texttt{<T
 \label{sec:placeholder-handling}
 The InternVL2-based implementation follows a conversation-template format where the user message includes an \texttt{<image>} sentinel that is expanded into a fixed number of image context tokens, and where placeholder tokens (e.g., \texttt{<TARGET\_POINT>}) may be replaced by continuous values.
 
-An important edge case is command-only conditioning: when no placeholder values are present, the placeholder replacement logic must be bypassed to avoid unintended behavior. The implementation therefore only constructs placeholder-value tensors when target-point conditioning is active; otherwise, it passes an empty placeholder list so that the downstream formatting pipeline behaves like a standard VLM prompt without continuous token replacement.
+An important edge case is command-only conditioning: when no placeholder values are present, the placeholder replacement logic must be bypassed. If replacement proceeds anyway, the formatting pipeline attempts to inject continuous values into non-existent placeholder positions, which can corrupt the token sequence or raise a dimension-mismatch error during embedding lookup. The implementation therefore only constructs placeholder-value tensors when target-point conditioning is active; otherwise, it passes an empty placeholder list so that the downstream formatting pipeline behaves like a standard VLM prompt without continuous token replacement.
 
 \section{State estimation}
 \label{sec:state-estimation}
@@ -46,7 +46,7 @@ Let $\mathbf{p}(t)\in\mathbb{R}^2$ be the ego position in the simulator world fr
 \begin{equation}
  v(t) \;=\; \frac{\lVert \mathbf{p}(t)-\mathbf{p}(t-\Delta t) \rVert_2}{\Delta t},
 \end{equation}
-where $\Delta t$ is the elapsed real time between successive state updates. This design reduces distribution shift between logged demonstrations and the online controller.
+where $\Delta t$ is the elapsed real time between successive state updates. Because $\Delta t$ can vary slightly between ticks, the resulting estimate is noisier than a moving-average filter; this noise is accepted intentionally so that the runtime signal matches the single-frame estimate recorded during data collection (\Cref{sec:speed-alignment}), thereby avoiding distribution shift between logged demonstrations and the online controller.
 
 \section{PID-based control conversion}
 \label{sec:pid-conversion}
@@ -58,6 +58,7 @@ Desired speed is computed in \path{inference/control_converter.py} from the disp
 \begin{equation}
 \texttt{dt\_model} = \texttt{dt} \cdot \texttt{data\_save\_freq}.
 \end{equation}
+Here \texttt{data\_save\_freq} is the number of control ticks between consecutively saved training frames during data collection (\Cref{sec:qlabs-expert-collection}), so \texttt{dt\_model} represents the physical time separating successive waypoint predictions in the training data.
 If the predicted speed waypoints are $\mathbf{s}_0,\mathbf{s}_1\in\mathbb{R}^2$, the controller sets
 \begin{equation}
  v_{\text{des}} = \mathrm{clip}\!\left( \frac{\lVert \mathbf{s}_1-\mathbf{s}_0\rVert_2}{\texttt{dt\_model}},\ 0,\ v_{\max}\right),
@@ -68,14 +69,14 @@ where $v_{\max}$ is the configured maximum speed. Clamping prevents out-of-range
 \label{sec:lateral-pid}
 The lateral controller uses a PID law on a scaled heading error computed from an interpolated route. Two adaptation details are critical:
 \begin{itemize}[leftmargin=*,itemsep=0.25em]
-  \item \textbf{Heading-error scaling:} the heading error is normalized by $180/\pi/90$ so that a \SI{90}{\degree} error maps to approximately $1.0$, matching the reference implementation.
-  \item \textbf{Derivative compensation:} because the derivative term is computed as a raw difference (without explicit division by $\Delta t$), differences in control frequency must be compensated. The implementation divides by $5$ to align a \SI{4}{Hz} loop with a \SI{20}{Hz} reference assumption.
+  \item \textbf{Heading-error scaling:} the heading error (in radians) is first converted to degrees ($\times 180/\pi$) and then divided by $90$, yielding an effective factor of $180/\pi/90 \approx 0.637$. This maps the $\pm\SI{90}{\degree}$ range to $\pm 1.0$, keeping the PID gains interpretable in a unit-normalized error space and matching the reference SimLingo implementation.
+  \item \textbf{Derivative compensation:} because the derivative term is computed as a raw difference (without explicit division by $\Delta t$), differences in control frequency must be compensated. Specifically, the raw error difference is divided by the sampling-period ratio $\Delta t_{\text{runtime}}/\Delta t_{\text{ref}} = 0.25\,\text{s}\,/\,0.05\,\text{s} = 5$, so that the derivative magnitude matches what the \SI{20}{Hz} reference controller would observe.
 \end{itemize}
 The lateral controller is implemented in \path{inference/control_converter.py} as a PID law \citep{astrom1995pid} acting on a scaled heading error $e_\psi$. With proportional, integral, and derivative gains $(K_P,K_I,K_D)$, the raw steering command before saturation can be written as
 \begin{equation}
  u = K_P e_\psi + K_I \sum_{\tau\le t} e_\psi(\tau) + K_D\,\Delta e_\psi.
 \end{equation}
-Because the derivative term is implemented as a simple difference (without explicit division by $\Delta t$), the code includes an explicit compensation factor to account for the \SI{4}{Hz} control cadence relative to a \SI{20}{Hz} reference assumption; effectively, $\Delta e_\psi$ is scaled by $1/5$.
+Because the derivative term is implemented as a simple difference (without explicit division by $\Delta t$), the code divides $\Delta e_\psi$ by the sampling-period ratio $\Delta t_{\text{runtime}}/\Delta t_{\text{ref}} = 0.25/0.05 = 5$ to normalize it to the \SI{20}{Hz} reference assumption. The integral term is implemented as a bounded sliding-window average over the $n$ most recent error samples (stored in a fixed-size buffer), rather than an unbounded cumulative sum; this windowed design inherently prevents integrator windup without requiring an explicit anti-windup mechanism. In the current default configuration $K_I=0$, so the integral contribution is inactive; the windowed mechanism serves as a safeguard for future tuning.
 
 \subsection{Steering sign convention}
 \label{sec:steering-sign}
