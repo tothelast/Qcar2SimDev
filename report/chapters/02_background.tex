@@ -9,37 +9,86 @@ Learned driving systems typically separate the problem into two levels. The \emp
 
 \begin{figure}[ht]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  block/.style={draw, rounded corners, minimum height=1cm, minimum width=2.2cm, align=center, font=\small},
+  block/.style={draw, rounded corners, minimum height=1.1cm, minimum width=2.2cm,
+                align=center, font=\small},
   arrow/.style={-{Stealth[length=2.5mm]}, thick},
-  label/.style={font=\scriptsize, midway},
+  lbl/.style={font=\scriptsize, midway},
+  annot/.style={draw=gray!60, dashed, rounded corners=2pt, inner sep=3pt,
+                font=\scriptsize, align=left, fill=gray!5},
 ]
-  % Upper level
-  \node[block, fill=blue!10] (vision) at (0,0) {Vision\\Encoder};
-  \node[block, fill=blue!10] (llm) at (3.5,0) {Language\\Model};
-  \node[block, fill=orange!10] (lateral) at (7.5,0.5) {Lateral PID};
-  \node[block, fill=orange!10] (speed) at (7.5,-0.8) {Speed\\Controller};
-  \node[block, fill=green!10] (vehicle) at (11,0) {Vehicle};
+  % === Camera frame (actual QLabs image) ===
+  \node[inner sep=1pt, draw, thin] (img) at (0,0)
+    {\includegraphics[width=2.8cm]{figures/qlabs_frame_0072.jpg}};
 
-  % Inputs
-  \node[font=\small, left=0.6cm of vision] (img) {Camera};
-  \node[font=\small, below=0.6cm of llm] (nav) {Speed, Target Point};
+  % === Vision Encoder ===
+  \node[block, fill=blue!10, right=0.8cm of img] (vision)
+    {Vision\\Encoder\\[-2pt]{\scriptsize InternViT-300M}};
 
-  % Arrows
+  % === Language Model ===
+  \node[block, fill=blue!10, right=2.0cm of vision] (llm)
+    {Language\\Model\\[-2pt]{\scriptsize Qwen2-0.5B}};
+
+  % === PID controllers ===
+  \node[block, fill=orange!10] (lateral) at (12.0,1.2) {Lateral PID};
+  \node[block, fill=orange!10] (speed) at (12.0,-1.4) {Speed\\Controller};
+
+  % === Vehicle ===
+  \node[block, fill=green!10] (vehicle) at (16.0,0) {QCar~2};
+
+  % === Nav conditioning input (below LLM, shifted left) ===
+  \node[annot, below=1.8cm of llm, xshift=-1.0cm] (nav)
+    {$v = 2.15\;\text{m/s}$\\[1pt]$\mathbf{tp} = (15.16,\; 31.45)$};
+
+  % === Arrows: camera to vision encoder ===
   \draw[arrow] (img) -- (vision);
-  \draw[arrow] (vision) -- node[label, above] {visual tokens} (llm);
-  \draw[arrow] (nav) -- (llm);
-  \draw[arrow] (llm.east) ++(0,0.2) -- node[label, above] {route WPs} (lateral.west);
-  \draw[arrow] (llm.east) ++(0,-0.2) -- node[label, below] {speed WPs} (speed.west);
-  \draw[arrow] (lateral.east) -- node[label, above] {steer} (vehicle.west |- lateral.east);
-  \draw[arrow] (speed.east) -- node[label, below] {throttle} (vehicle.west |- speed.east);
 
-  % Level labels
-  \draw[dashed, gray] (5.5,-1.6) -- (5.5,1.4);
-  \node[font=\scriptsize\itshape, gray] at (1.75,1.5) {Upper level (learned)};
-  \node[font=\scriptsize\itshape, gray] at (9.25,1.5) {Lower level (classical)};
-\end{tikzpicture}
-\caption{Two-level driving architecture. The learned upper level predicts future waypoints from vision and route intent; the classical lower level converts waypoints to steering and throttle via PID controllers.}
+  % === Arrow: vision encoder to LLM (with token notation) ===
+  \draw[arrow] (vision) -- node[lbl, above]
+    {$\mathbf{e}_I \in \mathbb{R}^{512 \times 896}$} (llm);
+
+  % === Arrow: nav input to LLM ===
+  \draw[arrow] (nav) -- (llm);
+
+  % === LLM to PID (split outputs) ===
+  \draw[arrow] (llm.east) ++(0,0.1) -- (lateral.west);
+  \draw[arrow] (llm.east) ++(0,-0.1) -- (speed.west);
+
+  % === Route WP annotation box (label + data, above the route arrow) ===
+  \node[annot] (rwp) at ($(llm.east)!0.5!(lateral.west) + (0.5,2.5)$)
+    {\textit{20 route waypoints}\\[2pt]
+     $\mathbf{w}_0{=}(0.02,\; 0.01)$\\[1pt]
+     $\mathbf{w}_1{=}(0.89,\; 0.02)$\\[1pt]
+     $\;\;\vdots$\\[-2pt]
+     $\mathbf{w}_{19}{=}(16.75,\; {-}3.16)$};
+  \draw[-{Stealth[length=1.5mm]}, gray, thin]
+    (rwp.south) -- ($(llm.east)!0.5!(lateral.west) + (0,0.65)$);
+
+  % === Speed WP annotation box (label + data, below the speed arrow) ===
+  \node[annot] (swp) at ($(llm.east)!0.5!(speed.west) + (0.5,-2.6)$)
+    {\textit{10 speed waypoints}\\[2pt]
+     $\mathbf{s}_0{=}(0.40,\; 0.00)$\\[1pt]
+     $\;\;\vdots$\\[-2pt]
+     $\mathbf{s}_9{=}(3.69,\; {-}0.80)$};
+  \draw[-{Stealth[length=1.5mm]}, gray, thin]
+    (swp.north) -- ($(llm.east)!0.5!(speed.west) + (0,-0.65)$);
+
+  % === PID to vehicle ===
+  \draw[arrow] (lateral.east) -- node[lbl, above]
+    {$\delta = \frac{\pi}{9} \approx 20^\circ$} (vehicle.west |- lateral.east);
+  \draw[arrow] (speed.east) -- node[lbl, below, pos=0.55]
+    {$v_{\text{cmd}} = 2.33$ m/s} (vehicle.west |- speed.east);
+
+  % === Level separator ===
+  \draw[dashed, gray] (8.8,-4.0) -- (8.8,4.5);
+  \node[font=\scriptsize\itshape, gray] at (3.5,4.2)
+    {Upper level (learned)};
+  \node[font=\scriptsize\itshape, gray] at (14.0,4.2)
+    {Lower level (classical)};
+\end{tikzpicture}%
+}% end resizebox
+\caption[Two-level driving architecture with QLabs data.]{Two-level driving architecture instantiated with QLabs data. The camera input shows a QLabs roundabout scene; the vision encoder (InternViT-300M) produces $512$ visual tokens projected to the language model's $896$-dimensional embedding space. The language model (Qwen2-0.5B) predicts $20$ route waypoints and $10$ speed waypoints in the ego frame (example values from a representative inference step at $v = 2.15$\,m/s). Classical PID controllers convert waypoints to steering ($\delta_{\max} = \pi/9$) and velocity commands.}
 \label{fig:two-level}
 \end{figure}
 
