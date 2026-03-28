@@ -1,0 +1,37 @@
+{
+  "checkpoint": "models/simlingo/checkpoints/epoch=013.ckpt",
+  "timestamp": "20260327_180723",
+  "total_runs": 1,
+  "pass_rate": 0.0,
+  "results": [
+    {
+      "scenario_name": "baseline",
+      "run_number": 1,
+      "safety": {
+        "collision_detected": false,
+        "stopped_before_obstacle": true,
+        "stopping_distance": -1.0,
+        "min_speed_near_obstacle": -1.0
+      },
+      "route_complete": false,
+      "route_coverage_percent": 4.705882352941177,
+      "distance_traveled": 1.94394748239692,
+      "total_route_distance": 89.1390620470047,
+      "avg_lateral_deviation": 0.07008510902710735,
+      "max_lateral_deviation": 0.3157930374145518,
+      "total_steps": 399,
+      "total_time": 150.12292528152466,
+      "stuck_detected": false,
+      "timeout": true,
+      "pass_status": false,
+      "trajectory_log_path": "results/runs/baseline_run_1/trajectory_log.json"
+    }
+  ],
+  "aggregate": {
+    "total_pass": 0,
+    "total_fail": 1,
+    "baseline_pass_rate": 0.0,
+    "obstacle_pass_rate": 0,
+    "obstacle_collision_rate": 0
+  }
+}

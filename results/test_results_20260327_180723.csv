@@ -1,0 +1,2 @@
+scenario,run,pass,collision,stopped,stopping_distance_m,route_coverage_pct,avg_lateral_dev_m,total_steps,total_time_s
+baseline,1,False,False,True,-1.000,4.7,0.070,399,150.12

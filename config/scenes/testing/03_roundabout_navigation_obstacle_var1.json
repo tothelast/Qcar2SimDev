@@ -1,0 +1,9 @@
+{
+    "name": "roundabout_navigation_obstacle_var1",
+    "description": "Roundabout navigation with obstacle variant 1 (early roundabout)",
+    "ego_route": "roundabout_navigation",
+    "actors": [
+        "obstacle_car_var1"
+    ],
+    "actors_backup": []
+}

@@ -1,0 +1,6 @@
+{
+  "name": "roundabout_navigation_baseline",
+  "description": "Roundabout navigation without obstacles or actors (matches test harness baseline)",
+  "ego_route": "roundabout_navigation",
+  "actors": []
+}
