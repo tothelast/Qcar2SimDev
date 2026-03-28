@@ -45,6 +45,22 @@ These videos are for the thesis presentation only (not the report).
 - Did not reach the finish
 - Commentary window not used
 
+## Video 5: buffer_overflow.mp4
+- **Model**: Fine-tuned (epoch_14.pt)
+- **PID**: QLabs-tuned
+- **Scene**: Roundabout navigation with 6 actors (north_pedestrian, stop_sign_roundabout, north_crosswalk, north_crosswalk_light, roundabout_car, circular_car)
+
+**Findings**:
+- Running inference with multiple dynamic actors (2 autonomous vehicles + pedestrian) on the roundabout route triggered repeated buffer overflow errors
+- Error message in terminal:
+  ```
+  Error parsing multiple packets in receive buffer.  Clearing internal buffers.
+  Error parsing multiple packets in receive buffer.  Clearing internal buffers.
+  Error parsing multiple packets in receive buffer.  Clearing internal buffers.
+  ```
+- Reproduces the platform-level limitation documented in the report (Section 4, `sec:multi-actor-constraints`): the QLabs API serializes all control and state-query interactions, and the aggregate command rate from ego control + dynamic actor threads exceeds what the communication channel can handle
+- This is why data collection and evaluation were restricted to single-obstacle scenes
+
 ## Key Takeaways
 
 1. **Fine-tuning the driving head is necessary**: Pre-trained CARLA model cannot drive in QLabs (Video 2 vs Video 1)
