@@ -31,6 +31,10 @@
 \makeatother
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{xcolor}
+% Highlight revised content — coloured text since soul's \hl is incompatible
+% with \Cref, \caption, and other fragile commands.  Remove after review.
+\definecolor{revcolor}{RGB}{191,144,0}          % dark gold
+\newcommand{\hl}[1]{{\color{revcolor}#1}}
 \usepackage{enumitem}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc}
