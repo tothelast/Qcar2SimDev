@@ -9,9 +9,9 @@
 \begin{document}
 
 % --------------------
-% Front matter
+% Front matter (continuous arabic numbering throughout the document)
 % --------------------
-\pagenumbering{roman}
+\pagenumbering{arabic}
 \setcounter{page}{1}
 
 \input{frontmatter/titlepage}
@@ -23,22 +23,24 @@
 \input{frontmatter/acknowledgements}
 \cleardoublepage
 
+\tableofcontents
+\cleardoublepage
+
 \input{frontmatter/abstract}
 \cleardoublepage
 
-\tableofcontents
-\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Figures}
 \listoffigures
 \cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Tables}
 \listoftables
 \cleardoublepage
 
 % --------------------
 % Main matter
 % --------------------
-\pagenumbering{arabic}
-\setcounter{page}{1}
-
 \input{chapters/01_introduction}
 \input{chapters/02_background}
 \input{chapters/03_methodology}
@@ -59,6 +61,8 @@
 \input{appendices/C_scene_configs}
 
 \cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Bibliography}
 \bibliographystyle{plainnat}
 \bibliography{references}
 
